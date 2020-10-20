@@ -88,7 +88,6 @@ Output: dict(method, hostname, port, path)
 def process_targets(targets_str):
 
     for target_str in targets_str.split(','):
-        
         if "://" in target_str:
             # If target_str is a url form: method://hostname:port/path
 

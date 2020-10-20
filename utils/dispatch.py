@@ -41,7 +41,7 @@ def dispatch(targets, static_inputs, worker_func, func_args, workers=10):
     pg_thread.join()
 
     num_terminated = 0
-    num_failed = 0  
+    num_failed = 0 
     end_time = time.time() + STOP_WAIT_SECS
     for p in process_list:
         join_secs = max(0.0, min(end_time - time.time(), STOP_WAIT_SECS))
@@ -84,7 +84,7 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue):
             pg_queue.put(1)
            
 def progressbar_worker(target_size, pg_queue):
-    pg = tqdm(total=target_size, mininterval=1)
+    pg = tqdm(total=target_size, mininterval=1, position=0)
     count = 0
 
     while True:
