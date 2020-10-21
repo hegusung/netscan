@@ -17,9 +17,15 @@ Used by argparse arguments
 """
 
 def str_comma(input_str):
+    if input_str == None:
+        return None
+
     return list(set(input_str.split(',')))
 
 def str_ports(input_str):
+    if input_str == None:
+        return None
+
     ports = []
     for input_ports in input_str.split(','):
         if '-' in input_ports:

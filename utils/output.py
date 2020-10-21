@@ -9,6 +9,7 @@ simple_output_format = "[{time}]     {message}"
 target_output_format = "[{time}]     {target:50} {message}"
 http_output_format =   "[{time}]     {target:50} {code}   {server:40} {title}"
 dns_output_format =   "[{time}]     {target:30} {query_type:5}   {resolved}"
+port_service_output_format =   "[{time}]     {target:30} {service:30} {version}"
 
 class Output:
 
@@ -49,6 +50,8 @@ class Output:
                 output_format = http_output_format
             elif 'message_type' in message and message['message_type'] == 'dns':
                 output_format = dns_output_format
+            elif 'message_type' in message and message['message_type'] == 'port_service':
+                output_format = port_service_output_format
             elif 'target' in message:
                 output_format = target_output_format
             else:
