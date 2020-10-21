@@ -65,7 +65,7 @@ class HTTPScan:
         soup = BeautifulSoup(html, 'html.parser')
         title = soup.find('title')
 
-        if title != None:
+        if title != None and title.string != None:
             return title.string.strip()
         else:
             return 'N/A'
