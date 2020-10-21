@@ -11,6 +11,7 @@ def main():
     parser.add_argument('targets', type=str)
     parser.add_argument('--dns', metavar='dns_ip', nargs='?', type=str, help='DNS server to send query to', default=None, dest='dns')
     parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Bruteforce subdomains', default=None, dest='bruteforce')
+    parser.add_argument('--axfr', action='store_true', help='AXFR check', dest='axfr')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -23,6 +24,8 @@ def main():
     actions = []
     if args.bruteforce:
         actions.append(('bruteforce', args.bruteforce))
+    if args.axfr:
+        actions.append(('axfr',))
 
     dnsscan(args.targets, static_inputs, args.workers, args.dns, actions, args.timeout)
 

@@ -2,6 +2,7 @@ import socket
 import re
 from time import sleep
 import dns.resolver
+import dns.zone
 import tqdm
 
 from utils.output import Output
@@ -22,6 +23,9 @@ def dnsscan_worker(target, dn_server, actions, timeout):
             Output.write({"target": target['hostname'], "message": "Starting subdomain bruteforce"})
             for resolved in dnsscan.subdomain_bruteforce(action[1]):
                 Output.write({"message_type": "dns", "target": resolved['target'], "query_type": resolved["query_type"], "resolved": resolved['resolved']})
+        if action[0] == 'axfr':
+            Output.write({"target": target['hostname'], "message": "Starting AXFR check"})
+            dnsscan.axfr()
 
 
 class DNSScan:
@@ -59,6 +63,9 @@ class DNSScan:
             return False
 
     def subdomain_bruteforce(self, subdomain_file):
+        if self.is_ip(self.hostname):
+            return
+
         f = open(subdomain_file)
         nb_lines = sum(1 for _ in f)
         f.close()
@@ -77,3 +84,49 @@ class DNSScan:
                 pass
 
         f.close()
+
+    def axfr(self):
+        if self.is_ip(self.hostname):
+            return
+
+        for ns_server in self.get_nameservers():
+            Output.write({"target": ns_server['target'], "message": "Checking AXFR against nameserver %s" % ns_server['resolved']})
+
+            axfr = dns.zone.from_xfr(dns.query.xfr(ns_server['resolved'], self.hostname, lifetime=self.timeout))
+            if axfr == None:
+                continue
+
+            for name, node in axfr.nodes.items():
+                name = str(name)
+                if name == "@":
+                    name = self.hostname
+                else:
+                    if not name.endswith('.'):
+                        name = "%s.%s" % (name, self.hostname)
+                for rdataset in node.rdatasets:
+                    parts = str(rdataset).split()
+                    if len(parts) >= 4:
+                        query_type = parts[2]
+                        if not query_type in ["SOA", "NS"]:
+                            if query_type in ["MX"]:
+                                if not parts[4].endswith('.'):
+                                    resolved = "%s.%s" % (parts[4], self.hostname)
+                                Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
+                            else:
+                                resolved = parts[3]
+                                Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
+                    else:
+                            Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, type(rdataset), rdataset)})
+
+    def get_nameservers(self):
+        if self.is_ip(self.hostname):
+            return
+
+        try:
+            answer = self.resolver.query(self.hostname, 'NS')
+            for r in answer:
+                yield {"target": self.hostname, "query_type": "NS", "resolved": str(r)}
+        except dns.resolver.NXDOMAIN:
+            pass
+        except dns.resolver.NoAnswer:
+            pass
