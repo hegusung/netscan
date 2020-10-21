@@ -12,6 +12,8 @@ def main():
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='80,443', dest='port')
     parser.add_argument('--method', metavar='methods', type=str_comma, nargs='?', help='methods to connect', default='http,https', dest='method')
     parser.add_argument('--path', metavar='path', nargs='?', type=str_comma, help='HTTP path', default='/', dest='path')
+    parser.add_argument('--useragent', metavar='useragent', nargs='?', type=str, help='User agent', default='Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0', dest='useragent')
+    parser.add_argument('--proxy', metavar='http://ip:port', nargs='?', type=str, help='Proxy', default=None, dest='proxy')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -27,13 +29,13 @@ def main():
 
     Output.setup()
 
-    httpscan(args.targets, static_inputs, args.workers, args.timeout)
+    httpscan(args.targets, static_inputs, args.workers, args.useragent, args.proxy, args.timeout)
 
     Output.stop()
 
-def httpscan(input_targets, static_inputs, workers, timeout):
+def httpscan(input_targets, static_inputs, workers, useragent, proxy, timeout):
 
-    args = (timeout,)
+    args = (useragent, proxy, timeout)
 
     dispatch(input_targets, static_inputs, httpscan_worker, args, workers=workers)
 
