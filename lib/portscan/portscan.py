@@ -4,6 +4,7 @@ import os.path
 import subprocess
 import traceback
 from time import sleep
+from operator import itemgetter
 from utils.output import Output
 import xml.etree.ElementTree as ET
 
@@ -111,3 +112,32 @@ class PortScan:
             # Unable to parse XML
             Output.write({"target": "%s:%d" % (target['hostname'], target['port']), "message": "Failed to parse nmap XML output (probably due to nmap core dump)"})
 
+def top_ports(top_n, protocols=['tcp']):
+    try:
+        if top_n == None:
+            return None
+
+        top_n = int(top_n)
+
+        ports = []
+
+        # parse and sort file
+        f = open(os.path.join(os.path.dirname(__file__), 'nmap-services'))
+        for line in f:
+            if line.startswith('#'):
+                continue
+
+            line = line.strip()
+            parts = line.split()
+            freq = float(parts[2])
+            port = int(parts[1].split('/')[0])
+            protocol = parts[1].split('/')[1]
+
+            if protocol in protocols:
+                ports.append({'port': port, 'freq': freq, 'protocol': protocol})
+
+        f.close()
+    except Exception as e:
+        print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+
+    return [p['port'] for p in sorted(ports, key=itemgetter('freq'), reverse=True)[:top_n]]
