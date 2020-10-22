@@ -13,6 +13,7 @@ def main():
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--list', action='store_true', help='List contents if auth success', dest='list')
+    parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=3, dest='recurse')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -26,7 +27,7 @@ def main():
 
     actions = {}
     if args.list:
-        actions['list'] = True
+        actions['list'] = {'recurse': args.recurse}
 
     Output.setup()
 

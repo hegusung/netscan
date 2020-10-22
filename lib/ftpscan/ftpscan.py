@@ -25,16 +25,21 @@ def ftpscan_worker(target, actions, creds, timeout):
                     Output.write({'target': ftpscan.url(), 'message': 'Successful anonymous connection'})
 
                 if 'list' in actions:
-                    ftp_dir = '/'
-                    contents = ""
-                    for content in ftpscan.list_content(ftp_dir):
-                        if 'size' in content:
-                            contents += " "*80+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
-                        else:
-                            contents += " "*80+"- %s\n" % content['name']
-                    Output.write({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)})
+                    try:
+                        ftp_dir = '/'
+                        contents = ""
+                        for content in ftpscan.list_content(ftp_dir, recurse=actions['list']['recurse']):
+                            if 'size' in content:
+                                contents += " "*80+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
+                            else:
+                                contents += " "*80+"- %s\n" % content['name']
+                        Output.write({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)})
+                    except socket.timeout as e:
+                        Output.write({'target': ftpscan.url(), 'message': 'Timeout while listing folder, do you have a firewall enabled ?'})
     except Exception as e:
         Output.write({'target': ftpscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+    finally:
+        ftpscan.disconnect()
 
 
 def sizeof_fmt(num, suffix='B'):
@@ -101,14 +106,25 @@ class FTPScan:
             return False
 
     def disconnect(self):
-        self.ftp.quit()
-        self.ftp.close()
-        self.ftp = None
+        if self.ftp != None:
+            try:
+                self.ftp.quit()
+                self.ftp.close()
+            except socket.timeout:
+                pass
+            except OSError:
+                pass
+            finally:
+                self.ftp = None
 
-    def list_content(self, path="/"):
+    def list_content(self, path="/", recurse=3):
         try:
+            has_content = False
+
             contents = self.ftp.nlst(path)
+
             for content in contents:
+                has_content = True
                 if not content.startswith('/'):
                     content = os.path.join(path, content)
 
@@ -118,16 +134,30 @@ class FTPScan:
                     file_type = 'folder'
                     if not content.endswith('/'):
                         content += '/'
+
+                    if recurse <= 0:
+                        data = {'type': file_type, 'name': content}
+                        if file_size != None:
+                            data['size'] = file_size
+
+                        yield data
+                    else:
+                        for data in self.list_content(path=content, recurse=recurse-1):
+                            yield data
+
                 except Exception as e:
                     self.ftp.voidcmd("TYPE I")
                     file_size = self.ftp.size(content)
                     file_type = 'file'
 
-                data = {'type': file_type, 'name': content}
-                if file_size != None:
-                    data['size'] = file_size
+                    data = {'type': file_type, 'name': content}
+                    if file_size != None:
+                        data['size'] = file_size
 
-                yield data
+                    yield data
+
+            if not has_content and path != '/':
+                yield {'type': 'folder', 'name': path}
         except ftplib.error_perm:
             return
         except ftplib.error_temp:
