@@ -6,17 +6,23 @@ import traceback
 
 from utils.output import Output
 
-def ftpscan_worker(target, actions, timeout):
+def ftpscan_worker(target, actions, creds, timeout):
     try:
         ftpscan = FTPScan(target['hostname'], target['port'], timeout)
 
         ftp_code, version = ftpscan.grab_banner()
         if ftp_code:
-            Output.write({'target': ftpscan.url(), 'message': '%d   %s' % (ftp_code, version)}) 
+            Output.write({'target': ftpscan.url(), 'message': '%d   %s' % (ftp_code, version)})
 
-            success = ftpscan.auth()
+            if creds[0] != None and creds[1] != None:
+                success = ftpscan.auth(creds[0], creds[1])
+            else:
+                success = ftpscan.auth()
             if success:
-                Output.write({'target': ftpscan.url(), 'message': 'successful anonymous connection'}) 
+                if creds[0] != None and creds[1] != None:
+                    Output.write({'target': ftpscan.url(), 'message': 'Successful connection with credentials %s:%s' % creds})
+                else:
+                    Output.write({'target': ftpscan.url(), 'message': 'Successful anonymous connection'})
 
                 if 'list' in actions:
                     ftp_dir = '/'
@@ -26,9 +32,9 @@ def ftpscan_worker(target, actions, timeout):
                             contents += " "*80+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
                         else:
                             contents += " "*80+"- %s\n" % content['name']
-                    Output.write({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)}) 
+                    Output.write({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)})
     except Exception as e:
-        Output.write({'target': ftpscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())}) 
+        Output.write({'target': ftpscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
 
 
 def sizeof_fmt(num, suffix='B'):
