@@ -10,55 +10,73 @@ import json
 
 STOP_WAIT_SECS = 1
 
-def dispatch(targets, static_inputs, worker_func, func_args, workers=10):
+def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10, process=True, pg_name=None):
+    # Parse inputs
+    target_gen = process_inputs(targets, static_inputs)
+    target_size = count_process_inputs(targets, static_inputs)
+
+    dispatch(target_gen, target_size, worker_func, func_args, workers=workers, process=process, pg_name=pg_name)
+
+def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None):
     try:
-        process_list = []
+        worker_list = []
 
-        n_process = int(workers/100+1)
-        n_threads = int(workers/n_process)
-
-        # Parse inputs
-        target_gen = process_inputs(targets, static_inputs)
-        target_size = count_process_inputs(targets, static_inputs)
+        if process:
+            n_process = int(workers/100+1)
+            n_threads = int(workers/n_process)
+        else:
+            n_threads = int(workers)
 
         # prepare progress bar thread
         pg_queue = Queue()
-        pg_thread = Thread(target=progressbar_worker, args=(target_size, pg_queue))
+        pg_thread = Thread(target=progressbar_worker, args=(gen_size, pg_queue, pg_name))
         pg_thread.daemon = True
         pg_thread.start()
 
+        if process:
+            n_all = n_threads*n_process
+        else:
+            n_all = n_threads
+
         # Start feeding worker
         feed_queue = Queue()
-        feed_thread = Thread(target=feedqueue_worker, args=(target_gen, feed_queue, n_threads*n_process))
+        feed_thread = Thread(target=feedqueue_worker, args=(gen, feed_queue, n_all))
         feed_thread.daemon = True
         feed_thread.start()
 
-        # Start processes
-        for _ in range(n_process):
-            p = Process(target=process_worker, args=(feed_queue, worker_func, func_args, pg_queue, n_threads)) 
-            p.start()
-            process_list.append(p)
+        if process:
+            # Start processes
+            for _ in range(n_process):
+                p = Process(target=process_worker, args=(feed_queue, worker_func, func_args, pg_queue, n_threads)) 
+                p.start()
+                worker_list.append(p)
+        else:
+            for _ in range(n_threads):
+                t = Thread(target=thread_worker, args=(feed_queue, worker_func, func_args, pg_queue)) 
+                t.start()
+                worker_list.append(t)
 
         pg_thread.join()
     except KeyboardInterrupt:
         Output.write("Scan interrupted")
     finally:
-        num_terminated = 0
-        num_failed = 0 
-        end_time = time.time() + STOP_WAIT_SECS
-        for p in process_list:
-            join_secs = max(0.0, min(end_time - time.time(), STOP_WAIT_SECS))
-            p.join(join_secs)
+        if process:
+            num_terminated = 0
+            num_failed = 0 
+            end_time = time.time() + STOP_WAIT_SECS
+            for p in worker_list:
+                join_secs = max(0.0, min(end_time - time.time(), STOP_WAIT_SECS))
+                p.join(join_secs)
 
-        while process_list:
-            proc = process_list.pop()
-            if proc.is_alive():
-                proc.terminate()
-                num_terminated += 1
-            else:
-                exitcode = proc.exitcode
-                if exitcode:
-                    num_failed += 1
+            while worker_list:
+                proc = worker_list.pop()
+                if proc.is_alive():
+                    proc.terminate()
+                    num_terminated += 1
+                else:
+                    exitcode = proc.exitcode
+                    if exitcode:
+                        num_failed += 1
 
 def process_worker(feed_queue, worker_func, func_args, pg_queue, n_threads):
     try:
@@ -92,8 +110,11 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue):
     except KeyboardInterrupt:
         pass
            
-def progressbar_worker(target_size, pg_queue):
-    pg = tqdm(total=target_size, mininterval=1, position=0)
+def progressbar_worker(target_size, pg_queue, pg_name):
+    if pg_name == None:
+        pg = tqdm(total=target_size, mininterval=1)
+    else:
+        pg = tqdm(total=target_size, mininterval=1, desc=pg_name)
     count = 0
 
     while True:

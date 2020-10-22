@@ -3,7 +3,7 @@ import os
 import argparse
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
-from utils.dispatch import dispatch
+from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.portscan.portscan import portscan_worker, top_ports
 
@@ -40,9 +40,9 @@ def portscan(input_targets, static_inputs, workers, service_scan, timeout):
 
     args = (service_scan, timeout)
 
-    dispatch(input_targets, static_inputs, portscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, portscan_worker, args, workers=workers)
 
-    # Fix terminal, in case it was broken by nmap
+    # Nmap can break the terminal, so fix it
     os.system("stty echo")
 
 if __name__ == '__main__':

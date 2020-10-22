@@ -2,6 +2,7 @@ from time import sleep
 from utils.output import Output
 
 import requests
+import copy
 from bs4 import BeautifulSoup
 import urllib3
 import ssl
@@ -9,34 +10,31 @@ import tqdm
 import os.path
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.poolmanager import PoolManager
+from utils.dispatch import dispatch
+from .dir_bruteforce import dir_file_count, dir_bruteforce_generator
 
 urllib3.disable_warnings()
 
-def httpscan_worker(target, useragent, proxy, dir_bruteforce, timeout):
+def httpscan_worker(target, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[]):
     httpscan = HTTPScan(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
     output = httpscan.get(target['path'])
-    if output != None:
+    if output != None and not output['code'] in excluded_code:
         output['message_type'] = 'http'
         output['target'] = httpscan.url(target['path'])
         Output.write(output)    
 
-    if dir_bruteforce:
-        f = open(dir_bruteforce)
-        nb_lines = sum(1 for _ in f)
-        f.close()
-        f = open(dir_bruteforce)
-        for http_dir in tqdm.tqdm(f, total=nb_lines, mininterval=1, desc=httpscan.url(target['path'])):
-            http_dir = http_dir.split('#')[0].strip()
-            if len(http_dir) == 0:
-                continue
-            path = os.path.join(target['path'], http_dir)
-            output = httpscan.get(path)
-            if output != None and not output['code'] in [400, 404]:
-                output['message_type'] = 'http'
-                output['target'] = httpscan.url(path)
-                Output.write(output)    
-        f.close()
+        if dir_bruteforce:
+            extension_list = ['']
+            if extensions != None:
+                extension_list += extensions.split(',')
+                extension_list = list(set(extension_list))
+
+            gen = dir_bruteforce_generator(target, dir_bruteforce, extension_list)
+            gen_size = dir_file_count(dir_bruteforce)*len(extension_list)
+
+            args = (useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, [400, 404])
+            dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
 
 class HTTPScan:
 
@@ -87,7 +85,7 @@ class HTTPScan:
         headers = res.headers
 
         server = headers['server'].strip() if 'server' in headers else 'N/A'
-        content_type = headers['content-type'].strip() if 'server' in headers else None
+        content_type = headers['content-type'].strip() if 'content-type' in headers else None
 
         html = ""
         max_size = 1024*1000
