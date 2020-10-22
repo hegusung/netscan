@@ -2,12 +2,9 @@ from time import sleep
 from utils.output import Output
 
 import requests
-import copy
 from bs4 import BeautifulSoup
 import urllib3
 import ssl
-import tqdm
-import os.path
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.poolmanager import PoolManager
 from utils.dispatch import dispatch
