@@ -2,7 +2,7 @@
 import argparse
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
-from utils.dispatch import dispatch
+from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.dnsscan.dnsscan import dnsscan_worker
 
@@ -35,7 +35,7 @@ def dnsscan(input_targets, static_inputs, workers, dns, actions, timeout):
 
     args = (dns, actions, timeout)
 
-    dispatch(input_targets, static_inputs, dnsscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, dnsscan_worker, args, workers=workers)
 
 if __name__ == '__main__':
     main()
