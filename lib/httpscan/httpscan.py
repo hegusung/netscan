@@ -5,15 +5,38 @@ import requests
 from bs4 import BeautifulSoup
 import urllib3
 import ssl
+import tqdm
+import os.path
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.poolmanager import PoolManager
 
 urllib3.disable_warnings()
 
-def httpscan_worker(target, useragent, proxy, timeout):
+def httpscan_worker(target, useragent, proxy, dir_bruteforce, timeout):
     httpscan = HTTPScan(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
-    httpscan.get(target['path'])
+    output = httpscan.get(target['path'])
+    if output != None:
+        output['message_type'] = 'http'
+        output['target'] = httpscan.url(target['path'])
+        Output.write(output)    
+
+    if dir_bruteforce:
+        f = open(dir_bruteforce)
+        nb_lines = sum(1 for _ in f)
+        f.close()
+        f = open(dir_bruteforce)
+        for http_dir in tqdm.tqdm(f, total=nb_lines, mininterval=1, desc=httpscan.url(target['path'])):
+            http_dir = http_dir.split('#')[0].strip()
+            if len(http_dir) == 0:
+                continue
+            path = os.path.join(target['path'], http_dir)
+            output = httpscan.get(path)
+            if output != None and not output['code'] in [400, 404]:
+                output['message_type'] = 'http'
+                output['target'] = httpscan.url(path)
+                Output.write(output)    
+        f.close()
 
 class HTTPScan:
 
@@ -26,9 +49,12 @@ class HTTPScan:
         self.proxy = proxy
         self.read_timeout = 60
 
+    def url(self, path):
+        return "%s://%s:%d%s" % (self.method, self.hostname, self.port, path)
+
     def get(self, path, ssl_version=ssl.PROTOCOL_TLSv1_2):
         try:
-            url = "{method}://{hostname}:{port}{path}".format(method=self.method, hostname=self.hostname, port=self.port, path=path)
+            url = self.url(path)
 
             if self.proxy:
                 proxies = {
@@ -47,10 +73,6 @@ class HTTPScan:
             res = session.get(url, timeout=(self.connect_timeout, self.read_timeout), headers=headers, proxies=proxies, verify=False, stream=True)
             response_data = self.parse_response(res)
 
-            response_data['message_type'] = 'http'
-            response_data['target'] = url
-
-            Output.write(response_data)    
         except requests.exceptions.ConnectTimeout:
             response_data = None
         except requests.exceptions.ConnectionError:
