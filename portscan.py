@@ -12,6 +12,7 @@ def main():
     parser.add_argument('targets', type=str)
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default=None, dest='port')
     parser.add_argument('--top-ports', metavar='top-N', nargs='?', type=top_ports, help='top n ports', default=None, dest='top_ports')
+    parser.add_argument('-p-', action='store_true', help='Scan all ports', dest='all_ports')
     parser.add_argument('-sV', action='store_true', help='Service scan (nmap)', dest='service_scan')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
@@ -19,12 +20,15 @@ def main():
     args = parser.parse_args()
 
     static_inputs = {}
-    static_inputs['port'] = []
-    if args.port:
-        static_inputs['port'] += args.port
-    if args.top_ports:
-        static_inputs['port'] += args.top_ports
-    static_inputs['port'] = list(set(static_inputs['port']))
+    if args.all_ports:
+        static_inputs['port'] = list(range(1,65536))
+    else:
+        static_inputs['port'] = []
+        if args.port:
+            static_inputs['port'] += args.port
+        if args.top_ports:
+            static_inputs['port'] += args.top_ports
+        static_inputs['port'] = list(set(static_inputs['port']))
 
     Output.setup()
 
