@@ -61,12 +61,13 @@ class HTTPScan:
 
             headers = {
                 'User-Agent': self.useragent,
+                'Connection':'close', # no need to keep the connection opened once we got our answer
             }
 
-            session = requests.Session()
-            session.mount('https://', SSLAdapter(ssl_version))
-            res = session.get(url, timeout=(self.connect_timeout, self.read_timeout), headers=headers, proxies=proxies, verify=False, stream=True)
-            response_data = self.parse_response(res)
+            with requests.Session() as session:
+                session.mount('https://', SSLAdapter(ssl_version))
+                res = session.get(url, timeout=(self.connect_timeout, self.read_timeout), headers=headers, proxies=proxies, verify=False, stream=True)
+                response_data = self.parse_response(res)
 
         except requests.exceptions.ConnectTimeout:
             response_data = None

@@ -26,10 +26,6 @@ def main():
         static_inputs['port'] += args.top_ports
     static_inputs['port'] = list(set(static_inputs['port']))
 
-    if len(static_inputs['port']) == 0:
-        print('Please specify some ports')
-        return
-
     Output.setup()
 
     portscan(args.targets, static_inputs, args.workers, args.service_scan, args.timeout)
