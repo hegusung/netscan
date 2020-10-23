@@ -1,6 +1,13 @@
 from time import sleep
 from utils.output import Output
 
+# Cert related imports
+import idna
+from socket import socket
+from OpenSSL import SSL
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+
 import requests
 from bs4 import BeautifulSoup
 import urllib3
@@ -20,6 +27,11 @@ def httpscan_worker(target, useragent, proxy, dir_bruteforce, extensions, dir_br
         output['message_type'] = 'http'
         output['target'] = httpscan.url(target['path'])
         Output.write(output)    
+        
+        if httpscan.method == 'https':
+            names = httpscan.get_cert_hostnames()
+            if len(names) != 0:
+                Output.write({"target": httpscan.url(target['path']), "message": "certificates names: %s" % ", ".join(names)})
 
         if dir_bruteforce:
             extension_list = ['']
@@ -77,6 +89,44 @@ class HTTPScan:
             response_data = None
 
         return response_data
+
+    def get_cert_hostnames(self):
+        if self.method != 'https':
+            return None
+
+        hostname_idna = idna.encode(self.hostname)
+
+        sock = socket()
+
+        sock.connect((self.hostname, self.port))
+        peername = sock.getpeername()
+        ctx = SSL.Context(SSL.SSLv23_METHOD) # most compatible
+        ctx.check_hostname = False
+        ctx.verify_mode = SSL.VERIFY_NONE
+
+        sock_ssl = SSL.Connection(ctx, sock)
+        sock_ssl.set_connect_state()
+        sock_ssl.set_tlsext_host_name(hostname_idna)
+        sock_ssl.do_handshake()
+        cert = sock_ssl.get_peer_certificate()
+        cert = cert.to_cryptography()
+        sock_ssl.close()
+        sock.close()
+
+        names = []
+        try:
+            name = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            names.append(name[0].value)
+        except x509.ExtensionNotFound:
+            pass
+
+        try:
+            ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            names += ext.value.get_values_for_type(x509.DNSName)
+        except x509.ExtensionNotFound:
+            pass
+
+        return list(set(names))
 
     def parse_response(self, res):
         code = res.status_code
