@@ -33,6 +33,7 @@ class DNSScan:
     def __init__(self, hostname, dn_server, timeout):
         self.hostname = hostname
         self.timeout = timeout
+        self.dn_server = dn_server
 
         self.resolver = dns.resolver.Resolver()
         self.resolver.timeout = timeout
@@ -92,31 +93,39 @@ class DNSScan:
         for ns_server in self.get_nameservers():
             Output.write({"target": ns_server['target'], "message": "Checking AXFR against nameserver %s" % ns_server['resolved']})
 
-            axfr = dns.zone.from_xfr(dns.query.xfr(ns_server['resolved'], self.hostname, lifetime=self.timeout))
-            if axfr == None:
-                continue
+            # resolve nameserver IP
+            resolver = dns.resolver.Resolver()
+            resolver.timeout = self.timeout
+            if self.dn_server != None:
+                self.resolver.nameservers = [self.dn_server]
+            answer = self.resolver.query(ns_server['resolved'], "A")
 
-            for name, node in axfr.nodes.items():
-                name = str(name)
-                if name == "@":
-                    name = self.hostname
-                else:
-                    if not name.endswith('.'):
-                        name = "%s.%s" % (name, self.hostname)
-                for rdataset in node.rdatasets:
-                    parts = str(rdataset).split()
-                    if len(parts) >= 4:
-                        query_type = parts[2]
-                        if not query_type in ["SOA", "NS"]:
-                            if query_type in ["MX"]:
-                                if not parts[4].endswith('.'):
-                                    resolved = "%s.%s" % (parts[4], self.hostname)
-                                Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
-                            else:
-                                resolved = parts[3]
-                                Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
+            for ns_ip in answer:
+                axfr = dns.zone.from_xfr(dns.query.xfr(str(ns_ip), self.hostname, lifetime=self.timeout))
+                if axfr == None:
+                    continue
+
+                for name, node in axfr.nodes.items():
+                    name = str(name)
+                    if name == "@":
+                        name = self.hostname
                     else:
-                            Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, type(rdataset), rdataset)})
+                        if not name.endswith('.'):
+                            name = "%s.%s" % (name, self.hostname)
+                    for rdataset in node.rdatasets:
+                        parts = str(rdataset).split()
+                        if len(parts) >= 4:
+                            query_type = parts[2]
+                            if not query_type in ["SOA", "NS"]:
+                                if query_type in ["MX"]:
+                                    if not parts[4].endswith('.'):
+                                        resolved = "%s.%s" % (parts[4], self.hostname)
+                                    Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
+                                else:
+                                    resolved = parts[3]
+                                    Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
+                        else:
+                                Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, type(rdataset), rdataset)})
 
     def get_nameservers(self):
         if self.is_ip(self.hostname):
