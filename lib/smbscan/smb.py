@@ -423,3 +423,35 @@ class SMBScan:
         for group in enum.enumGroups():
             yield group
 
+    def enum_loggedin(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+
+        for logged in enum.enumLoggedIn():
+            yield logged
+
+    def enum_sessions(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+
+        for session in enum.enumSessions():
+            yield session
+

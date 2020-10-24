@@ -31,6 +31,8 @@ def main():
     # Enum
     parser.add_argument("--users", action='store_true', help='dump users from target systems')
     parser.add_argument("--groups", action='store_true', help='dump groups from target systems')
+    parser.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
+    parser.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -74,6 +76,10 @@ def main():
         actions['users'] = {}
     if args.groups:
         actions['groups'] ={}
+    if args.loggedin:
+        actions['loggedin'] ={}
+    if args.sessions:
+        actions['sessions'] ={}
 
     Output.setup()
 
