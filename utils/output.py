@@ -8,8 +8,9 @@ time_format = "%Y/%m/%d %H:%M:%S"
 simple_output_format = "[{time}]     {message}"
 target_output_format = "[{time}]     {target:50} {message}"
 http_output_format =   "[{time}]     {target:50} {code}   {server:40} {title}"
-dns_output_format =   "[{time}]     {target:30} {query_type:5}   {resolved}"
+dns_output_format =    "[{time}]     {target:30} {query_type:5}   {resolved}"
 port_service_output_format =   "[{time}]     {target:30} {service:30} {version}"
+smb_output_format =    "[{time}]     {target:30} {domain:30} {hostname:30} {server_os}"
 
 class Output:
 
@@ -44,7 +45,7 @@ class Output:
 
             if not 'time' in message:
                 now = datetime.now()
-                message['time'] = now.strftime(time_format) 
+                message['time'] = now.strftime(time_format)
 
             if 'message_type' in message and message['message_type'] == 'http':
                 output_format = http_output_format
@@ -52,6 +53,8 @@ class Output:
                 output_format = dns_output_format
             elif 'message_type' in message and message['message_type'] == 'port_service':
                 output_format = port_service_output_format
+            elif 'message_type' in message and message['message_type'] == 'smb':
+                output_format = smb_output_format
             elif 'target' in message:
                 output_format = target_output_format
             else:
