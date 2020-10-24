@@ -15,19 +15,21 @@
 #  DCE/RPC for SAMR
 
 from impacket.nt_errors import STATUS_MORE_ENTRIES
-from impacket.dcerpc.v5 import transport, samr
+from impacket.dcerpc.v5 import transport, samr, wkst, srvs
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.samr import DCERPCSessionError
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
+
+# https://github.com/SecureAuthCorp/impacket/blob/master/examples/netview.py
 
 class ListUsersException(Exception):
     pass
 
 class Enum:
-    KNOWN_PROTOCOLS = {
+    SAMR_KNOWN_PROTOCOLS = {
         '139/SMB': (r'ncacn_np:%s[\pipe\samr]', 139),
         '445/SMB': (r'ncacn_np:%s[\pipe\samr]', 445),
-        }
+    }
 
     def __init__(self, hostname, port, domain, username, password, hash, conn):
 
@@ -58,7 +60,7 @@ class Enum:
         addr. Addr is a valid host name or IP address.
         """
 
-        protodef = Enum.KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
+        protodef = Enum.SAMR_KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
         port = protodef[1]
 
         rpctransport = transport.SMBTransport(self.__addr, port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
@@ -99,7 +101,7 @@ class Enum:
         addr. Addr is a valid host name or IP address.
         """
 
-        protodef = Enum.KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
+        protodef = Enum.SAMR_KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
         port = protodef[1]
 
         rpctransport = transport.SMBTransport(self.__addr, port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
@@ -117,8 +119,6 @@ class Enum:
                 'uid': uid,
             }
 
-
-
     def enumAdmins(self, silent=False):
         """Dumps the list of admins registered present at
         addr. Addr is a valid host name or IP address.
@@ -127,7 +127,7 @@ class Enum:
         # Try all requested protocols until one works.
         entries = []
 
-        protodef = Enum.KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
+        protodef = Enum.SAMR_KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
         port = protodef[1]
 
         rpctransport = transport.SMBTransport(self.__addr, port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
@@ -145,6 +145,59 @@ class Enum:
             #for member in members["RelativeIds"]:
             new_domain_group(domain, self.__addr, groupname, rid=uid, contained_rid=members["RelativeIds"], comment=group["AdminComment"])
             """
+
+    def enumLoggedIn(self):
+        rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\wkssvc', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
+
+        dce = rpctransport.get_dce_rpc()
+
+        dce.connect()
+        dce.bind(wkst.MSRPC_UUID_WKST)
+
+        try:
+            resp = wkst.hNetrWkstaUserEnum(dce,1)
+        except Exception as e:
+            print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+
+        for session in resp['UserInfo']['WkstaUserInfo']['Level1']['Buffer']:
+            username = session['wkui1_username'][:-1]
+            logonDomain = session['wkui1_logon_domain'][:-1]
+
+            yield {
+                'username': username,
+                'domain': logonDomain,
+            }
+
+        dce.disconnect()
+
+
+    def enumSessions(self):
+        rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\srvsvc', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
+
+        dce = rpctransport.get_dce_rpc()
+
+        dce.connect()
+        dce.bind(srvs.MSRPC_UUID_SRVS)
+
+        try:
+            resp = srvs.hNetrSessionEnum(dce, '\x00', NULL, 10)
+        except Exception as e:
+            print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+
+        for session in resp['InfoStruct']['SessionInfo']['Level10']['Buffer']:
+            username = session['sesi10_username'][:-1]
+            sourceIP = session['sesi10_cname'][:-1][2:]
+            active_time = session['sesi10_time']
+            idle_time = session['sesi10_idle_time']
+
+            yield {
+                'username': username,
+                'source_ip': sourceIP,
+                'active_time': active_time,
+                'idle_time': idle_time,
+            }
+
+        dce.disconnect()
 
     def __fetchUserList(self, rpctransport):
         dce = rpctransport.get_dce_rpc()

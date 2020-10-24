@@ -116,6 +116,16 @@ def smbscan_worker(target, actions, creds, timeout):
                 for entry in entries:
                     group = '%s\\%s' % (entry['domain'], entry['groupname'])
                     Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
+            if 'loggedin' in actions:
+                entries = smbscan.enum_loggedin()
+                Output.write({'target': smbscan.url(), 'message': 'Logged in users:'})
+                for entry in entries:
+                    Output.write({'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
+            if 'session' in actions:
+                entries = smbscan.enum_sessions()
+                Output.write({'target': smbscan.url(), 'message': 'Sessions:'})
+                for entry in entries:
+                    Output.write({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
 
     except Exception as e:
         Output.write({'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
