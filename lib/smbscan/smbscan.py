@@ -67,7 +67,7 @@ def smbscan_worker(target, actions, creds, timeout):
             if 'list_shares' in actions:
                 shares = "Shares:\n"
                 for share_info in smbscan.list_shares():
-                    shares += " "*80+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
+                    shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
                     share_list.append(share_info['name'])
                 Output.write({'target': smbscan.url(), 'message': shares})
             if 'list' in actions:
@@ -82,10 +82,40 @@ def smbscan_worker(target, actions, creds, timeout):
                     contents = "Content of share %s:\n" % share
                     for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
                         if 'size' in content:
-                            contents += " "*80+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
+                            contents += " "*60+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
                         else:
-                            contents += " "*80+"- %s\n" % (content['name'].ljust(30),)
+                            contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
                     Output.write({'target': smbscan.url(), 'message': contents})
+            if 'command' in actions:
+                output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True)
+                if output:
+                    Output.write({'target': smbscan.url(), 'message': 'Executed command \'%s\':\n%s' % (actions['command']['command'], output)})
+                else:
+                    Output.write({'target': smbscan.url(), 'message': 'Failed to execute command %s' % (actions['command']['command'],)})
+            if 'sam' in actions:
+                entries = smbscan.dump_sam()
+                output = "SAM hashes:\n"
+                for entry in entries:
+                    output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
+                Output.write({'target': smbscan.url(), 'message': output})
+            if 'lsa' in actions:
+                entries = smbscan.dump_lsa()
+                output = "LSA secrets:\n"
+                for entry in entries:
+                    output += " "*60+"- %s\n" % (entry['secret'],)
+                Output.write({'target': smbscan.url(), 'message': output})
+            if 'users' in actions:
+                entries = smbscan.enum_users()
+                Output.write({'target': smbscan.url(), 'message': 'Users:'})
+                for entry in entries:
+                    user = '%s\\%s' % (entry['domain'], entry['username'])
+                    Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], user.ljust(30), entry['fullname'])})
+            if 'groups' in actions:
+                entries = smbscan.enum_groups()
+                Output.write({'target': smbscan.url(), 'message': 'Groups:'})
+                for entry in entries:
+                    group = '%s\\%s' % (entry['domain'], entry['groupname'])
+                    Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
 
     except Exception as e:
         Output.write({'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})

