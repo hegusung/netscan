@@ -39,21 +39,21 @@ def smbscan_worker(target, actions, creds, timeout):
 
                 if 'password' in creds:
                     try:
-                        success, is_admin = smbscan.auth(domain=creds['username'], username=creds['username'], password=creds['password'])
+                        success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
                         Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
                     except AuthFailure as e:
                         Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
                         return
                 elif 'hash' in creds:
                     try:
-                        success, is_admin = smbscan.auth(domain=creds['username'], username=creds['username'], hash=creds['hash'])
+                        success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
                         Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
                     except AuthFailure as e:
                         Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
                         return
                 else:
                     try:
-                        success, is_admin = smbscan.auth(domain=creds['username'], username=creds['username'], password='')
+                        success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password='')
                         Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
                     except AuthFailure as e:
                         Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
@@ -109,7 +109,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 Output.write({'target': smbscan.url(), 'message': 'Users:'})
                 for entry in entries:
                     user = '%s\\%s' % (entry['domain'], entry['username'])
-                    Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], user.ljust(30), entry['fullname'])})
+                    Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
             if 'groups' in actions:
                 entries = smbscan.enum_groups()
                 Output.write({'target': smbscan.url(), 'message': 'Groups:'})
