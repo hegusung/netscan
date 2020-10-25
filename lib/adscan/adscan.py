@@ -105,7 +105,7 @@ def adscan_worker(target, actions, creds, timeout):
             # Perform actions
 
             if 'users' in actions:
-                Output.write({'target': smbscan.url(), 'message': 'Users:'})
+                Output.write({'target': ldapscan.url(), 'message': 'Users:'})
                 if ldap_available:
                     for entry in ldapscan.list_users():
                         user = '%s\\%s' % (entry['domain'], entry['username'])
@@ -113,7 +113,7 @@ def adscan_worker(target, actions, creds, timeout):
                 else:
                     raise NotImplementedError('Dumping users through SMB')
             if 'groups' in actions:
-                Output.write({'target': smbscan.url(), 'message': 'Groups:'})
+                Output.write({'target': ldapscan.url(), 'message': 'Groups:'})
                 if ldap_available:
                     for entry in ldapscan.list_groups():
                         group = '%s\\%s' % (entry['domain'], entry['groupname'])
@@ -121,16 +121,18 @@ def adscan_worker(target, actions, creds, timeout):
                 else:
                     raise NotImplementedError('Dumping groups through SMB')
             if 'hosts' in actions:
-                Output.write({'target': smbscan.url(), 'message': 'Hosts:'})
+                Output.write({'target': ldapscan.url(), 'message': 'Hosts:'})
                 if ldap_available:
                     for entry in ldapscan.list_hosts():
                         host = '%s\\%s' % (entry['domain'], entry['hostname'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (host.ljust(40), entry['os'].ljust(20), entry['comment'])})
                 else:
                     raise NotImplementedError('Dumping hosts through SMB')
-
-
-
+            if 'dns' in actions:
+                Output.write({'target': ldapscan.url(), 'message': 'DNS entries:'})
+                if ldap_available:
+                    for entry in ldapscan.list_dns():
+                        Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})

@@ -186,4 +186,22 @@ class LDAPScan:
                 'comment': comment,
             }
 
+    def list_dns(self):
+        entry_generator = self.conn.extend.standard.paged_search(search_base='%s' % self.defaultdomainnamingcontext,
+                                  search_filter="(objectClass=dnsNode)",
+                                  search_scope=ldap3.SUBTREE,
+                                  attributes=ldap3.ALL_ATTRIBUTES,
+                                  get_operational_attributes=True,
+                                  paged_size = 100,
+                                  generator=True)
 
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                dn = obj_info["dn"].split(",CN=MicrosoftDNS,",1)[0]
+                dns_entry = ".".join([item.split("=", 1)[-1] for item in dn.split(',') if item.split("=",1)[0].lower() == "dc"])
+                if not '.in-addr.arpa' in dns_entry:
+                    yield dns_entry
