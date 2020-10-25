@@ -18,6 +18,7 @@ from .exec.smbexec import SMBEXEC
 from .exec.wmiexec import WMIEXEC
 from .exec.mmcexec import MMCEXEC
 from .enum import Enum
+from .spns import GetUserSPNs
 from utils.output import Output
 from utils.utils import AuthFailure, sizeof_fmt, gen_random_string
 
@@ -488,4 +489,20 @@ class SMBScan:
 
         for session in enum.enumSessions():
             yield session
+
+    def list_spns(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+
+        get_spns = GetUserSPNs(self.hostname, username, password, domain)
+
+        for spn in get_spns.run():
+            yield spn
+
 

@@ -22,7 +22,8 @@ def main():
     parser.add_argument("--groups", action='store_true', help='dump groups from Active Directory')
     parser.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory')
     parser.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
-    parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
+    parser.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
+    #parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -56,8 +57,10 @@ def main():
         actions['hosts'] ={}
     if args.dns:
         actions['dns'] ={}
-    if args.passpol:
-        actions['passpol'] = {}
+    if args.spns:
+        actions['spns'] ={}
+    #if args.passpol:
+    #    actions['passpol'] = {}
 
     Output.setup()
 
