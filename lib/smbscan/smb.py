@@ -353,7 +353,7 @@ class SMBScan:
             try:
                 self.remote_ops.finish()
             except Exception as e:
-                logging.debug("Error calling remote_ops.finish(): {}".format(e))
+                print("Error calling remote_ops.finish(): {}".format(e))
 
             self.remote_ops = None
             self.bootkey = None
@@ -382,7 +382,7 @@ class SMBScan:
             try:
                 self.remote_ops.finish()
             except Exception as e:
-                logging.debug("Error calling remote_ops.finish(): {}".format(e))
+                print("Error calling remote_ops.finish(): {}".format(e))
 
             self.remote_ops = None
             self.bootkey = None
@@ -422,6 +422,37 @@ class SMBScan:
 
         for group in enum.enumGroups():
             yield group
+
+    def enum_admins(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+
+        for user in enum.enumAdmins():
+            yield user
+
+    def enum_password_policy(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+
+        return enum.enumPasswordPolicy()
 
     def enum_loggedin(self):
         if self.conn == None:

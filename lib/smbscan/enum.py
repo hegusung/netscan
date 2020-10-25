@@ -1,24 +1,10 @@
-#!/usr/bin/python
-# Copyright (c) 2003-2015 CORE Security Technologies
-#
-# This software is provided under under a slightly modified version
-# of the Apache Software License. See the accompanying LICENSE file
-# for more information.
-#
-# Description: DCE/RPC SAMR dumper.
-#
-# Author:
-#  Javier Kohen <jkohen@coresecurity.com>
-#  Alberto Solino (@agsolino)
-#
-# Reference for:
-#  DCE/RPC for SAMR
-
+from time import strftime, gmtime
 from impacket.nt_errors import STATUS_MORE_ENTRIES
-from impacket.dcerpc.v5 import transport, samr, wkst, srvs
+from impacket.dcerpc.v5 import transport, samr, wkst, srvs, lsat, lsad
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.samr import DCERPCSessionError
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
+from impacket.dcerpc.v5.samr import SID_NAME_USE
 
 # https://github.com/SecureAuthCorp/impacket/blob/master/examples/netview.py
 
@@ -26,11 +12,6 @@ class ListUsersException(Exception):
     pass
 
 class Enum:
-    SAMR_KNOWN_PROTOCOLS = {
-        '139/SMB': (r'ncacn_np:%s[\pipe\samr]', 139),
-        '445/SMB': (r'ncacn_np:%s[\pipe\samr]', 445),
-    }
-
     def __init__(self, hostname, port, domain, username, password, hash, conn):
 
         self.__username = username
@@ -60,10 +41,7 @@ class Enum:
         addr. Addr is a valid host name or IP address.
         """
 
-        protodef = Enum.SAMR_KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
-        port = protodef[1]
-
-        rpctransport = transport.SMBTransport(self.__addr, port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
+        rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
 
         # Display results.
 
@@ -101,10 +79,7 @@ class Enum:
         addr. Addr is a valid host name or IP address.
         """
 
-        protodef = Enum.SAMR_KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
-        port = protodef[1]
-
-        rpctransport = transport.SMBTransport(self.__addr, port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
+        rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
 
         for entry in self.__fetchGroupList(rpctransport):
             (domain, groupname, uid, group, members) = entry
@@ -124,27 +99,71 @@ class Enum:
         addr. Addr is a valid host name or IP address.
         """
 
-        # Try all requested protocols until one works.
-        entries = []
-
-        protodef = Enum.SAMR_KNOWN_PROTOCOLS['{}/SMB'.format(self.__port)]
-        port = protodef[1]
-
-        rpctransport = transport.SMBTransport(self.__addr, port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
+        rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
 
         # Display results.
 
-        for entry in self.__fetchAdminList(rpctransport):
-            print(entry)
-            """
-            (domain, groupname, uid, group, members) = entry
-            if self.__host_domain != domain:
-                domain = "WORKGROUP"
-            if not silent:
-                Logger.highlight("%s\\%s (%d) %s" % (domain, groupname.ljust(30), uid, group["AdminComment"]))
-            #for member in members["RelativeIds"]:
-            new_domain_group(domain, self.__addr, groupname, rid=uid, contained_rid=members["RelativeIds"], comment=group["AdminComment"])
-            """
+        admin_sids = self.__fetchAdminSidList(rpctransport)
+        for entry in self.__lookupSidUidGen((n for n in admin_sids)):
+            yield entry
+
+    def enumPasswordPolicy(self):
+        rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
+
+        dce = rpctransport.get_dce_rpc()
+        dce.connect()
+
+        dce.bind(samr.MSRPC_UUID_SAMR)
+
+        resp = samr.hSamrConnect(dce)
+        serverHandle = resp['ServerHandle']
+
+        resp = samr.hSamrEnumerateDomainsInSamServer(dce, serverHandle)
+        domains = resp['Buffer']['Buffer']
+
+        domain = domains[0]["Name"]
+        resp = samr.hSamrLookupDomainInSamServer(dce, serverHandle, domains[0]['Name'])
+
+        resp = samr.hSamrOpenDomain(dce, serverHandle = serverHandle, domainId = resp['DomainId'])
+        domainHandle = resp['DomainHandle']
+
+        if self.__host_domain == "":
+            domain = "WORKGROUP"
+        else:
+            domain = self.__host_domain
+
+        resp = samr.hSamrQueryInformationDomain(dce, domainHandle, samr.DOMAIN_INFORMATION_CLASS.DomainPasswordInformation)
+
+        pass_complexity = resp['Buffer']['Password']['PasswordProperties']
+        min_pass_len = resp['Buffer']['Password']['MinPasswordLength']
+        pass_hst_len = resp['Buffer']['Password']['PasswordHistoryLength']
+
+        max_pass_age = self.__convert(resp['Buffer']['Password']['MaxPasswordAge']['LowPart'],
+                                    resp['Buffer']['Password']['MaxPasswordAge']['HighPart'],
+                                    1)
+
+        min_pass_age = self.__convert(resp['Buffer']['Password']['MinPasswordAge']['LowPart'],
+                                    resp['Buffer']['Password']['MinPasswordAge']['HighPart'],
+                                    1)
+
+        resp = samr.hSamrQueryInformationDomain2(dce, domainHandle,samr.DOMAIN_INFORMATION_CLASS.DomainLockoutInformation)
+
+        lock_threshold = int(resp['Buffer']['Lockout']['LockoutThreshold'])
+
+        lock_duration = None
+        if lock_threshold != 0: lock_duration = int(resp['Buffer']['Lockout']['LockoutDuration']) / -600000000
+
+        dce.disconnect()
+
+        return {
+            'complexity': pass_complexity,
+            'minimum_length': min_pass_len,
+            'history_length': pass_hst_len,
+            'maximum_age': max_pass_age,
+            'minimum_age': min_pass_age,
+            'lock_threshold': lock_threshold,
+            'lock_duration': lock_duration,
+        }
 
     def enumLoggedIn(self):
         rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\wkssvc', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
@@ -315,7 +334,7 @@ class Enum:
 
         #return domain, entries
 
-    def __fetchAdminList(self, rpctransport):
+    def __fetchAdminSidList(self, rpctransport):
         dce = rpctransport.get_dce_rpc()
 
         domain = None
@@ -323,6 +342,8 @@ class Enum:
 
         dce.connect()
         dce.bind(samr.MSRPC_UUID_SAMR)
+
+        admin_sids = []
 
         try:
             resp = samr.hSamrConnect(dce)
@@ -351,11 +372,103 @@ class Enum:
 
                     resp = samr.hSamrGetMembersInAlias(dce, resp["AliasHandle"])
                     for member in resp["Members"]["Sids"]:
-                        yield member["SidPointer"].formatCanonical()
+                        admin_sids.append(member["SidPointer"].formatCanonical())
 
         except ListUsersException as e:
             print("Error listing group: %s" % e)
 
         dce.disconnect()
 
-        #return domain, entries
+        return admin_sids
+
+    def __lookupSidUidGen(self, sid_uid_gen):
+
+        rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\lsarpc', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
+        dce = rpctransport.get_dce_rpc()
+
+        domain = None
+        entries = []
+
+        dce.connect()
+        dce.bind(lsat.MSRPC_UUID_LSAT)
+
+        resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
+        policyHandle = resp['PolicyHandle']
+
+        resp = lsad.hLsarQueryInformationPolicy2(dce, policyHandle, lsad.POLICY_INFORMATION_CLASS.PolicyAccountDomainInformation)
+        domainSid = resp['PolicyInformation']['PolicyAccountDomainInfo']['DomainSid'].formatCanonical()
+
+        SIMULTANEOUS = 1000
+
+        while True:
+            empty = True
+            sids = []
+            for i in sid_uid_gen:
+                empty = False
+                if type(i) == int:
+                    i = domainSid + '-%d' % i
+                sids.append(i)
+
+                if len(sids) >= SIMULTANEOUS:
+                    break
+
+            if empty:
+                break
+
+
+            try:
+                resp = lsat.hLsarLookupSids(dce, policyHandle, sids,lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
+            except DCERPCException as e:
+                if str(e).find('STATUS_NONE_MAPPED') >= 0:
+                    continue
+                elif str(e).find('STATUS_SOME_NOT_MAPPED') >= 0:
+                    resp = e.get_packet()
+                else:
+                    raise
+
+            for n, item in enumerate(resp['TranslatedNames']['Names']):
+                if item['Use'] != SID_NAME_USE.SidTypeUnknown:
+                    yield {
+                        'domain': resp['ReferencedDomains']['Domains'][item['DomainIndex']]['Name'],
+                        'name': item['Name'],
+                        'type': SID_NAME_USE.enumItems(item['Use']).name
+                    }
+
+        dce.disconnect()
+
+
+    def __convert(self, low, high, no_zero):
+
+        if low == 0 and hex(high) == "-0x80000000":
+            return "Not Set"
+        if low == 0 and high == 0:
+            return "None"
+        if no_zero: # make sure we have a +ve vale for the unsined int
+            if (low != 0):
+                high = 0 - (high+1)
+            else:
+                high = 0 - (high)
+            low = 0 - low
+        tmp = low + (high)*16**8 # convert to 64bit int
+        tmp *= (1e-7) #  convert to seconds
+        try:
+            minutes = int(strftime("%M", gmtime(tmp)))  # do the conversion to human readable format
+        except ValueError as e:
+            return "BAD TIME:"
+        hours = int(strftime("%H", gmtime(tmp)))
+        days = int(strftime("%j", gmtime(tmp)))-1
+        time = ""
+        if days > 1:
+         time = str(days) + " days "
+        elif days == 1:
+            time = str(days) + " day "
+        if hours > 1:
+            time += str(hours) + " hours "
+        elif hours == 1:
+            time = str(days) + " hour "
+        if minutes > 1:
+            time += str(minutes) + " minutes"
+        elif minutes == 1:
+            time = str(days) + " minute "
+        return time
+

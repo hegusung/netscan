@@ -116,6 +116,25 @@ def smbscan_worker(target, actions, creds, timeout):
                 for entry in entries:
                     group = '%s\\%s' % (entry['domain'], entry['groupname'])
                     Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
+            if 'admins' in actions:
+                entries = smbscan.enum_admins()
+                Output.write({'target': smbscan.url(), 'message': 'Administrators:'})
+                for entry in entries:
+                    admin = '%s\\%s' % (entry['domain'], entry['name'])
+                    Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (admin.ljust(30), entry['type'])})
+            if 'passpol' in actions:
+                password_policy = smbscan.enum_password_policy()
+                output = "Password policy:\n"
+                output += " "*60+"- Complexity:       %s\n" % ("Enabled" if password_policy['complexity'] == 1 else "Disabled",)
+                output += " "*60+"- Minimum length:   %d\n" % password_policy['minimum_length']
+                output += " "*60+"- History:          last %d passwords\n" % password_policy['history_length']
+                output += " "*60+"- Maximum age:      %s\n" % password_policy['maximum_age']
+                output += " "*60+"- Minimum age:      %s\n" % password_policy['minimum_age']
+                output += " "*60+"- Lock threshold:   %s\n" % (str(password_policy['lock_threshold']) if password_policy['lock_threshold'] != 0 else "Disabled",)
+                if password_policy['lock_threshold'] != 0:
+                    output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
+
+                Output.write({'target': smbscan.url(), 'message': output})
             if 'loggedin' in actions:
                 entries = smbscan.enum_loggedin()
                 Output.write({'target': smbscan.url(), 'message': 'Logged in users:'})
