@@ -133,6 +133,11 @@ def adscan_worker(target, actions, creds, timeout):
                 if ldap_available:
                     for entry in ldapscan.list_dns():
                         Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
+            if 'gpps' in actions:
+                Output.write({'target': smbscan.url(), 'message': 'Passwords in GPPs:'})
+                if smb_available:
+                    for entry in smbscan.list_gpps():
+                        Output.write({'target': smbscan.url(), 'message': '- %s   %s' % (entry['username'].ljust(40), entry['password'].ljust(20))})
             if 'spns' in actions:
                 Output.write({'target': smbscan.url(), 'message': 'SPNs:'})
                 if smb_available:

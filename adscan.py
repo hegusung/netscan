@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--groups", action='store_true', help='dump groups from Active Directory')
     parser.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory')
     parser.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
+    parser.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
     parser.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
     #parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
 
@@ -57,6 +58,8 @@ def main():
         actions['hosts'] ={}
     if args.dns:
         actions['dns'] ={}
+    if args.gpp:
+        actions['gpps'] ={}
     if args.spns:
         actions['spns'] ={}
     #if args.passpol:
