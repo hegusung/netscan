@@ -133,6 +133,15 @@ def adscan_worker(target, actions, creds, timeout):
                 if ldap_available:
                     for entry in ldapscan.list_dns():
                         Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
+            if 'spns' in actions:
+                Output.write({'target': smbscan.url(), 'message': 'SPNs:'})
+                if smb_available:
+                    for entry in smbscan.list_spns():
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        tgs_hash = entry['tgs']['tgs'] if 'tgs' in entry['tgs'] else 'Unable to retreive TGS hash'
+                        Output.write({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
+
+
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})
