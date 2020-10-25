@@ -63,7 +63,7 @@ class SMBScan:
         is_admin = False
 
         try:
-            if username == None:
+            if username == None or username == '':
                 self.conn.login('' , '')
                 self.is_admin = self.check_if_admin(domain, '', '', hash)
                 self.creds = {'username': '', 'password': '', 'domain': domain}
@@ -79,9 +79,6 @@ class SMBScan:
                         nt_hash = hash.split(':')[1]
                         lm_hash = hash.split(':')[0]
 
-                    print(nt_hash)
-                    print(lm_hash)
-
                     self.conn.login(username, '', domain, lm_hash, nt_hash)
                     self.creds = {'username': username, 'hash': hash, 'domain': domain}
 
@@ -91,7 +88,11 @@ class SMBScan:
 
         except impacket.smbconnection.SessionError as e:
             error, desc = e.getErrorString()
-            raise AuthFailure(error)
+            if 'STATUS_ACCESS_DENIED' in str(error):
+                # Auth success but we have been denied access during check_admin_privs
+                success = True
+            else:
+                raise AuthFailure(error)
         except Exception as e:
             Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             pass
