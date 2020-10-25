@@ -10,6 +10,7 @@ def main():
     parser = argparse.ArgumentParser(description='SMBScan')
     parser.add_argument('targets', type=str)
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='445', dest='port')
+    parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Authentication
     parser.add_argument('--null', action='store_true', help='NULL bind', dest='null')
     parser.add_argument('--guest', action='store_true', help='guest account', dest='guest')
@@ -21,7 +22,6 @@ def main():
     parser.add_argument('--shares', action='store_true', help='List shares', dest='shares')
     parser.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
     parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
-    parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Execution-related
     parser.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
     parser.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')

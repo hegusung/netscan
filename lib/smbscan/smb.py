@@ -73,6 +73,9 @@ class SMBScan:
                         nt_hash = hash.split(':')[1]
                         lm_hash = hash.split(':')[0]
 
+                    print(nt_hash)
+                    print(lm_hash)
+
                     self.conn.login(username, '', domain, lm_hash, nt_hash)
                     self.creds = {'username': username, 'hash': hash, 'domain': domain}
 
