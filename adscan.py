@@ -18,10 +18,11 @@ def main():
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
     # Enum
-    parser.add_argument("--users", action='store_true', help='dump users from target systems')
-    parser.add_argument("--groups", action='store_true', help='dump groups from target systems')
-    parser.add_argument("--hosts", action='store_true', help='dump hosts from target systems')
-    parser.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
+    parser.add_argument("--users", action='store_true', help='dump users from Active Directory')
+    parser.add_argument("--groups", action='store_true', help='dump groups from Active Directory')
+    parser.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory')
+    parser.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
+    parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -53,6 +54,8 @@ def main():
         actions['groups'] ={}
     if args.hosts:
         actions['hosts'] ={}
+    if args.dns:
+        actions['dns'] ={}
     if args.passpol:
         actions['passpol'] = {}
 
