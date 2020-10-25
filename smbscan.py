@@ -31,6 +31,8 @@ def main():
     # Enum
     parser.add_argument("--users", action='store_true', help='dump users from target systems')
     parser.add_argument("--groups", action='store_true', help='dump groups from target systems')
+    parser.add_argument("--admins", action='store_true', help='dump admins from target systems')
+    parser.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
     parser.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
     parser.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
 
@@ -76,6 +78,10 @@ def main():
         actions['users'] = {}
     if args.groups:
         actions['groups'] ={}
+    if args.admins:
+        actions['admins'] ={}
+    if args.passpol:
+        actions['passpol'] = {}
     if args.loggedin:
         actions['loggedin'] ={}
     if args.sessions:
