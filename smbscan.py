@@ -35,6 +35,7 @@ def main():
     parser.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
     parser.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
     parser.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
+    parser.add_argument("--rid-brute", metavar="range", help='RID bruteforce', type=str, default=None, dest='rid_brute')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -86,6 +87,15 @@ def main():
         actions['loggedin'] ={}
     if args.sessions:
         actions['sessions'] ={}
+    if args.rid_brute:
+        if '-' in args.rid_brute:
+            start_rid = int(args.rid_brute.split('-')[0])
+            end_rid = int(args.rid_brute.split('-')[-1])
+        else:
+            start_rid = 0
+            end_rid = int(args.rid_brute)
+
+        actions['rid_brute'] = {'start': start_rid, 'end': end_rid}
 
     Output.setup()
 

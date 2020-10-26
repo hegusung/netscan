@@ -218,6 +218,10 @@ class Enum:
 
         dce.disconnect()
 
+    def RIDBruteforce(self, start, end):
+        for entry in self.__lookupSidUidGen((n for n in range(start, end+1))):
+            yield entry
+
     def __fetchUserList(self, rpctransport):
         dce = rpctransport.get_dce_rpc()
 
