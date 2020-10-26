@@ -150,6 +150,13 @@ def smbscan_worker(target, actions, creds, timeout):
                 for entry in entries:
                     Output.write({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
 
+    except ConnectionResetError:
+        Output.write({'target': smbscan.url(), 'message': 'Connection reset by target'})
+    except TypeError as e:
+        if 'ConnectionResetError' in str(e):
+            Output.write({'target': smbscan.url(), 'message': 'Connection reset by target'})
+        else:
+            Output.write({'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     except Exception as e:
         Output.write({'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
