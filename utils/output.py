@@ -2,7 +2,11 @@ import sys
 from datetime import datetime
 from multiprocessing import Queue
 from threading import Thread
+import tqdm
 from tqdm import tqdm
+
+# Sometimes tqdm hangs during write
+tqdm.get_lock().locks = []
 
 time_format = "%Y/%m/%d %H:%M:%S"
 simple_output_format =         "[{time}]     {message}"
