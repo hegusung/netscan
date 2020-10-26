@@ -36,6 +36,13 @@ def main():
     parser.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
     parser.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
     parser.add_argument("--rid-brute", metavar="range", help='RID bruteforce', type=str, default=None, dest='rid_brute')
+    # Bruteforce
+    parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
+    parser.add_argument("--simple-bruteforce", action='store_true', help='Enable simple bruteforce (username=password)', dest='simple_bruteforce')
+    parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
+    parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
+    parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
+
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -96,6 +103,10 @@ def main():
             end_rid = int(args.rid_brute)
 
         actions['rid_brute'] = {'start': start_rid, 'end': end_rid}
+    if args.bruteforce:
+        actions['bruteforce'] ={'username_file': args.username_file, 'password_file': args.password_file, 'workers': args.bruteforce_workers}
+    if args.simple_bruteforce:
+        actions['simple_bruteforce'] ={'username_file': args.username_file, 'workers': args.bruteforce_workers}
 
     Output.setup()
 
