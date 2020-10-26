@@ -34,6 +34,7 @@ def smbscan_worker(target, actions, creds, timeout):
             smbscan.connect()
 
             success = False
+            is_admin = False
             # Authenticate
             if not 'username' in creds:
                 pass
