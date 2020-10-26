@@ -85,7 +85,7 @@ class WMIEXEC:
             return
 
         def output_callback(data):
-            self.__outputBuffer += data.decode()
+            self.__outputBuffer += data.decode('utf-8', "backslashreplace")
 
         while True:
             try:
