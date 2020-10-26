@@ -1,4 +1,5 @@
 import os.path
+import impacket
 from time import sleep
 import socket
 import traceback
@@ -111,9 +112,15 @@ def smbscan_worker(target, actions, creds, timeout):
             if 'users' in actions:
                 entries = smbscan.enum_users()
                 Output.write({'target': smbscan.url(), 'message': 'Users:'})
-                for entry in entries:
-                    user = '%s\\%s' % (entry['domain'], entry['username'])
-                    Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
+                try:
+                    for entry in entries:
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'Access denied'})
+                    else:
+                        raise e
             if 'groups' in actions:
                 entries = smbscan.enum_groups()
                 Output.write({'target': smbscan.url(), 'message': 'Groups:'})
@@ -149,6 +156,13 @@ def smbscan_worker(target, actions, creds, timeout):
                 Output.write({'target': smbscan.url(), 'message': 'Sessions:'})
                 for entry in entries:
                     Output.write({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
+            if 'rid_brute' in actions:
+                entries = smbscan.rid_bruteforce(actions['rid_brute']['start'], actions['rid_brute']['end'])
+                Output.write({'target': smbscan.url(), 'message': 'Users discovered via RID bruteforce:'})
+                for entry in entries:
+                    user = '%s\\%s' % (entry['domain'], entry['name'])
+                    Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (user.ljust(30), entry['type'])})
+
 
     except ConnectionResetError:
         Output.write({'target': smbscan.url(), 'message': 'Connection reset by target'})

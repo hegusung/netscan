@@ -512,6 +512,23 @@ class SMBScan:
         for spn in get_spns.run():
             yield spn
 
+    def rid_bruteforce(self, start, end):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+
+        for entry in enum.RIDBruteforce(start, end):
+            yield entry
+
+
     def list_gpps(self):
         sysvol_found = False
         for share in self.list_shares():
