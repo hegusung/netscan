@@ -235,7 +235,7 @@ class SMBScan:
                 yield share_info
 
         except Exception as e:
-            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+            raise e
 
     def list_dir(self, share, path):
         contents = self.conn.listPath(share, '*')
@@ -282,8 +282,9 @@ class SMBScan:
 
             if not has_content and path != '\\':
                 yield {'type': 'folder', 'name': path}
+
         except Exception as e:
-            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+            raise e
 
     def exec(self, command, exec_method=None, get_output=True):
 
