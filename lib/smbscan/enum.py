@@ -176,7 +176,7 @@ class Enum:
         try:
             resp = wkst.hNetrWkstaUserEnum(dce,1)
         except Exception as e:
-            print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+            raise e
 
         for session in resp['UserInfo']['WkstaUserInfo']['Level1']['Buffer']:
             username = session['wkui1_username'][:-1]
