@@ -37,6 +37,10 @@ def smbscan_worker(target, actions, creds, timeout):
                 if not 'domain' in creds:
                     creds['domain'] = 'WORKGROUP'
 
+                if '\\' in creds['username']:
+                    creds['domain'] = creds['username'].split('\\')[0]
+                    creds['username'] = creds['username'].split('\\')[1]
+
                 if 'password' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])

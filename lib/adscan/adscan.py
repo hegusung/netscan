@@ -11,6 +11,11 @@ from .ldap import LDAPScan
 from utils.output import Output
 
 def adscan_worker(target, actions, creds, timeout):
+    # Process creds
+    if '\\' in creds['username']:
+        creds['domain'] = creds['username'].split('\\')[0]
+        creds['username'] = creds['username'].split('\\')[1]
+
     try:
         smb_available = False
         ldap_available = False
