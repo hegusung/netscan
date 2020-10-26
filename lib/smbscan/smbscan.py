@@ -98,70 +98,118 @@ def smbscan_worker(target, actions, creds, timeout):
                 else:
                     Output.write({'target': smbscan.url(), 'message': 'Failed to execute command %s' % (actions['command']['command'],)})
             if 'sam' in actions:
-                entries = smbscan.dump_sam()
                 output = "SAM hashes:\n"
-                for entry in entries:
-                    output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
-                Output.write({'target': smbscan.url(), 'message': output})
+                try:
+                    entries = smbscan.dump_sam()
+                    for entry in entries:
+                        output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
+                    Output.write({'target': smbscan.url(), 'message': output})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'SAM dump: Access denied'})
+                    else:
+                        raise e
             if 'lsa' in actions:
-                entries = smbscan.dump_lsa()
                 output = "LSA secrets:\n"
-                for entry in entries:
-                    output += " "*60+"- %s\n" % (entry['secret'],)
-                Output.write({'target': smbscan.url(), 'message': output})
+                try:
+                    entries = smbscan.dump_lsa()
+                    for entry in entries:
+                        output += " "*60+"- %s\n" % (entry['secret'],)
+                    Output.write({'target': smbscan.url(), 'message': output})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'LSA dump: Access denied'})
+                    else:
+                        raise e
             if 'users' in actions:
-                entries = smbscan.enum_users()
                 Output.write({'target': smbscan.url(), 'message': 'Users:'})
                 try:
+                    entries = smbscan.enum_users()
                     for entry in entries:
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
                 except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                     if 'access_denied' in str(e):
-                        Output.write({'target': smbscan.url(), 'message': 'Access denied'})
+                        Output.write({'target': smbscan.url(), 'message': 'Enum users: Access denied'})
                     else:
                         raise e
             if 'groups' in actions:
-                entries = smbscan.enum_groups()
                 Output.write({'target': smbscan.url(), 'message': 'Groups:'})
-                for entry in entries:
-                    group = '%s\\%s' % (entry['domain'], entry['groupname'])
-                    Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
+                try:
+                    entries = smbscan.enum_groups()
+                    for entry in entries:
+                        group = '%s\\%s' % (entry['domain'], entry['groupname'])
+                        Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'Enum groups: Access denied'})
+                    else:
+                        raise e
             if 'admins' in actions:
-                entries = smbscan.enum_admins()
                 Output.write({'target': smbscan.url(), 'message': 'Administrators:'})
-                for entry in entries:
-                    admin = '%s\\%s' % (entry['domain'], entry['name'])
-                    Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (admin.ljust(30), entry['type'])})
+                try:
+                    entries = smbscan.enum_admins()
+                    for entry in entries:
+                        admin = '%s\\%s' % (entry['domain'], entry['name'])
+                        Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (admin.ljust(30), entry['type'])})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'Enum admins: Access denied'})
+                    else:
+                        raise e
             if 'passpol' in actions:
-                password_policy = smbscan.enum_password_policy()
-                output = "Password policy:\n"
-                output += " "*60+"- Complexity:       %s\n" % ("Enabled" if password_policy['complexity'] == 1 else "Disabled",)
-                output += " "*60+"- Minimum length:   %d\n" % password_policy['minimum_length']
-                output += " "*60+"- History:          last %d passwords\n" % password_policy['history_length']
-                output += " "*60+"- Maximum age:      %s\n" % password_policy['maximum_age']
-                output += " "*60+"- Minimum age:      %s\n" % password_policy['minimum_age']
-                output += " "*60+"- Lock threshold:   %s\n" % (str(password_policy['lock_threshold']) if password_policy['lock_threshold'] != 0 else "Disabled",)
-                if password_policy['lock_threshold'] != 0:
-                    output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
+                try:
+                    password_policy = smbscan.enum_password_policy()
+                    output = "Password policy:\n"
+                    output += " "*60+"- Complexity:       %s\n" % ("Enabled" if password_policy['complexity'] == 1 else "Disabled",)
+                    output += " "*60+"- Minimum length:   %d\n" % password_policy['minimum_length']
+                    output += " "*60+"- History:          last %d passwords\n" % password_policy['history_length']
+                    output += " "*60+"- Maximum age:      %s\n" % password_policy['maximum_age']
+                    output += " "*60+"- Minimum age:      %s\n" % password_policy['minimum_age']
+                    output += " "*60+"- Lock threshold:   %s\n" % (str(password_policy['lock_threshold']) if password_policy['lock_threshold'] != 0 else "Disabled",)
+                    if password_policy['lock_threshold'] != 0:
+                        output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
 
-                Output.write({'target': smbscan.url(), 'message': output})
+                    Output.write({'target': smbscan.url(), 'message': output})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
+                    else:
+                        raise e
             if 'loggedin' in actions:
-                entries = smbscan.enum_loggedin()
                 Output.write({'target': smbscan.url(), 'message': 'Logged in users:'})
-                for entry in entries:
-                    Output.write({'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
+                try:
+                    entries = smbscan.enum_loggedin()
+                    for entry in entries:
+                        Output.write({'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'Enum logged in: Access denied'})
+                    else:
+                        raise e
             if 'session' in actions:
-                entries = smbscan.enum_sessions()
                 Output.write({'target': smbscan.url(), 'message': 'Sessions:'})
-                for entry in entries:
-                    Output.write({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
+                try:
+                    entries = smbscan.enum_sessions()
+                    for entry in entries:
+                        Output.write({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'Enum sessions: Access denied'})
+                    else:
+                        raise e
             if 'rid_brute' in actions:
-                entries = smbscan.rid_bruteforce(actions['rid_brute']['start'], actions['rid_brute']['end'])
                 Output.write({'target': smbscan.url(), 'message': 'Users discovered via RID bruteforce:'})
-                for entry in entries:
-                    user = '%s\\%s' % (entry['domain'], entry['name'])
-                    Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (user.ljust(30), entry['type'])})
+                try:
+                    entries = smbscan.rid_bruteforce(actions['rid_brute']['start'], actions['rid_brute']['end'])
+                    for entry in entries:
+                        user = '%s\\%s' % (entry['domain'], entry['name'])
+                        Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (user.ljust(30), entry['type'])})
+                except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': smbscan.url(), 'message': 'RID brutefroce: Access denied'})
+                    else:
+                        raise e
 
 
     except ConnectionResetError:

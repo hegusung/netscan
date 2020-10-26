@@ -237,9 +237,6 @@ class SMBScan:
         except Exception as e:
             raise e
 
-    def list_dir(self, share, path):
-        contents = self.conn.listPath(share, '*')
-
     def list_content(self, path="\\", share=None, recurse=3):
         if not share:
             return
@@ -251,6 +248,8 @@ class SMBScan:
             except SessionError as e:
                 if 'STATUS_ACCESS_DENIED' not in str(e):
                     Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                else:
+                    Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: Access denied".format(share, path)})
                 return
 
             for content in contents:
@@ -345,7 +344,7 @@ class SMBScan:
             self.remote_ops.enableRegistry()
             self.bootkey = self.remote_ops.getBootKey()
         except Exception as e:
-            self.logger.error('RemoteOperations failed: {}'.format(e))
+            raise e
 
     def dump_sam(self):
         self.enable_remoteops()
