@@ -72,26 +72,38 @@ def smbscan_worker(target, actions, creds, timeout):
                 share_list = []
                 if 'list_shares' in actions:
                     shares = "Shares:\n"
-                    for share_info in smbscan.list_shares():
-                        shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
-                        share_list.append(share_info['name'])
-                    Output.write({'target': smbscan.url(), 'message': shares})
+                    try:
+                        for share_info in smbscan.list_shares():
+                            shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
+                            share_list.append(share_info['name'])
+                        Output.write({'target': smbscan.url(), 'message': shares})
+                    except impacket.smbconnection.SessionError as e:
+                        if 'STATUS_ACCESS_DENIED' in str(e):
+                            Output.write({'target': smbscan.url(), 'message': 'List shares: Access denied'})
+                        else:
+                            raise e
                 if 'list' in actions:
-                    if not 'share' in actions['list']:
-                        if len(share_list) == 0:
-                            for share_info in smbscan.list_shares():
-                                share_list.append(share_info['name'])
-                    else:
-                        share_list = [actions['list']['share']]
+                    try:
+                        if not 'share' in actions['list']:
+                            if len(share_list) == 0:
+                                for share_info in smbscan.list_shares():
+                                    share_list.append(share_info['name'])
+                        else:
+                            share_list = [actions['list']['share']]
 
-                    for share in share_list:
-                        contents = "Content of share %s:\n" % share
-                        for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
-                            if 'size' in content:
-                                contents += " "*60+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
-                            else:
-                                contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
-                        Output.write({'target': smbscan.url(), 'message': contents})
+                        for share in share_list:
+                            contents = "Content of share %s:\n" % share
+                            for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
+                                if 'size' in content:
+                                    contents += " "*60+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
+                                else:
+                                    contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
+                            Output.write({'target': smbscan.url(), 'message': contents})
+                    except impacket.smbconnection.SessionError as e:
+                        if 'STATUS_ACCESS_DENIED' in str(e):
+                            Output.write({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
+                        else:
+                            raise e
                 if 'command' in actions:
                     output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True)
                     if output:
