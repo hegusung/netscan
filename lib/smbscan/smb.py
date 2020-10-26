@@ -307,22 +307,31 @@ class SMBScan:
                 try:
                     exec = WMIEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share)
                     break
-                except:
-                    Output.write({'target': self.url(), 'message': "Error execution command via wmiexec:\n%s" % traceback.format_exc()})
+                except Exception as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': self.url(), 'message': "Error execution command via wmiexec: Access denied"})
+                    else:
+                        Output.write({'target': self.url(), 'message': "Error execution command via wmiexec:\n%s" % traceback.format_exc()})
                     continue
             elif method == 'smbexec':
                 try:
                     exec = SMBEXEC(self.hostname, username, password, domain, hash, smb_share)
                     break
-                except:
-                    Output.write({'target': self.url(), 'message': "Error execution command via smbexec:\n%s" % traceback.format_exc()})
+                except Exception as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': self.url(), 'message': "Error execution command via smbexec: Access denied"})
+                    else:
+                        Output.write({'target': self.url(), 'message': "Error execution command via smbexec:\n%s" % traceback.format_exc()})
                     continue
             elif method == 'mmcexec':
                 try:
                     exec = MMCEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share)
                     break
-                except:
-                    Output.write({'target': self.url(), 'message': "Error execution command via smbexec:\n%s" % traceback.format_exc()})
+                except Exception as e:
+                    if 'access_denied' in str(e):
+                        Output.write({'target': self.url(), 'message': "Error execution command via mmcexec: Access denied"})
+                    else:
+                        Output.write({'target': self.url(), 'message': "Error execution command via mmcexec:\n%s" % traceback.format_exc()})
                     continue
             else:
                 Output.write({'target': self.url(), 'message': "Unknown execution method: %s" % method})

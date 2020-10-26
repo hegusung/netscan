@@ -104,9 +104,15 @@ class MMCEXEC:
             dcom.disconnect()
 
         except Exception as e:
-            logging.error("%s" % str(e))
-            self.exit()
-            dcom.disconnect()
+            try:
+                self.exit()
+            except:
+                pass
+            try:
+                dcom.disconnect()
+            except:
+                pass
+            raise e
 
     def getInterface(self, interface, resp):
         # Now let's parse the answer and build an Interface instance
