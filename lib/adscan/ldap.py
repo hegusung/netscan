@@ -24,20 +24,24 @@ class LDAPScan:
         else:
             self.conn = ldap3.Connection(self.server, user=username, password=password)
 
-        if self.conn.bind():
+        try:
+            if self.conn.bind():
 
-            # Gather info on service
-            info = vars(self.server.info)
-            self.defaultdomainnamingcontext = info["other"]["defaultNamingContext"]
-            if type(self.defaultdomainnamingcontext) == list:
-                self.defaultdomainnamingcontext = "; ".join(self.defaultdomainnamingcontext)
-            dnsHostName = info["other"]["dnsHostName"]
-            if type(dnsHostName) == list:
-                dnsHostName = "; ".join(dnsHostName)
-            self.current_domain = ".".join([item.split("=", 1)[-1] for item in self.defaultdomainnamingcontext.split(',') if item.split("=",1)[0].lower() == "dc"])
+                # Gather info on service
+                info = vars(self.server.info)
+                self.defaultdomainnamingcontext = info["other"]["defaultNamingContext"]
+                if type(self.defaultdomainnamingcontext) == list:
+                    self.defaultdomainnamingcontext = "; ".join(self.defaultdomainnamingcontext)
+                dnsHostName = info["other"]["dnsHostName"]
+                if type(dnsHostName) == list:
+                    dnsHostName = "; ".join(dnsHostName)
+                self.current_domain = ".".join([item.split("=", 1)[-1] for item in self.defaultdomainnamingcontext.split(',') if item.split("=",1)[0].lower() == "dc"])
 
-            return True, {'dns_hostname': dnsHostName, 'default_domain_naming_context': self.defaultdomainnamingcontext}
-        else:
+                return True, {'dns_hostname': dnsHostName, 'default_domain_naming_context': self.defaultdomainnamingcontext}
+            else:
+                return False, None
+        except ldap3.core.exceptions.LDAPSocketOpenError:
+            # timeout
             return False, None
 
     def disconnect(self):

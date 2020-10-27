@@ -7,18 +7,22 @@ import copy
 
 from lib.smbscan.smb import SMBScan
 from .ldap import LDAPScan
+from .kerberos import Kerberos
 
 from utils.output import Output
+from utils.utils import AuthFailure
 
 def adscan_worker(target, actions, creds, timeout):
     # Process creds
-    if '\\' in creds['username']:
+    if 'username' in creds and '\\' in creds['username']:
         creds['domain'] = creds['username'].split('\\')[0]
         creds['username'] = creds['username'].split('\\')[1]
 
     try:
         smb_available = False
+        smb_authenticated = False
         ldap_available = False
+        ldap_authenticated = False
 
         try:
             smbscan = SMBScan(target['hostname'], 445, timeout)
@@ -27,6 +31,8 @@ def adscan_worker(target, actions, creds, timeout):
 
             if smbscan.connect():
                 # We are against a SMB server
+
+                smb_available = True
 
                 # Gather info
                 smb_info = smbscan.get_server_info()
@@ -41,6 +47,9 @@ def adscan_worker(target, actions, creds, timeout):
                 smbscan.connect()
 
                 creds_smb = copy.copy(creds)
+
+                success = False
+                is_admin = False
 
                 # Authenticate
                 if not 'username' in creds_smb:
@@ -69,7 +78,7 @@ def adscan_worker(target, actions, creds, timeout):
                         Output.write({'target': smbscan.url(), 'message': 'SMB: Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds_smb) % str(e)})
 
                 if success:
-                    smb_available = True
+                    smb_authenticated = True
 
                     if is_admin:
                         Output.write({'target': smbscan.url(), 'message': 'SMB: Administrative privileges with credentials {domain}\\{username}'.format(**creds_smb)})
@@ -86,6 +95,7 @@ def adscan_worker(target, actions, creds, timeout):
             success, ldap_info = ldapscan.connect(domain, username, password)
             if success:
                 ldap_available = True
+                ldap_authenticated = True
 
                 Output.write({'target': ldapscan.url(), 'message': 'LDAP: %s  %s' % (ldap_info['dns_hostname'].ljust(30), ldap_info['default_domain_naming_context'])})
 
@@ -111,7 +121,7 @@ def adscan_worker(target, actions, creds, timeout):
 
             if 'users' in actions:
                 Output.write({'target': ldapscan.url(), 'message': 'Users:'})
-                if ldap_available:
+                if ldap_authenticated:
                     for entry in ldapscan.list_users():
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
@@ -119,7 +129,7 @@ def adscan_worker(target, actions, creds, timeout):
                     raise NotImplementedError('Dumping users through SMB')
             if 'groups' in actions:
                 Output.write({'target': ldapscan.url(), 'message': 'Groups:'})
-                if ldap_available:
+                if ldap_authenticated:
                     for entry in ldapscan.list_groups():
                         group = '%s\\%s' % (entry['domain'], entry['groupname'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s' % (group.ljust(40), len(entry['members']), entry['comment'])})
@@ -127,7 +137,7 @@ def adscan_worker(target, actions, creds, timeout):
                     raise NotImplementedError('Dumping groups through SMB')
             if 'hosts' in actions:
                 Output.write({'target': ldapscan.url(), 'message': 'Hosts:'})
-                if ldap_available:
+                if ldap_authenticated:
                     for entry in ldapscan.list_hosts():
                         host = '%s\\%s' % (entry['domain'], entry['hostname'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (host.ljust(40), entry['os'].ljust(20), entry['comment'])})
@@ -135,23 +145,75 @@ def adscan_worker(target, actions, creds, timeout):
                     raise NotImplementedError('Dumping hosts through SMB')
             if 'dns' in actions:
                 Output.write({'target': ldapscan.url(), 'message': 'DNS entries:'})
-                if ldap_available:
+                if ldap_authenticated:
                     for entry in ldapscan.list_dns():
                         Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
             if 'gpps' in actions:
                 Output.write({'target': smbscan.url(), 'message': 'Passwords in GPPs:'})
-                if smb_available:
+                if smb_authenticated:
                     for entry in smbscan.list_gpps():
                         Output.write({'target': smbscan.url(), 'message': '- %s   %s' % (entry['username'].ljust(40), entry['password'].ljust(20))})
             if 'spns' in actions:
                 Output.write({'target': smbscan.url(), 'message': 'SPNs:'})
-                if smb_available:
+                if smb_authenticated:
                     for entry in smbscan.list_spns():
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         tgs_hash = entry['tgs']['tgs'] if 'tgs' in entry['tgs'] else 'Unable to retreive TGS hash'
                         Output.write({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
+            if 'passpol' in actions:
+                if smb_authenticated:
+                    try:
+                        password_policy = smbscan.enum_password_policy()
+                        output = "Password policy:\n"
+                        output += " "*60+"- Complexity:       %s\n" % ("Enabled" if password_policy['complexity'] == 1 else "Disabled",)
+                        output += " "*60+"- Minimum length:   %d\n" % password_policy['minimum_length']
+                        output += " "*60+"- History:          last %d passwords\n" % password_policy['history_length']
+                        output += " "*60+"- Maximum age:      %s\n" % password_policy['maximum_age']
+                        output += " "*60+"- Minimum age:      %s\n" % password_policy['minimum_age']
+                        output += " "*60+"- Lock threshold:   %s\n" % (str(password_policy['lock_threshold']) if password_policy['lock_threshold'] != 0 else "Disabled",)
+                        if password_policy['lock_threshold'] != 0:
+                            output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
 
+                        Output.write({'target': smbscan.url(), 'message': output})
+                    except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                        if 'access_denied' in str(e):
+                            Output.write({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
+                        else:
+                            raise e
+            if 'users_brute' in actions:
+                # Technically only needs kerberos but well....
+                if smb_available:
+                    try:
+                        if not 'domain' in creds or not '.' in creds['domain']:
+                            Output.write({'target': smbscan.url(), 'message': 'Users bruteforce: Please provide complete domain fqdn'})
+                        else:
+                            kerberos = Kerberos(target['hostname'], creds['domain'])
+                            Output.write({'target': smbscan.url(), 'message': 'Valid users:'})
+                            for valid_user in kerberos.check_users_dump_asreq(actions['users_brute']['username_file']):
+                                user = '%s\\%s' % (valid_user['domain'], valid_user['username'])
+                                if 'asreq' in valid_user:
+                                    Output.write({'target': smbscan.url(), 'message': '- %s  (Kerberos pre-auth disabled !!!)\n%s' % (user.ljust(50), valid_user['asreq'])})
+                                else:
+                                    Output.write({'target': smbscan.url(), 'message': '- %s' % user})
 
+                    except Exception as e:
+                        raise e
+            if 'dump_ntds' in actions:
+                if smb_authenticated:
+                    try:
+                        Output.write({'target': smbscan.url(), 'message': 'Dumping NTDS (method: %s):' % actions['dump_ntds']['method']})
+                        def ntds_hash(entry):
+                            user = '%s\\%s' % (entry['domain'], entry['username'])
+                            Output.write({'target': smbscan.url(), 'message': '- %s   %s   (%s)' % (user.ljust(40), entry['hash'].ljust(70), entry['hash_type'])})
+                        dumped = smbscan.dump_ntds(actions['dump_ntds']['method'], callback_func=ntds_hash)
+                        Output.write({'target': smbscan.url(), 'message': 'Dumped %d hashes' % dumped})
+                    except Exception as e:
+                        raise e
+                    except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                        if 'access_denied' in str(e):
+                            Output.write({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
+                        else:
+                            raise e
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})

@@ -24,7 +24,11 @@ def main():
     parser.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
     parser.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
     parser.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
-    #parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
+    parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
+    # Bruteforce
+    parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
+    # Dump
+    parser.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
@@ -62,8 +66,12 @@ def main():
         actions['gpps'] ={}
     if args.spns:
         actions['spns'] ={}
-    #if args.passpol:
-    #    actions['passpol'] = {}
+    if args.passpol:
+        actions['passpol'] = {}
+    if args.users_brute:
+        actions['users_brute'] = {'username_file': args.users_brute}
+    if args.ntds:
+        actions['dump_ntds'] = {'method': args.ntds}
 
     Output.setup()
 
