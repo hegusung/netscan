@@ -64,5 +64,9 @@ class Output:
             else:
                 output_format = simple_output_format
 
-            tqdm.write(output_format.format(**message))
+            # Remove control characters which breaks terminal
+            message = output_format.format(**message)
+            message = ''.join([c if ord(c) not in [0x9d, 0x9e, 0x9f] else '\\x%x' % ord(c) for c in message])
+
+            tqdm.write(message)
             sys.stdout.flush()
