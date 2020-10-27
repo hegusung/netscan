@@ -15,6 +15,7 @@ http_output_format =           "[{time}]     {target:50} {code}   {server:40} {t
 dns_output_format =            "[{time}]     {target:30} {query_type:5}   {resolved}"
 port_service_output_format =   "[{time}]     {target:30} {service:30} {version}"
 smb_output_format =            "[{time}]     {target:30} {domain:30} {hostname:30} {server_os}"
+mssql_output_format =          "[{time}]     {target:30} {version}"
 
 class Output:
 
@@ -59,6 +60,8 @@ class Output:
                 output_format = port_service_output_format
             elif 'message_type' in message and message['message_type'] == 'smb':
                 output_format = smb_output_format
+            elif 'message_type' in message and message['message_type'] == 'mssql':
+                output_format = mssql_output_format
             elif 'target' in message:
                 output_format = target_output_format
             else:
