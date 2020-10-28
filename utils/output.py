@@ -17,6 +17,7 @@ port_service_output_format =   "[{time}]     {target:30} {service:30} {version}"
 smb_output_format =            "[{time}]     {target:30} {domain:30} {hostname:30} {server_os}"
 mssql_output_format =          "[{time}]     {target:30} {version}"
 mysql_output_format =          "[{time}]     {target:30} {version}"
+postgresql_output_format =     "[{time}]     {target:30} {version}"
 
 class Output:
 
@@ -65,6 +66,8 @@ class Output:
                 output_format = mssql_output_format
             elif 'message_type' in message and message['message_type'] == 'mysql':
                 output_format = mysql_output_format
+            elif 'message_type' in message and message['message_type'] == 'postgresql':
+                output_format = postgresql_output_format
             elif 'target' in message:
                 output_format = target_output_format
             else:
