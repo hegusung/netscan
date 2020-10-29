@@ -15,6 +15,11 @@ def main():
     parser.add_argument('--list', action='store_true', help='List contents if auth success', dest='list')
     parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=3, dest='recurse')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    # Bruteforce
+    parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
+    parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
+    parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
+    parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     args = parser.parse_args()
@@ -23,11 +28,17 @@ def main():
     if args.port:
         static_inputs['port'] = args.port
 
-    creds = (args.username, args.password)
+    creds = {}
+    if args.username:
+        creds['username'] = args.username
+    if args.password:
+        creds['password'] = args.password
 
     actions = {}
     if args.list:
         actions['list'] = {'recurse': args.recurse}
+    if args.bruteforce:
+        actions['bruteforce'] ={'username_file': args.username_file, 'password_file': args.password_file, 'workers': args.bruteforce_workers}
 
     Output.setup()
 
