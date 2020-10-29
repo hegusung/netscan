@@ -5,6 +5,7 @@ from .ftp_bruteforce import *
 
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.utils import sizeof_fmt
 
 def ftpscan_worker(target, actions, creds, timeout):
     try:
@@ -30,9 +31,9 @@ def ftpscan_worker(target, actions, creds, timeout):
                         contents = ""
                         for content in ftpscan.list_content(ftp_dir, recurse=actions['list']['recurse']):
                             if 'size' in content:
-                                contents += " "*80+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
+                                contents += " "*60+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
                             else:
-                                contents += " "*80+"- %s\n" % content['name']
+                                contents += " "*60+"- %s\n" % content['name']
                         Output.write({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)})
                     except socket.timeout as e:
                         Output.write({'target': ftpscan.url(), 'message': 'Timeout while listing folder, do you have a firewall enabled ?'})
@@ -58,12 +59,4 @@ def ftpscan_worker(target, actions, creds, timeout):
         Output.write({'target': ftpscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
         ftpscan.disconnect()
-
-
-def sizeof_fmt(num, suffix='B'):
-    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
-        if abs(num) < 1024.0:
-            return "%3.1f %s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f %s%s" % (num, 'Yi', suffix)
 
