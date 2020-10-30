@@ -4,12 +4,12 @@ import argparse
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
 from utils.output import Output
-from lib.sshscan.sshscan import sshscan_worker
+from lib.telnetscan.telnetscan import telnetscan_worker
 
 def main():
     parser = argparse.ArgumentParser(description='SSHScan')
     parser.add_argument('targets', type=str)
-    parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='22', dest='port')
+    parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='23', dest='port')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Authentication
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
@@ -44,15 +44,15 @@ def main():
 
     Output.setup()
 
-    sshscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
+    telnetscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
 
     Output.stop()
 
-def sshscan(input_targets, static_inputs, workers, actions, creds, timeout):
+def telnetscan(input_targets, static_inputs, workers, actions, creds, timeout):
 
     args = (actions, creds, timeout)
 
-    dispatch_targets(input_targets, static_inputs, sshscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, telnetscan_worker, args, workers=workers)
 
 if __name__ == '__main__':
     main()
