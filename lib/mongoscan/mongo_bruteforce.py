@@ -14,7 +14,7 @@ def bruteforce_worker(target, timeout):
         success, _ = mongo.auth(username, password, database=target['database'])
         if success:
             Output.write({'target': mongo.url(), 'message': 'Authentication success with credentials %s and password %s and database \'%s\'' % (username, password, target['database'])})
-
+            stop = True
 
         try:
             mongo.disconnect()

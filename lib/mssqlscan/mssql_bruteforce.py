@@ -29,6 +29,7 @@ def bruteforce_worker(target, timeout):
 
             if is_admin:
                 Output.write({'target': mssqlscan.url(), 'message': 'Administrative privileges with account %s' % (user,)})
+            stop = True
 
         except AuthFailure as e:
             pass
