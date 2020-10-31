@@ -19,6 +19,7 @@ def bruteforce_worker(target, timeout):
             success = ssh.auth(username, password)
             if success:
                 Output.write({'target': ssh.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                stop = True
 
         except paramiko.AuthenticationException as e:
             pass
