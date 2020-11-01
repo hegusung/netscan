@@ -4,6 +4,7 @@ from time import sleep
 import socket
 import traceback
 import struct
+import psycopg2
 
 from .postgresql import PostgreSQL
 from .postgresql_bruteforce import *
@@ -16,16 +17,10 @@ def postgrescan_worker(target, actions, creds, timeout):
     try:
         postgresql = PostgreSQL(target['hostname'], target['port'], timeout)
 
-        if not 'username' in creds:
-            pass
-        elif not 'password' in creds:
-            pass
-        else:
-            username = creds['username']
-            password = creds['password']
+        username = creds['username'] if 'username' in creds else None
+        password = creds['password'] if 'password' in creds else None
 
-            success = False
-
+        try:
             success, version = postgresql.auth(username, password)
 
             postgresql_info = {'version': version}
@@ -50,8 +45,19 @@ def postgrescan_worker(target, actions, creds, timeout):
 
                     Output.write({'target': postgresql.url(), 'message': output})
             else:
-                Output.write({'target': postgresql.url(), 'message': 'Authentication failure with credentials %s and password %s' % (username, password)})
-
+                if username != None:
+                    Output.write({'target': postgresql.url(), 'message': 'Authentication failure with credentials %s and password %s' % (username, password)})
+        except psycopg2.OperationalError as e:
+            if "could not connect to server" in str(e) or "timeout expired" in str(e) or "Connection refused" in str(e) or "server closed the connection unexpectedly" in str(e) or "Network is unreachable" in str(e):
+                pass
+            elif "FATAL: " in str(e):
+                postgresql_info = {'version': 'Unknown'}
+                postgresql_info['target'] = postgresql.url()
+                postgresql_info['message_type'] = 'postgresql'
+                Output.write(postgresql_info)
+            else:
+                print(str(e))
+                Output.write({'target': postgresql.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
@@ -73,7 +79,11 @@ def postgrescan_worker(target, actions, creds, timeout):
     except ConnectionRefusedError:
         pass
     except Exception as e:
-        Output.write({'target': postgresql.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+        #Output.write({'target': postgresql.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+        pass
     finally:
-        postgresql.disconnect()
+        try:
+            postgresql.disconnect()
+        except:
+            pass
 

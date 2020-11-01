@@ -49,10 +49,15 @@ def telnetscan_worker(target, actions, creds, timeout):
                 args = (timeout,)
                 dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
+    except OSError:
+        pass
     except ConnectionRefusedError:
         pass
     except Exception as e:
         Output.write({'target': telnet.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
-        telnet.disconnect()
+        try:
+            telnet.disconnect()
+        except:
+            pass
 
