@@ -71,13 +71,17 @@ def vncscan_worker(target, actions, creds, timeout):
                         sleep(0.5)
             else:
                 Output.write({'target': vnc.url(), 'message': 'Unsupported authentication mechanism for bruteforce'})
-
+    except ConnectionRefusedError:
+        pass
     except OSError as e:
-        Output.write({'target': vnc.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+        pass
     except ConnectionRefusedError as e:
         Output.write({'target': vnc.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     except Exception as e:
         Output.write({'target': vnc.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
-        vnc.disconnect()
+        try:
+            vnc.disconnect()
+        except:
+            pass
 

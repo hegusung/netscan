@@ -85,7 +85,6 @@ class SMBScan:
 
                 self.is_admin = self.check_if_admin(domain, username, password, hash)
 
-            success = True
 
         except impacket.smbconnection.SessionError as e:
             error, desc = e.getErrorString()
@@ -123,14 +122,10 @@ class SMBScan:
             self.domain = hostname
 
         smb_info = {}
-        if self.domain:
-            smb_info['domain'] = self.domain
-        if hostname:
-            smb_info['hostname'] = hostname
-        if server_os:
-            smb_info['server_os'] = server_os
-        if signing:
-            smb_info['signing'] = signing
+        smb_info['domain'] = self.domain.strip()
+        smb_info['hostname'] = hostname.strip()
+        smb_info['server_os'] = server_os.strip()
+        smb_info['signing'] = signing
 
         return smb_info
 
@@ -190,12 +185,12 @@ class SMBScan:
         if hasattr(rpctransport, 'set_credentials'):
             # This method exists only for selected protocol sequences.
             rpctransport.set_credentials(username, password if password is not None else '', domain, lmhash, nthash)
-        dce = rpctransport.get_dce_rpc()
-        dce.connect()
-        dce.bind(scmr.MSRPC_UUID_SCMR)
-
-        lpMachineName = '{}\x00'.format(self.hostname)
         try:
+            dce = rpctransport.get_dce_rpc()
+            dce.connect()
+            dce.bind(scmr.MSRPC_UUID_SCMR)
+
+            lpMachineName = '{}\x00'.format(self.hostname)
 
             # 0xF003F - SC_MANAGER_ALL_ACCESS
             # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx

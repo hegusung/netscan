@@ -9,7 +9,7 @@ def rsyncscan_worker(target, timeout):
 
     try:
         version, welcome = rsync.version()
-        
+
         Output.write({'target': rsync.url(), 'message': 'RSync server: %s' % version})
 
         shares = rsync.list_shares()
@@ -21,6 +21,10 @@ def rsyncscan_worker(target, timeout):
                 output += ' '*60+'- %s   %s  (%s)\n' % (share['name'].ljust(30), share['description'].ljust(60), share['auth_message'])
         Output.write({'target': rsync.url(), 'message': output})
 
+    except OSError:
+        pass
+    except ConnectionRefusedError:
+        pass
     except Exception as e:
         if str(e) == 'Not a rsync server':
             pass

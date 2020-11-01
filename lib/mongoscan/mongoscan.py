@@ -4,6 +4,7 @@ from time import sleep
 import socket
 import traceback
 import struct
+import pymongo.errors
 
 from .mongo import Mongo
 from .mongo_bruteforce import *
@@ -66,6 +67,8 @@ def mongoscan_worker(target, actions, creds, timeout):
                 args = (timeout,)
                 dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
+    except pymongo.errors.ServerSelectionTimeoutError:
+        pass
     except OSError:
         pass
     except ConnectionRefusedError:
@@ -73,5 +76,8 @@ def mongoscan_worker(target, actions, creds, timeout):
     except Exception as e:
         Output.write({'target': mongo.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
-        mongo.disconnect()
+        try:
+            mongo.disconnect()
+        except:
+            pass
 
