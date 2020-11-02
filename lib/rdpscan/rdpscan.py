@@ -15,65 +15,68 @@ from utils.dispatch import dispatch
 
 def rdpscan_worker(target, actions, creds, timeout):
     try:
-        rdpscan = RDP(target['hostname'], target['port'], timeout)
+        rdp = RDP(target['hostname'], target['port'], timeout)
 
-        rdp_info = rdpscan.get_certificate_info()
+        rdp_info = rdp.get_certificate_info()
 
-        Output.write({'target': rdpscan.url(), 'message': '%s' % rdp_info['hostname']})
+        Output.write({'target': rdp.url(), 'message': '%s' % rdp_info['hostname']})
 
-        """
-        if rdpscan.connect():
-            # We are against a SMB server
+        if 'username' in creds:
+            domain = creds['domain'] if 'domain' in creds else None
+            username = creds['username']
+            password = creds['password'] if 'password' in creds else None
+            ntlm_hash = creds['hash'] if 'hash' in creds else None
 
-            # Gather info
-            rdp_info = rdpscan.get_server_info()
-            rdp_info['target'] = rdpscan.url()
-            rdp_info['message_type'] = 'rdp'
-            Output.write(rdp_info)
+            result = rdp.check_auth(domain, username, password, ntlm_hash)
 
-            rdpscan.disconnect()
-
-            # Start new connection
-            rdpscan.connect()
-
-            success = False
-            is_admin = False
-            # Authenticate
-            if not 'username' in creds:
-                pass
+            if domain:
+                user = '%s\\%s' % (domain, username)
             else:
-                if not 'domain' in creds:
-                    creds['domain'] = 'WORKGROUP'
+                user = username
+            if password:
+                user_secret = 'password %s' % password
+            else:
+                user_secret = 'hash %s' % ntlm_hash
+            if result:
+                Output.write({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and %s' % (user, user_secret)})
+            else:
+                Output.write({'target': rdp.url(), 'message': 'Authentication failure with credentials %s and %s' % (user, user_secret)})
 
-                if '\\' in creds['username']:
-                    creds['domain'] = creds['username'].split('\\')[0]
-                    creds['username'] = creds['username'].split('\\')[1]
+        if 'bruteforce' in actions:
+            if 'username_file' in actions['bruteforce'] != None:
+                Output.write({'target': rdp.url(), 'message': 'Starting bruteforce:'})
 
-                if 'password' in creds:
-                    try:
-                        success, is_admin = rdpscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
-                        Output.write({'target': rdpscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
-                    except AuthFailure as e:
-                        Output.write({'target': rdpscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
-                elif 'hash' in creds:
-                    try:
-                        success, is_admin = rdpscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
-                        Output.write({'target': rdpscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
-                    except AuthFailure as e:
-                        Output.write({'target': rdpscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
+                if 'domain' in creds:
+                    domain = creds['domain']
                 else:
-                    try:
-                        success, is_admin = rdpscan.auth(domain=creds['domain'], username=creds['username'], password='')
-                        Output.write({'target': rdpscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
-                    except AuthFailure as e:
-                        Output.write({'target': rdpscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
+                    domain = 'WORKGROUP'
+                username_file = actions['bruteforce']['username_file']
+                password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
+                bruteforce_workers = actions['bruteforce']['workers']
 
-                if is_admin:
-                    Output.write({'target': rdpscan.url(), 'message': 'Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
+                # The generator will provide a username:password_list couple
+                gen = bruteforce_generator(target, domain, username_file, password_file)
+                gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
 
-            if success:
-                # Authenticated, now perform actions
-        """
+                args = (timeout,)
+                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+        if 'simple_bruteforce' in actions:
+            if 'username_file' in actions['bruteforce'] != None:
+                Output.write({'target': rdp.url(), 'message': 'Starting simple bruteforce:'})
+
+                if 'domain' in creds:
+                    domain = creds['domain']
+                else:
+                    domain = 'WORKGROUP'
+                username_file = actions['bruteforce']['username_file']
+                bruteforce_workers = actions['bruteforce']['workers']
+
+                # The generator will provide a username:password_list couple
+                gen = bruteforce_generator(target, domain, username_file, None, simple_bruteforce=True)
+                gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
+
+                args = (timeout,)
+                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except ssl.SSLError as e:
         pass
@@ -82,9 +85,9 @@ def rdpscan_worker(target, actions, creds, timeout):
     except OSError:
         pass
     except ConnectionResetError:
-        Output.write({'target': rdpscan.url(), 'message': 'Connection reset by target'})
+        Output.write({'target': rdp.url(), 'message': 'Connection reset by target'})
     except Exception as e:
-        Output.write({'target': rdpscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+        Output.write({'target': rdp.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
-        rdpscan.disconnect()
+        rdp.disconnect()
 
