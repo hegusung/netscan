@@ -2,43 +2,31 @@ import copy
 from .rdp import RDP
 from utils.output import Output
 from utils.utils import AuthFailure
+from time import sleep
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
         domain = target['b_domain']
         username = target['b_username']
-
-        smbscan = SMBScan(target['hostname'], target['port'], timeout)
-
-        success = smbscan.connect()
-
-        if not success:
-            Output.write({'target': smbscan.url(), 'message': 'Unable to connect to SMB server'})
-            continue
-
-        success = False
         stop = False
-        try:
-            success, is_admin = smbscan.auth(target['b_domain'], target['b_username'], password)
-            Output.write({'target': smbscan.url(), 'message': 'Authentication success with credentials %s\\%s and password %s' % (domain, username, password)})
 
-            if is_admin:
-                Output.write({'target': smbscan.url(), 'message': 'Administrative privileges with credentials %s\\%s' % (domain, username)})
+        rdp = RDP(target['hostname'], target['port'], timeout)
 
+        result = rdp.check_auth(domain, username, password)
+
+        sleep(0.5)
+
+        if result:
+            if domain:
+                user = '%s\\%s' % (domain, username)
+            else:
+                user = username
+
+            Output.write({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
             stop = True
 
-        except AuthFailure as e:
-            if str(e) in ["STATUS_ACCOUNT_LOCKED_OUT"]:
-                    Output.write({'target': smbscan.url(), 'message': 'Account locked out: %s\\%s' % (domain, username)})
-                    stop = True
-            elif str(e) in ["STATUS_LOGON_FAILURE"]:
-                #Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials %s\\%s and password %s: %s' % (domain, username, password, str(e))})
-                pass
-            else:
-                Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials %s\\%s and password %s: %s' % (domain, username, password, str(e))})
-
         try:
-            smbscan.disconnect()
+            rdp.disconnect()
         except:
             pass
 

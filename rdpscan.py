@@ -33,8 +33,8 @@ def main():
     creds = {}
     if args.domain:
         creds['domain'] = args.domain
-    if args.domain:
-        creds['domain'] = args.domain
+    if args.username:
+        creds['username'] = args.username
     if args.password:
         creds['password'] = args.password
     if args.hash:
