@@ -11,6 +11,7 @@ from .kerberos import Kerberos
 
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def adscan_worker(target, actions, creds, timeout):
     # Process creds
@@ -39,6 +40,19 @@ def adscan_worker(target, actions, creds, timeout):
                 smb_info['target'] = smbscan.url()
                 smb_info['message_type'] = 'smb'
                 Output.write(smb_info)
+                DB.insert_port({
+                    'hostname': target['hostname'],
+                    'port': 445,
+                    'protocol': 'tcp',
+                    'service': 'smb',
+                    'version': smb_info['server_os'],
+                    'service_info': {
+                        'os': smb_info['server_os'],
+                        'domain': smb_info['domain'],
+                        'hostname': smb_info['hostname'],
+                        'signing': smb_info['signing'],
+                    }
+                })
 
                 # We need to disconnect after get_server_info
                 smbscan.disconnect()
@@ -88,6 +102,7 @@ def adscan_worker(target, actions, creds, timeout):
         # == LDAP check ==
         try:
 
+            # TODO: switch to ssl
             ldapscan = LDAPScan(target['hostname'], 389, timeout)
             domain = creds['domain'] if 'domain' in creds else None
             username = creds['username'] if 'username' in creds else None
@@ -98,6 +113,17 @@ def adscan_worker(target, actions, creds, timeout):
                 ldap_authenticated = True
 
                 Output.write({'target': ldapscan.url(), 'message': 'LDAP: %s  %s' % (ldap_info['dns_hostname'].ljust(30), ldap_info['default_domain_naming_context'])})
+                (ldap_info['dns_hostname'].ljust(30), ldap_info['default_domain_naming_context'])})
+                DB.insert_port({
+                    'hostname': target['hostname'],
+                    'port': 389,
+                    'protocol': 'tcp',
+                    'service': 'ldap',
+                    'service_info': {
+                        'dns_hostname': ldap_info['dns_hostname'],
+                        'default_domain_naming_context': ldap_info['default_domain_naming_context'],
+                    }
+                })
 
                 if username == None:
                     Output.write({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null bind'})
@@ -140,7 +166,7 @@ def adscan_worker(target, actions, creds, timeout):
                 if ldap_authenticated:
                     for entry in ldapscan.list_hosts():
                         host = '%s\\%s' % (entry['domain'], entry['hostname'])
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (host.ljust(40), entry['os'].ljust(20), entry['comment'])})
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s  [%s]' % (host.ljust(30), entry['os'].ljust(20), entry['comment'].ljust(25), ','.join(entry['tags']))})
                 else:
                     raise NotImplementedError('Dumping hosts through SMB')
             if 'dns' in actions:

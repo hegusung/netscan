@@ -12,6 +12,7 @@ from .redis_bruteforce import *
 from utils.utils import AuthFailure
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.db import DB
 
 def redisscan_worker(target, actions, creds, timeout):
     try:
@@ -26,7 +27,24 @@ def redisscan_worker(target, actions, creds, timeout):
         if auth:
             version_printed = True
             Output.write({'target': redis.url(), 'message': version})
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'protocol': 'tcp',
+                'service': 'redis',
+                'version': version,
+            })
+
             Output.write({'target': redis.url(), 'message': 'Authentication success with anonymous credentials'})
+            vuln_info = {
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'service': 'redis',
+                'url': redis.url(),
+                'name': 'Anonymous connection to service',
+                'description': 'Anonymous account can connect to redis service: %s' % redis.url(),
+            }
+            DB.insert_vulnerability(vuln_info)
 
         if 'password' in creds:
             redis_auth = Redis(target['hostname'], target['port'], timeout)
@@ -38,6 +56,17 @@ def redisscan_worker(target, actions, creds, timeout):
                 if not version_printed:
                     Output.write({'target': redis.url(), 'message': version})
                 Output.write({'target': redis.url(), 'message': 'Authentication success with password %s' % (creds['password'],)})
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'redis',
+                    'url': redis.url(),
+                    'type': 'password',
+                    'username': 'N/A',
+                    'password': creds['password'],
+                }
+                DB.insert_credential(cred_info)
+
                 redis.disconnect()
                 redis = redis_auth
 
@@ -50,6 +79,13 @@ def redisscan_worker(target, actions, creds, timeout):
 
         if not auth:
             Output.write({'target': redis.url(), 'message': 'Unknown'})
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'protocol': 'tcp',
+                'service': 'redis',
+            })
+
         else:
             """
             if 'list_dbs' in actions:

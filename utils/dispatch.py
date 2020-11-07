@@ -1,6 +1,6 @@
 from utils.process_inputs import process_inputs, count_process_inputs
 from utils.output import Output
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Manager
 import queue
 import time
 import traceback
@@ -19,6 +19,8 @@ def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10,
 
 def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None):
     try:
+        manager = Manager()
+
         worker_list = []
 
         if process:
@@ -28,7 +30,7 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
             n_threads = int(workers)
 
         # prepare progress bar thread
-        pg_queue = Queue()
+        pg_queue = manager.Queue()
         pg_thread = Thread(target=progressbar_worker, args=(gen_size, pg_queue, pg_name))
         pg_thread.daemon = True
         pg_thread.start()
@@ -39,7 +41,7 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
             n_all = n_threads
 
         # Start feeding worker
-        feed_queue = Queue()
+        feed_queue = manager.Queue()
         feed_thread = Thread(target=feedqueue_worker, args=(gen, feed_queue, n_all))
         feed_thread.daemon = True
         feed_thread.start()
@@ -100,7 +102,7 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue):
 
             if target == None:
                 break
-            
+
             try:
                 worker_func(target, *func_args)
             except Exception as e:
@@ -109,7 +111,7 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue):
                 pg_queue.put(1)
     except KeyboardInterrupt:
         pass
-           
+
 def progressbar_worker(target_size, pg_queue, pg_name):
     if pg_name == None:
         pg = tqdm(total=target_size, mininterval=1)
@@ -131,7 +133,7 @@ def progressbar_worker(target_size, pg_queue, pg_name):
         if count >= target_size:
             break
 
-    pg_queue.close()
+    #pg_queue.close()
 
 def feedqueue_worker(target_gen, feed_queue, nb_workers):
     try:

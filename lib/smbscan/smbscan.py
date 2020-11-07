@@ -10,6 +10,7 @@ from .smb_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_
 
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.db import DB
 
 """
 Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
@@ -27,6 +28,19 @@ def smbscan_worker(target, actions, creds, timeout):
             smb_info['target'] = smbscan.url()
             smb_info['message_type'] = 'smb'
             Output.write(smb_info)
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': 445,
+                'protocol': 'tcp',
+                'service': 'smb',
+                'version': smb_info['server_os'],
+                'service_info': {
+                    'os': smb_info['server_os'],
+                    'domain': smb_info['domain'],
+                    'hostname': smb_info['hostname'],
+                    'signing': smb_info['signing'],
+                }
+            })
 
             smbscan.disconnect()
 
@@ -50,12 +64,46 @@ def smbscan_worker(target, actions, creds, timeout):
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
                         Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
+                        if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
+                            # local account
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'smb',
+                                'url': smbscan.url(),
+                                'type': 'password',
+                                'username': creds['username'],
+                                'password': creds['password'],
+                            }
+                            DB.insert_credential(cred_info)
+
+                        else:
+                            # domain account 
+                            pass
                     except AuthFailure as e:
                         Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
                 elif 'hash' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
                         Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
+                        if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
+                            # local account
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'smb',
+                                'url': smbscan.url(),
+                                'type': 'hash',
+                                'username': creds['username'],
+                                'format': 'ntlm',
+                                'hash': creds['hash'],
+                            }
+                            DB.insert_credential(cred_info)
+
+                        else:
+                            # domain account 
+                            pass
+
                     except AuthFailure as e:
                         Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
                 else:
@@ -77,7 +125,22 @@ def smbscan_worker(target, actions, creds, timeout):
                         for share_info in smbscan.list_shares():
                             shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
                             share_list.append(share_info['name'])
+
+                            db_info = {
+                                'hostname': target['hostname'],
+                                'port': 445,
+                                'url': smbscan.url(),
+                                'share': share_info['name'],
+                                'service': 'smb',
+                                'path': '/',
+                                'access': share_info['access'],
+                                'comment': share_info['remark'],
+                            }
+                            DB.insert_content(db_info)
+
                         Output.write({'target': smbscan.url(), 'message': shares})
+
+
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
                             Output.write({'target': smbscan.url(), 'message': 'List shares: Access denied'})
@@ -96,9 +159,21 @@ def smbscan_worker(target, actions, creds, timeout):
                             contents = "Content of share %s:\n" % share
                             for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
                                 if 'size' in content:
-                                    contents += " "*60+"- %s %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
+                                    contents += " "*60+"- %s     %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
                                 else:
                                     contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
+
+                                db_info = {
+                                    'hostname': target['hostname'],
+                                    'port': 445,
+                                    'url': smbscan.url(),
+                                    'share': share,
+                                    'service': 'smb',
+                                    'path': content['name'].replace('\\', '/'),
+                                }
+                                if 'size' in content:
+                                    db_info['size'] = content['size']
+                                DB.insert_content(db_info)
                             Output.write({'target': smbscan.url(), 'message': contents})
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
@@ -201,7 +276,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             Output.write({'target': smbscan.url(), 'message': 'Enum logged in: Access denied'})
                         else:
                             raise e
-                if 'session' in actions:
+                if 'sessions' in actions:
                     Output.write({'target': smbscan.url(), 'message': 'Sessions:'})
                     try:
                         entries = smbscan.enum_sessions()

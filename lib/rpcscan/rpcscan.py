@@ -11,6 +11,7 @@ from .utils import parse_rpc_names
 from utils.output import Output
 from utils.dispatch import dispatch
 from utils.utils import gen_random_string, sizeof_fmt
+from utils.db import DB
 
 def rpcscan_worker(target, actions, timeout):
     portmap = None
@@ -23,6 +24,12 @@ def rpcscan_worker(target, actions, timeout):
 
         if res:
             Output.write({'target': 'rpc://%s:%d' % (target['hostname'], 111) , 'message': 'Portmapper'})
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': 111,
+                'protocol': 'tcp',
+                'service': 'portmapper',
+            })
 
             if 'rpc' in actions:
                 rpc_names = parse_rpc_names(os.path.join('lib', 'rpcscan', 'rpc_names.csv'))
@@ -46,6 +53,13 @@ def rpcscan_worker(target, actions, timeout):
 
             mount = Mount(target['hostname'], mount_port, timeout)
             mount.connect()
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': mount_port,
+                'protocol': 'tcp',
+                'service': 'mount',
+            })
+
             mounts = mount.export()
 
             if 'mounts' in actions:
@@ -55,10 +69,29 @@ def rpcscan_worker(target, actions, timeout):
                     Output.write({'target': 'rpc://%s:%d' % (target['hostname'], mount_port) , 'message': output})
 
             nfs_port = portmap.getport(NFS.program, NFS.program_version)
+
+            for mountpoint in mounts:
+                if '*' in mountpoint['authorized']:
+                    vuln_info = {
+                        'hostname': target['hostname'],
+                        'port': nfs_port,
+                        'service': 'nfs',
+                        'url': 'nfs://%s:%d' % (target['hostname'], nfs_port),
+                        'name': 'NFS share accessible to everyone',
+                        'description': 'NFS share is accessible from any IP address: nfs://%s:%d%s' % (target['hostname'], nfs_port, mountpoint['path']),
+                    }
+                    DB.insert_vulnerability(vuln_info)
+
             nfs = NFS(target['hostname'], nfs_port, timeout)
             nfs.connect()
 
             Output.write({'target': 'nfs://%s:%d' % (target['hostname'], nfs_port) , 'message': 'NFS'})
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': nfs_port,
+                'protocol': 'tcp',
+                'service': 'nfs',
+            })
 
             if 'list' in actions:
                 uid = actions['list']['uid']
@@ -83,11 +116,26 @@ def rpcscan_worker(target, actions, timeout):
                                 contents += " "*60+"- %s %s\n" % (content['file'].ljust(30), sizeof_fmt(content['size']))
                             else:
                                 contents += " "*60+"- %s/\n" % (content['file'],)
+
+                            db_info = {
+                                'hostname': target['hostname'],
+                                'port': nfs_port,
+                                'url': 'nfs://%s:%d' % (target['hostname'], nfs_port),
+                                'service': 'nfs',
+                                'share': mountpoint['path'],
+                                'path': content['file'],
+                            }
+                            if 'size' in content:
+                                db_info['size'] = content['size']
+                            DB.insert_content(db_info)
                         Output.write({'target': 'nfs://%s:%d' % (target['hostname'], nfs_port) , 'message': contents})
                     except MountAccessError as e:
                         print("%s: %s" % (type(e), e))
                         continue
-
+    except OSError:
+        pass
+    except ConnectionRefusedError:
+        pass
     except Exception as e:
         Output.write({'target': 'rpc://%s:%d' % (target['hostname'], 111), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
@@ -123,4 +171,5 @@ def get_content(nfs, auth, file_handle, file_path, recurse):
         yield entry
 
         if file_type_str == "directory" and recurse > 0:
-            get_content(nfs, auth, item["file_handle"], os.path.join(file_path, file_name), recurse-1)
+            for content in get_content(nfs, auth, item["file_handle"], os.path.join(file_path, file_name), recurse-1):
+                yield content

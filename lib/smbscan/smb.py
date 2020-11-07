@@ -68,6 +68,7 @@ class SMBScan:
                 self.conn.login('' , '')
                 self.is_admin = self.check_if_admin(domain, '', '', hash)
                 self.creds = {'username': '', 'password': '', 'domain': domain}
+                success = True
             else:
                 if password != None:
                     self.conn.login(username, password, domain)
@@ -82,9 +83,9 @@ class SMBScan:
 
                     self.conn.login(username, '', domain, lm_hash, nt_hash)
                     self.creds = {'username': username, 'hash': hash, 'domain': domain}
+                success = True
 
                 self.is_admin = self.check_if_admin(domain, username, password, hash)
-
 
         except impacket.smbconnection.SessionError as e:
             error, desc = e.getErrorString()
@@ -180,8 +181,14 @@ class SMBScan:
 
         lmhash = ''
         nthash = ''
-        if hash:
-            lmhash, nthash = hash.split(':')
+        if hash != None:
+            if not ':' in hash:
+                nthash = hash
+                lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+            else:
+                nthash = hash.split(':')[1]
+                lmhash = hash.split(':')[0]
+
         if hasattr(rpctransport, 'set_credentials'):
             # This method exists only for selected protocol sequences.
             rpctransport.set_credentials(username, password if password is not None else '', domain, lmhash, nthash)
@@ -247,6 +254,12 @@ class SMBScan:
                 else:
                     Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: Access denied".format(share, path)})
                 return
+            except impacket.nmb.NetBIOSError as e:
+                Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                return
+            except BrokenPipeError as e:
+                Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                return
 
             for content in contents:
                 has_content = True
@@ -269,14 +282,17 @@ class SMBScan:
                     if not filepath.endswith('\\'):
                         filepath = "%s\\" % filepath
 
+                    yield {'type': 'folder', 'name': filepath}
+
                     if recurse <= 0:
-                        yield {'type': 'folder', 'name': filepath}
+                        #yield {'type': 'folder', 'name': filepath}
+                        pass
                     else:
                         for data in self.list_content(path=filepath, share=share, recurse=recurse-1):
                             yield data
 
-            if not has_content and path != '\\':
-                yield {'type': 'folder', 'name': path}
+            #if not has_content and path != '\\':
+            #    yield {'type': 'folder', 'name': path}
 
         except Exception as e:
             raise e

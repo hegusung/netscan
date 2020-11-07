@@ -190,7 +190,7 @@ class NFS(RPC):
                 attributes = data[:84]
                 data = data[84:]
 
-                (file_type, mode, ulink, uid, gid, file_size) = struct.unpack('!LLLLLL', attributes[:24])
+                (file_type, mode, ulink, uid, gid, _, file_size) = struct.unpack('!LLLLLLL', attributes[:28])
                 # File types:
                 # 1: Regular file
                 # 2: Directory

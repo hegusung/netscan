@@ -11,6 +11,7 @@ from .mssql_bruteforce import *
 from utils.utils import AuthFailure
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.db import DB
 
 def mssqlscan_worker(target, actions, creds, timeout):
     try:
@@ -24,6 +25,16 @@ def mssqlscan_worker(target, actions, creds, timeout):
             mssql_info['target'] = mssqlscan.url()
             mssql_info['message_type'] = 'mssql'
             Output.write(mssql_info)
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'protocol': 'tcp',
+                'service': 'mssql',
+                'version': mssql_info['version'],
+                'service_info': {
+                    'version_number': mssql_info['version_number'],
+                }
+            })
 
             mssqlscan.disconnect()
 
@@ -53,6 +64,38 @@ def mssqlscan_worker(target, actions, creds, timeout):
                         Output.write({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
                     else:
                         Output.write({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and hash %s' % (user, ntlm_hash)})
+
+                    if domain in [None, 'WORKGROUP']:
+                        # local account
+                        if password:
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'mssql',
+                                'url': mssqlscan.url(),
+                                'type': 'password',
+                                'username': username,
+                                'password': password,
+                            }
+                            DB.insert_credential(cred_info)
+
+                        else:
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'mssql',
+                                'url': mssqlscan.url(),
+                                'type': 'hash',
+                                'username': username,
+                                'format': 'ntlm',
+                                'hash': ntlm_hash,
+                            }
+                            DB.insert_credential(cred_info)
+
+                    else:
+                        # domain account 
+                        pass
+
                 except AuthFailure as e:
                     if password:
                         Output.write({'target': mssqlscan.url(), 'message': 'Authentication failure with credentials %s and password %s: %s' % (user, password, str(e))})
@@ -70,6 +113,18 @@ def mssqlscan_worker(target, actions, creds, timeout):
                             output += " "*60+"- %s:\n" % db['name']
                             for table in db['tables']:
                                 output += " "*60+"\t- %s\n" % table
+
+                                db_info = {
+                                    'hostname': target['hostname'],
+                                    'port': target['port'],
+                                    'url': mssqlscan.url(),
+                                    'service': 'mssql',
+                                    'database': db['name'],
+                                    'table': table,
+                                }
+                                db_info['account'] = user
+                                DB.insert_database(db_info)
+
                         Output.write({'target': mssqlscan.url(), 'message': output})
                     if 'list_admins' in actions:
                         admins = mssqlscan.list_admins()

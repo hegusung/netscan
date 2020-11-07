@@ -2,6 +2,7 @@ import copy
 from .smb import SMBScan
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
@@ -21,6 +22,23 @@ def bruteforce_worker(target, timeout):
         try:
             success, is_admin = smbscan.auth(target['b_domain'], target['b_username'], password)
             Output.write({'target': smbscan.url(), 'message': 'Authentication success with credentials %s\\%s and password %s' % (domain, username, password)})
+            if domain in [None, 'WORKGROUP']:
+                # local account
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'smb',
+                    'url': smbscan.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
+
+            else:
+                # domain account 
+                pass
+
 
             if is_admin:
                 Output.write({'target': smbscan.url(), 'message': 'Administrative privileges with credentials %s\\%s' % (domain, username)})

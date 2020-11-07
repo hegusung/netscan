@@ -95,7 +95,7 @@ class LDAPScan:
                     tags.append('Password never expire')
                 if attr['userAccountControl'] & 0x400000 != 0:
                     tags.append('Don\'t require pre-auth')
-                if attr['userAccountControl'] & 0x1000000 != 0:
+                if attr['userAccountControl'] & 0x80000 != 0:
                     tags.append('Trusted to auth for delegation')
             else:
                 continue
@@ -175,10 +175,15 @@ class LDAPScan:
             domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
             dns = attr["dNSHostName"]
             hostname = attr['name']
-            os = attr['operatingSystem'] if 'operatingSystem' in attr else None
+            os = attr['operatingSystem'] if 'operatingSystem' in attr else ''
             sid = attr['objectSid']
             rid = sid.split('-')[-1]
-            comment = attr['description'] if 'description' in attr else None
+            comment = attr['description'] if 'description' in attr else ''
+
+            tags = []
+            if 'userAccountControl' in attr:
+                if attr['userAccountControl'] & 0x80000 != 0:
+                    tags.append('Trusted for delegation')
 
             yield {
                 'domain': domain,
@@ -187,6 +192,7 @@ class LDAPScan:
                 'os': os,
                 'sid': sid,
                 'rid': rid,
+                'tags': tags,
                 'comment': comment,
             }
 

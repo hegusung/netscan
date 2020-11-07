@@ -6,6 +6,9 @@ from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.rdpscan.rdpscan import rdpscan_worker
 
+from utils.db import DB
+from utils.config import Config
+
 def main():
     parser = argparse.ArgumentParser(description='RDPScan')
     parser.add_argument('targets', type=str)
@@ -24,7 +27,13 @@ def main():
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # DB arguments
+    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+
     args = parser.parse_args()
+
+    Config.load_config()
+    DB.start_worker(args.nodb)
 
     static_inputs = {}
     if args.port:
@@ -50,6 +59,8 @@ def main():
 
     rdpscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
 
+
+    DB.stop_worker()
     Output.stop()
 
 def rdpscan(input_targets, static_inputs, workers, actions, creds, timeout):

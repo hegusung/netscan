@@ -1,3 +1,4 @@
+import traceback
 from time import strftime, gmtime
 from impacket.nt_errors import STATUS_MORE_ENTRIES
 from impacket.dcerpc.v5 import transport, samr, wkst, srvs, lsat, lsad
@@ -5,6 +6,7 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.samr import DCERPCSessionError
 from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
 from impacket.dcerpc.v5.samr import SID_NAME_USE
+from impacket.dcerpc.v5.ndr import NULL
 
 # https://github.com/SecureAuthCorp/impacket/blob/master/examples/netview.py
 

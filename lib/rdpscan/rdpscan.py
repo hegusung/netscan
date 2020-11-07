@@ -11,6 +11,7 @@ from .rdp_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_
 
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.db import DB
 
 
 def rdpscan_worker(target, actions, creds, timeout):
@@ -20,6 +21,15 @@ def rdpscan_worker(target, actions, creds, timeout):
         rdp_info = rdp.get_certificate_info()
 
         Output.write({'target': rdp.url(), 'message': '%s' % rdp_info['hostname']})
+        DB.insert_port({
+            'hostname': target['hostname'],
+            'port': target['port'],
+            'protocol': 'tcp',
+            'service': 'rdp',
+            'service_info': {
+                'hostname': rdp_info['hostname'],
+            }
+        })
 
         if 'username' in creds:
             domain = creds['domain'] if 'domain' in creds else None
@@ -39,6 +49,35 @@ def rdpscan_worker(target, actions, creds, timeout):
                 user_secret = 'hash %s' % ntlm_hash
             if result:
                 Output.write({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and %s' % (user, user_secret)})
+                if domain in [None, 'WORKGROUP']:
+                    # local account
+                    if password:
+                        cred_info = {
+                            'hostname': target['hostname'],
+                            'port': target['port'],
+                            'service': 'rdp',
+                            'url': rdp.url(),
+                            'type': 'password',
+                            'username': username,
+                            'password': password,
+                        }
+                    else:
+                        cred_info = {
+                            'hostname': target['hostname'],
+                            'port': target['port'],
+                            'service': 'rdp',
+                            'url': rdp.url(),
+                            'type': 'hash',
+                            'format': 'ntlm',
+                            'username': username,
+                            'hash': ntlm_hash,
+                        }
+                    DB.insert_credential(cred_info)
+
+                else:
+                    # domain account 
+                    pass
+
             else:
                 Output.write({'target': rdp.url(), 'message': 'Authentication failure with credentials %s and %s' % (user, user_secret)})
 

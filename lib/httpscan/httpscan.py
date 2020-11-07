@@ -16,6 +16,8 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.poolmanager import PoolManager
 from utils.dispatch import dispatch
 from .dir_bruteforce import dir_file_count, dir_bruteforce_generator
+from utils.db import DB
+from utils.utils import gen_random_string
 
 urllib3.disable_warnings()
 
@@ -26,24 +28,63 @@ def httpscan_worker(target, useragent, proxy, dir_bruteforce, extensions, dir_br
     if output != None and not output['code'] in excluded_code:
         output['message_type'] = 'http'
         output['target'] = httpscan.url(target['path'])
-        Output.write(output)    
-        
+        Output.write(output)
+        db_info = {
+            'hostname': target['hostname'],
+            'port': target['port'],
+            'protocol': 'tcp',
+            'service': 'http',
+            'version': output['server'],
+        }
+        service_info = {}
+
         if httpscan.method == 'https':
             names = httpscan.get_cert_hostnames()
             if len(names) != 0:
                 Output.write({"target": httpscan.url(target['path']), "message": "certificates names: %s" % ", ".join(names)})
+                service_info['cert_names'] = names
+                # TODO: resolve name and insert them in ES
+
+            service_info['ssl'] = True
+
+        db_info['service_info'] = service_info
+        DB.insert_port(db_info)
+
+        # Insert http info
+        # TODO: insert redirection url also if there is one
+        http_info = {
+            'hostname': target['hostname'],
+            'port': target['port'],
+            'protocol': 'tcp',
+            'service': 'http',
+            'url': httpscan.url(target['path']),
+            'http': {
+                'path': target['path'],
+                'code': output['code'],
+                'server': output['server'],
+                'title': output['title'],
+                'content-type': output['content-type'],
+            }
+        }
+        DB.insert_http_url(http_info)
 
         if dir_bruteforce:
-            extension_list = ['']
-            if extensions != None:
-                extension_list += extensions.split(',')
-                extension_list = list(set(extension_list))
+            # Try a random uri first to prevent false positives
+            random_uri = '/%s' % gen_random_string()
+            output = httpscan.get(random_uri)
+            if output == None or output['code'] in [200, 401, 503]:
+                Output.write({"target": httpscan.url(target['path']), "message": "Directory bruteforce aborted because this server will generate a lot of false positives"})
+            else:
+                extension_list = ['']
+                if extensions != None:
+                    extension_list += extensions.split(',')
+                    extension_list = list(set(extension_list))
 
-            gen = dir_bruteforce_generator(target, dir_bruteforce, extension_list)
-            gen_size = dir_file_count(dir_bruteforce)*len(extension_list)
+                gen = dir_bruteforce_generator(target, dir_bruteforce, extension_list)
+                gen_size = dir_file_count(dir_bruteforce)*len(extension_list)
 
-            args = (useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, [400, 404])
-            dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
+                args = (useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, [400, 404])
+                dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
 
 class HTTPScan:
 

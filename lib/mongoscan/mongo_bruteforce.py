@@ -2,6 +2,7 @@ import copy
 from .mongo import Mongo
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
@@ -14,6 +15,17 @@ def bruteforce_worker(target, timeout):
         success, _ = mongo.auth(username, password, database=target['database'])
         if success:
             Output.write({'target': mongo.url(), 'message': 'Authentication success with credentials %s and password %s and database \'%s\'' % (username, password, target['database'])})
+            cred_info = {
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'service': 'mongo',
+                'url': mongo.url(),
+                'type': 'password',
+                'username': username,
+                'password': password,
+            }
+            DB.insert_credential(cred_info)
+
             stop = True
 
         try:
