@@ -2,6 +2,7 @@ import copy
 from .mysql import MySQLScan
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
@@ -14,6 +15,17 @@ def bruteforce_worker(target, timeout):
         try:
             success, _ = mysqlscan.auth(target['b_username'], password)
             Output.write({'target': mysqlscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+            cred_info = {
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'service': 'mysql',
+                'url': mysqlscan.url(),
+                'type': 'password',
+                'username': username,
+                'password': password,
+            }
+            DB.insert_credential(cred_info)
+
             stop = True
 
         except AuthFailure as e:

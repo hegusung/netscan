@@ -3,6 +3,7 @@ from .rdp import RDP
 from utils.output import Output
 from utils.utils import AuthFailure
 from time import sleep
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
@@ -24,6 +25,24 @@ def bruteforce_worker(target, timeout):
 
             Output.write({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
             stop = True
+
+            if domain in [None, 'WORKGROUP']:
+                # local account
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'rdp',
+                    'url': rdp.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
+
+            else:
+                # domain account 
+                pass
+
 
         try:
             rdp.disconnect()

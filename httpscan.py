@@ -6,6 +6,9 @@ from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.httpscan.httpscan import httpscan_worker
 
+from utils.db import DB
+from utils.config import Config
+
 def main():
     parser = argparse.ArgumentParser(description='HTTPScan')
     parser.add_argument('targets', type=str)
@@ -20,7 +23,13 @@ def main():
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # DB arguments
+    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+
     args = parser.parse_args()
+
+    Config.load_config()
+    DB.start_worker(args.nodb)
 
     static_inputs = {}
     if args.port:
@@ -34,6 +43,8 @@ def main():
 
     httpscan(args.targets, static_inputs, args.workers, args.useragent, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout)
 
+
+    DB.stop_worker()
     Output.stop()
 
 def httpscan(input_targets, static_inputs, workers, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout):

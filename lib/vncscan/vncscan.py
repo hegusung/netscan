@@ -13,6 +13,7 @@ from .vnc_utils import run_ducky
 from utils.utils import AuthFailure
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.db import DB
 
 def vncscan_worker(target, actions, creds, timeout):
     try:
@@ -25,19 +26,47 @@ def vncscan_worker(target, actions, creds, timeout):
 
         version = vnc.version
         Output.write({'target': vnc.url(), 'message': version})
+        DB.insert_port({
+            'hostname': target['hostname'],
+            'port': target['port'],
+            'protocol': 'tcp',
+            'service': 'vnc',
+            'version': version,
+        })
 
         if "None" in vnc.supported_security_types:
             # try anonymous auth
             code, _ = vnc.auth("None")
             if code == 0:
                 auth = True
-                Output.write({'target': vnc.url(), 'message': 'Authentication success without crdentials'})
+                Output.write({'target': vnc.url(), 'message': 'Authentication success without credentials'})
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'vnc',
+                    'url': vnc.url(),
+                    'name': 'Anonymous connection to service',
+                    'description': 'Anonymous account can connect to VNC service: %s' % vnc.url(),
+                }
+                DB.insert_vulnerability(vuln_info)
+
         elif "VNC Authentication" in vnc.supported_security_types:
             if 'password' in creds:
                 code, _ = vnc.auth("VNC Authentication", password=creds['password'])
                 if code == 0:
                     auth = True
                     Output.write({'target': vnc.url(), 'message': 'Authentication success with password: %s' % creds['password']})
+                    cred_info = {
+                        'hostname': target['hostname'],
+                        'port': target['port'],
+                        'service': 'vnc',
+                        'url': vnc.url(),
+                        'type': 'password',
+                        'username': 'N/A',
+                        'password': creds['password'],
+                    }
+                    DB.insert_credential(cred_info)
+
                 else:
                     Output.write({'target': vnc.url(), 'message': 'Authentication failure with password: %s' % creds['password']})
         elif 'password' in creds:
@@ -67,6 +96,17 @@ def vncscan_worker(target, actions, creds, timeout):
                         code, _ = v.auth("VNC Authentication", password=password)
                         if code == 0:
                             Output.write({'target': vnc.url(), 'message': 'Authentication success with password: %s' % password})
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'vnc',
+                                'url': vnc.url(),
+                                'type': 'password',
+                                'username': 'N/A',
+                                'password': password,
+                            }
+                            DB.insert_credential(cred_info)
+
                         v.disconnect()
                         sleep(0.5)
             else:

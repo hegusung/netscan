@@ -2,6 +2,7 @@ import copy
 from .ftp import FTPScan
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
@@ -15,6 +16,17 @@ def bruteforce_worker(target, timeout):
         success = ftpscan.auth(username, password)
         if success:
             Output.write({'target': ftpscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+            cred_info = {
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'service': 'ftp',
+                'url': ftpscan.url(),
+                'type': 'password',
+                'username': username,
+                'password': password,
+            }
+            DB.insert_credential(cred_info)
+
             stop = True
 
         try:

@@ -3,6 +3,7 @@ import subprocess
 import traceback
 from time import sleep
 from utils.output import Output
+from utils.db import DB
 
 def rsyncscan_worker(target, timeout):
     rsync = RSync(target['hostname'], target['port'], timeout)
@@ -11,14 +12,44 @@ def rsyncscan_worker(target, timeout):
         version, welcome = rsync.version()
 
         Output.write({'target': rsync.url(), 'message': 'RSync server: %s' % version})
+        DB.insert_port({
+            'hostname': target['hostname'],
+            'port': target['port'],
+            'protocol': 'tcp',
+            'service': 'rsync',
+            'version': version,
+        })
 
         shares = rsync.list_shares()
         output = 'Rsync shares:\n'
         for share in shares:
             if share['anon'] == True:
                 output += ' '*60+'- %s   %s  (Anonymous access !!!)\n' % (share['name'].ljust(30), share['description'].ljust(60))
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'rsync',
+                    'url': rsync.url(),
+                    'name': 'Anonymous connection to service',
+                    'description': 'Anonymous account can connect to rsync service: %s/%s' % (rsync.url(), share['name']),
+                }
+                DB.insert_vulnerability(vuln_info)
+
             else:
                 output += ' '*60+'- %s   %s  (%s)\n' % (share['name'].ljust(30), share['description'].ljust(60), share['auth_message'])
+
+            db_info = {
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'url': rsync.url(),
+                'service': 'rsync',
+                'share': share['name'],
+                'comment': share['description'],
+                'path': '/',
+            }
+            if share['anon'] == True:
+                db_info['access'] = ['READ']
+            DB.insert_content(db_info)
         Output.write({'target': rsync.url(), 'message': output})
 
     except OSError:

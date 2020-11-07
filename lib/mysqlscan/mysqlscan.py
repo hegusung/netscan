@@ -4,13 +4,15 @@ from time import sleep
 import socket
 import traceback
 import struct
+import mysql.connector
 
-from .mysql import MySQLScan
+from .mysql import MySQLScan, NotMysql
 from .mysql_bruteforce import *
 
 from utils.utils import AuthFailure
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.db import DB
 
 def mysqlscan_worker(target, actions, creds, timeout):
     try:
@@ -20,13 +22,20 @@ def mysqlscan_worker(target, actions, creds, timeout):
 
         # Gather info
         version = mysqlscan.get_server_version_unauth()
-        if version == None:
-            return
 
-        mysql_info = {'version': version}
+        mysql_info = {'version': version if version != None else 'Unknown'}
         mysql_info['target'] = mysqlscan.url()
         mysql_info['message_type'] = 'mysql'
         Output.write(mysql_info)
+        db_data = {
+            'hostname': target['hostname'],
+            'port': target['port'],
+            'protocol': 'tcp',
+            'service': 'mysql',
+        }
+        if version:
+            db_data['version'] = version
+        DB.insert_port(db_data)
 
         if not 'username' in creds:
             pass
@@ -41,6 +50,17 @@ def mysqlscan_worker(target, actions, creds, timeout):
             try:
                 success, version = mysqlscan.auth(username, password)
                 Output.write({'target': mysqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (username, password)})
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'mysql',
+                    'url': mysqlscan.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
+
             except AuthFailure as e:
                 Output.write({'target': mysqlscan.url(), 'message': 'Authentication failure with credentials %s and password %s: %s' % (username, password, str(e))})
 
@@ -52,6 +72,18 @@ def mysqlscan_worker(target, actions, creds, timeout):
                         output += " "*60+"- %s:\n" % db['name']
                         for table in db['tables']:
                             output += " "*60+"\t- %s\n" % table
+
+                            db_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'url': mysqlscan.url(),
+                                'service': 'mysql',
+                                'database': db['name'],
+                                'table': table,
+                            }
+                            db_info['account'] = username
+                            DB.insert_database(db_info)
+
                     Output.write({'target': mysqlscan.url(), 'message': output})
                 if 'list_hashes' in actions:
                     hashes = mysqlscan.list_hashes()
@@ -84,6 +116,10 @@ def mysqlscan_worker(target, actions, creds, timeout):
                 args = (timeout,)
                 dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
+    except mysql.connector.errors.DatabaseError as e:
+        Output.write({'target': mysqlscan.url(), 'message': str(e)})
+    except NotMysql:
+        pass
     except OSError:
         pass
     except ConnectionRefusedError:

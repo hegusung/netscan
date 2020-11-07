@@ -6,6 +6,9 @@ from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.winrmscan.winrmscan import winrmscan_worker
 
+from utils.db import DB
+from utils.config import Config
+
 def main():
     parser = argparse.ArgumentParser(description='WinRMScan')
     parser.add_argument('targets', type=str)
@@ -19,7 +22,13 @@ def main():
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # DB arguments
+    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+
     args = parser.parse_args()
+
+    Config.load_config()
+    DB.start_worker(args.nodb)
 
     static_inputs = {}
 
@@ -41,6 +50,8 @@ def main():
 
     winrmscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
 
+
+    DB.stop_worker()
     Output.stop()
 
 def winrmscan(input_targets, static_inputs, workers, actions, creds, timeout):

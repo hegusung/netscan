@@ -5,6 +5,7 @@ import paramiko
 from .telnet import Telnet
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
@@ -20,6 +21,17 @@ def bruteforce_worker(target, timeout):
             success = telnet.auth(username, password)
             if success:
                 Output.write({'target': telnet.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'telnet',
+                    'url': telnet.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
+
                 stop = True
 
         except ConnectionRefusedError:

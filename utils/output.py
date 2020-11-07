@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime
-from multiprocessing import Queue
+from multiprocessing import Queue, Manager
 from threading import Thread
 import tqdm
 from tqdm import tqdm
@@ -23,7 +23,8 @@ class Output:
 
     @classmethod
     def setup(self):
-        self.output_queue = Queue()
+        manager = Manager()
+        self.output_queue = manager.Queue()
 
         self.output_thread = Thread(target=self.output_worker, args=(self.output_queue,))
         self.output_thread.daemon = True
@@ -33,8 +34,8 @@ class Output:
     def stop(self):
         self.output_queue.put(None)
         self.output_thread.join()
-        self.output_queue.close()
-        self.output_queue.cancel_join_thread()
+        #self.output_queue.close()
+        #self.output_queue.cancel_join_thread()
 
     @classmethod
     def write(self, message):

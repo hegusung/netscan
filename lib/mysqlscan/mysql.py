@@ -6,6 +6,9 @@ import mysql.connector
 
 from utils.utils import AuthFailure
 
+class NotMysql(Exception):
+    pass
+
 class MySQLScan:
 
     def __init__(self, hostname, port, timeout):
@@ -36,7 +39,10 @@ class MySQLScan:
             version = ""
             version_start = data[5:]
 
-            if data[4] != 10:
+            if not data[4] in [10, 0xff]:
+                raise NotMysql()
+
+            if data[4] == 0xff:
                 return None
 
             i = 0

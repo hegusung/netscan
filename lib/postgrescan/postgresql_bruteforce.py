@@ -1,29 +1,60 @@
 import copy
+import psycopg2
 from .postgresql import PostgreSQL
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
         username = target['b_username']
 
-        postgresql = PostgreSQL(target['hostname'], target['port'], timeout)
-
-        success = False
-        stop = False
-
-        success, _ = postgresql.auth(target['b_username'], password)
-        if success:
-            Output.write({'target': postgresql.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
-            stop = True
-
         try:
-            postgresql.disconnect()
-        except:
-            pass
+
+            postgresql = PostgreSQL(target['hostname'], target['port'], timeout)
+
+            success = False
+            stop = False
+
+            success, _ = postgresql.auth(target['b_username'], password)
+            if success:
+                Output.write({'target': postgresql.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'postgresql',
+                    'url': postgresql.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
+
+                stop = True
+
+            try:
+                postgresql.disconnect()
+            except:
+                pass
+
+        except psycopg2.OperationalError as e:
+            if "could not connect to server" in str(e) or "timeout expired" in str(e) or "Connection refused" in str(e) or "server closed the connection unexpectedly" in str(e) or "Network is unreachable" in str(e):
+                stop = True
+            elif "FATAL: " in str(e):
+                pass
+            elif "fe_sendauth:" in str(e):
+                # no password supplied
+                pass
+            else:
+                stop = True
+                print(str(e))
+                Output.write({'target': postgresql.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
 
         if stop:
             break
+
+
+
 
 def bruteforce_generator(target, username_file, password_file, simple_bruteforce=False):
     password_list = []
