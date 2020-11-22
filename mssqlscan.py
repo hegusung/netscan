@@ -11,7 +11,8 @@ from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='MSSQLScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='1433', dest='port')
     parser.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default=None, dest='domain')
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
@@ -38,6 +39,12 @@ def main():
 
     Config.load_config()
     DB.start_worker(args.nodb)
+
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
 
     static_inputs = {}
     if args.port:
@@ -69,7 +76,7 @@ def main():
 
     Output.setup()
 
-    mssqlscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
+    mssqlscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
 
 
     DB.stop_worker()

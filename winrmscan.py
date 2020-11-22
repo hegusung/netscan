@@ -11,7 +11,8 @@ from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='WinRMScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Authentication
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
@@ -29,6 +30,12 @@ def main():
 
     Config.load_config()
     DB.start_worker(args.nodb)
+
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
 
     static_inputs = {}
 
@@ -48,7 +55,7 @@ def main():
 
     Output.setup()
 
-    winrmscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
+    winrmscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
 
 
     DB.stop_worker()

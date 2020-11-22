@@ -1,9 +1,11 @@
 import elasticsearch
+from elasticsearch import helpers
 import sys
 import os.path
 import json
 import queue
 import time
+import traceback
 from datetime import datetime
 from multiprocessing import Queue, Manager
 from threading import Thread
@@ -12,6 +14,8 @@ from copy import copy
 from utils.utils import check_ip
 from utils.config import Config
 from utils.output import Output
+
+MAX_BULK = 100
 
 es_ids = {
     'dns': 'dns_{session}_{source}_{query_type}_{target}',
@@ -82,10 +86,14 @@ class DB:
 
     @classmethod
     def db_worker(self, db_queue):
+        inserts = []
         while True:
             try:
                 insert = db_queue.get(True, 5)
                 if insert == None:
+                    if len(inserts) > 0:
+                        Elasticsearch.insert_bulk(inserts)
+                        inserts = []
                     break
                 insert = json.loads(insert)
                 insert['session'] = self.session
@@ -94,9 +102,20 @@ class DB:
                     continue
 
                 if not self.nodb:
-                    Elasticsearch.insert_document(es_ids[insert['doc_type']].format(**insert), insert)
+                    # Elasticsearch.insert_document(es_ids[insert['doc_type']].format(**insert), insert)
+                    if 'append' in insert:
+                        append = insert['append']
+                        del insert['append']
+                    else:
+                        append = None
+                    inserts.append((es_ids[insert['doc_type']].format(**insert), insert, append))
+                    if len(inserts) >= MAX_BULK:
+                        Elasticsearch.insert_bulk(inserts)
+                        inserts = []
             except queue.Empty:
-                pass
+                if len(inserts) > 0:
+                    Elasticsearch.insert_bulk(inserts)
+                    inserts = []
             except Exception as e:
                 print('%s: %s' % (type(e), e))
 
@@ -160,6 +179,10 @@ class DB:
                 to_insert.append(host_doc_tmp)
 
         for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
             self.send(doc)
 
     @classmethod
@@ -200,6 +223,10 @@ class DB:
                 to_insert.append(script_doc_tmp)
 
         for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
             self.send(doc)
 
     @classmethod
@@ -240,6 +267,10 @@ class DB:
                 to_insert.append(http_doc_tmp)
 
         for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
             self.send(doc)
 
     @classmethod
@@ -298,6 +329,10 @@ class DB:
                 to_insert.append(content_doc_tmp)
 
         for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
             self.send(doc)
 
     @classmethod
@@ -337,6 +372,10 @@ class DB:
                 to_insert.append(database_doc_tmp)
 
         for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
             self.send(doc)
 
     @classmethod
@@ -378,6 +417,10 @@ class DB:
                 to_insert.append(credential_doc_tmp)
 
         for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
             self.send(doc)
 
     @classmethod
@@ -414,6 +457,10 @@ class DB:
                 to_insert.append(vulnerability_doc_tmp)
 
         for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
             self.send(doc)
 
 def check_entry(entry, required_list, optional_list):
@@ -474,11 +521,13 @@ class Elasticsearch(object):
         try:
             es = self.get_es_instance()
 
+            """
             if "append" in doc:
                 append = doc["append"]
                 del doc["append"]
             else:
                 append = None
+            """
 
             body={
                 "doc": doc,
@@ -489,6 +538,7 @@ class Elasticsearch(object):
                 body=body,
             )
 
+            """
             if append != None:
                 for key in append:
                     if type(append[key]) != list:
@@ -502,9 +552,76 @@ class Elasticsearch(object):
                         }
 
                         self.insert_script(id, script)
+            """
 
         except elasticsearch.exceptions.ConnectionError:
             print("Elasticsearch: Unable to connect to elasticsearch instance")
+
+    @classmethod
+    def insert_bulk(self, inserts):
+        try:
+            es = self.get_es_instance()
+
+            body = []
+            scripts = []
+            for insert in inserts:
+                # body
+                b = {
+                    '_op_type': 'update',
+                    '_index': es[1],
+                    '_id': insert[0],
+                    'doc': insert[1],
+                    'doc_as_upsert': True,
+                }
+
+                # script
+                append = insert[2]
+                b_s = {
+                    '_op_type': 'update',
+                    '_index': es[1],
+                    '_id': insert[0],
+                }
+
+                if append != None:
+                    script = {
+                        "params": {},
+                        "source": "",
+                    }
+
+                    for key in append:
+                        if type(append[key]) != list:
+                            append[key] = list(append[key])
+                        if len(append[key]) == 0:
+                            continue
+
+                        script['params'][key] = append[key]
+                        s = """for (item in params.%s) {
+    if(ctx._source.%s != null) {
+        if (!ctx._source.%s.contains(item)) { ctx._source.%s.add(item) }
+    }
+    else {
+        ctx._source.%s = [ item ]
+    }
+}
+""" % (key, key, key, key, key)
+                        script['source'] += s
+
+                    b_s['script'] = script
+
+                    if len(script['params'].keys()) != 0:
+                        scripts.append(b_s)
+
+                body.append(b)
+
+            helpers.bulk(es[0], body, index=es[1])
+            if len(scripts) != 0:
+                helpers.bulk(es[0], scripts, index=es[1])
+
+        except elasticsearch.exceptions.ConnectionError:
+            print("Elasticsearch: Unable to connect to elasticsearch instance")
+        except Exception as e:
+            print('%s: %s\n%s' % (type(e), e, traceback.format_exc()))
+
 
     @classmethod
     def insert_script(self, id, script):

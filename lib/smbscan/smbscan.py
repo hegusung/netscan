@@ -11,10 +11,13 @@ from .smb_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_
 from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
+from utils.modulemanager import ModuleManager
 
 """
 Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
 """
+
+smb_modules = ModuleManager('lib/smbscan/modules')
 
 def smbscan_worker(target, actions, creds, timeout):
     try:
@@ -300,6 +303,8 @@ def smbscan_worker(target, actions, creds, timeout):
                         else:
                             raise e
 
+            if 'modules' in actions:
+                smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], timeout))
             if 'bruteforce' in actions:
                 if 'username_file' in actions['bruteforce'] != None:
                     Output.write({'target': smbscan.url(), 'message': 'Starting bruteforce:'})

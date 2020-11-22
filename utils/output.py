@@ -10,14 +10,14 @@ tqdm.get_lock().locks = []
 
 time_format = "%Y/%m/%d %H:%M:%S"
 simple_output_format =         "[{time}]     {message}"
-target_output_format =         "[{time}]     {target:30} {message}"
+target_output_format =         "[{time}]     {target:50} {message}"
 http_output_format =           "[{time}]     {target:50} {code}   {server:40} {title}"
-dns_output_format =            "[{time}]     {target:30} {query_type:5}   {resolved}"
-port_service_output_format =   "[{time}]     {target:30} {service:30} {version}"
-smb_output_format =            "[{time}]     {target:30} {domain:30} {hostname:30} {server_os}"
-mssql_output_format =          "[{time}]     {target:30} {version}"
-mysql_output_format =          "[{time}]     {target:30} {version}"
-postgresql_output_format =     "[{time}]     {target:30} {version}"
+dns_output_format =            "[{time}]     {target:50} {query_type:5}   {resolved}"
+port_service_output_format =   "[{time}]     {target:50} {service:30} {version}"
+smb_output_format =            "[{time}]     {target:50} {domain:30} {hostname:30} {server_os}"
+mssql_output_format =          "[{time}]     {target:50} {version}"
+mysql_output_format =          "[{time}]     {target:50} {version}"
+postgresql_output_format =     "[{time}]     {target:50} {version}"
 
 class Output:
 

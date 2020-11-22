@@ -11,7 +11,8 @@ from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='VNCScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='5900', dest='port')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
@@ -31,6 +32,12 @@ def main():
     Config.load_config()
     DB.start_worker(args.nodb)
 
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
+
     static_inputs = {}
     if args.port:
         static_inputs['port'] = args.port
@@ -49,7 +56,7 @@ def main():
 
     Output.setup()
 
-    vncscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
+    vncscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
 
 
     DB.stop_worker()

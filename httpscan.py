@@ -1,17 +1,19 @@
 #!/usr/bin/python3
 import argparse
+import sys
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
 from utils.output import Output
-from lib.httpscan.httpscan import httpscan_worker
+from lib.httpscan.httpscan import httpscan_worker, http_modules
 
 from utils.db import DB
 from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='HTTPScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='80,443', dest='port')
     parser.add_argument('--method', metavar='methods', type=str_comma, nargs='?', help='methods to connect', default='http,https', dest='method')
     parser.add_argument('--path', metavar='path', nargs='?', type=str_comma, help='HTTP path', default='/', dest='path')
@@ -21,6 +23,12 @@ def main():
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the directory bruteforce', default=5, dest='dir_bruteforce_workers')
     parser.add_argument('--proxy', metavar='http://ip:port', nargs='?', type=str, help='Proxy', default=None, dest='proxy')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    # Modules
+    parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
+    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules', default=None, dest='modules')
+    # Module arguments
+    parser.add_argument('--exec', metavar='command', nargs='?', type=str, help='Execute command if RCE from a module', default=None, dest='exec')
+    parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Enable bruteforce, file name is optional', default=None, const='default', dest='bruteforce')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # DB arguments
@@ -28,8 +36,20 @@ def main():
 
     args = parser.parse_args()
 
+    if args.list_modules:
+        print('Available modules:')
+        for module in http_modules.list_modules():
+            print('- %s   %s' % (module['name'].ljust(15), module['description']))
+        sys.exit()
+
     Config.load_config()
     DB.start_worker(args.nodb)
+
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
 
     static_inputs = {}
     if args.port:
@@ -39,17 +59,23 @@ def main():
     if args.path:
         static_inputs['path'] = args.path
 
+    actions = {}
+    if args.modules:
+        module_args = {
+            'exec': args.exec,
+            'bruteforce': args.bruteforce,
+        }
+        actions['modules'] = {'modules': args.modules, 'args': module_args}
+
     Output.setup()
-
-    httpscan(args.targets, static_inputs, args.workers, args.useragent, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout)
-
+    httpscan(targets, static_inputs, args.workers, actions, args.useragent, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout)
 
     DB.stop_worker()
     Output.stop()
 
-def httpscan(input_targets, static_inputs, workers, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout):
+def httpscan(input_targets, static_inputs, workers, actions, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout):
 
-    args = (useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout)
+    args = (actions, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout)
 
     dispatch_targets(input_targets, static_inputs, httpscan_worker, args, workers=workers)
 
