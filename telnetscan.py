@@ -11,7 +11,8 @@ from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='SSHScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='23', dest='port')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Authentication
@@ -35,6 +36,12 @@ def main():
     Config.load_config()
     DB.start_worker(args.nodb)
 
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
+
     static_inputs = {}
     if args.port:
         static_inputs['port'] = args.port
@@ -53,7 +60,7 @@ def main():
 
     Output.setup()
 
-    telnetscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
+    telnetscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
 
 
     DB.stop_worker()

@@ -12,6 +12,9 @@ from .kerberos import Kerberos
 from utils.output import Output
 from utils.utils import AuthFailure
 from utils.db import DB
+from utils.modulemanager import ModuleManager
+
+ad_modules = ModuleManager('lib/adscan/modules')
 
 def adscan_worker(target, actions, creds, timeout):
     # Process creds
@@ -113,7 +116,6 @@ def adscan_worker(target, actions, creds, timeout):
                 ldap_authenticated = True
 
                 Output.write({'target': ldapscan.url(), 'message': 'LDAP: %s  %s' % (ldap_info['dns_hostname'].ljust(30), ldap_info['default_domain_naming_context'])})
-                (ldap_info['dns_hostname'].ljust(30), ldap_info['default_domain_naming_context'])})
                 DB.insert_port({
                     'hostname': target['hostname'],
                     'port': 389,
@@ -240,6 +242,10 @@ def adscan_worker(target, actions, creds, timeout):
                             Output.write({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
                         else:
                             raise e
+
+            if 'modules' in actions:
+                if smb_available:
+                    ad_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], timeout))
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})

@@ -11,7 +11,8 @@ from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='RPCScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Actions
     parser.add_argument('--rpc', action='store_true', help='List RPC entries', dest='rpc')
@@ -30,6 +31,12 @@ def main():
     Config.load_config()
     DB.start_worker(args.nodb)
 
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
+
     static_inputs = {}
 
     actions = {}
@@ -42,7 +49,7 @@ def main():
 
     Output.setup()
 
-    rpcscan(args.targets, static_inputs, args.workers, actions, args.timeout)
+    rpcscan(targets, static_inputs, args.workers, actions, args.timeout)
 
 
     DB.stop_worker()

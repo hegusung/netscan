@@ -12,7 +12,8 @@ from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='RSyncScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='873', dest='port')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
@@ -25,12 +26,18 @@ def main():
     Config.load_config()
     DB.start_worker(args.nodb)
 
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
+
     static_inputs = {}
     static_inputs['port'] = args.port
 
     Output.setup()
 
-    rsyncscan(args.targets, static_inputs, args.workers, args.timeout)
+    rsyncscan(targets, static_inputs, args.workers, args.timeout)
 
 
     DB.stop_worker()
