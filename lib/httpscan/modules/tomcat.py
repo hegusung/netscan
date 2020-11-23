@@ -33,7 +33,7 @@ creds = [
 
 class Module:
     name = 'Tomcat'
-    description = 'Discover and exploit tomcat (default password, CVE-2017-12615, TODO: CVE-2020-1938)'
+    description = 'Discover and exploit tomcat (default password, CVE-2017-12615, TODO: CVE-2020-1938, CVE-2020-9484)'
 
     def run(self, target, args, useragent, proxy, timeout):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)

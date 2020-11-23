@@ -1,6 +1,7 @@
 import re
 import sys
 import copy
+import csv
 from urllib.parse import urlparse
 from netaddr import *
 
@@ -57,23 +58,40 @@ def process_inputs(targets, static_inputs):
                 yield t
 
     if 'target_file' in targets:
-        f = open(targets['target_file'])
-        for line in f:
-            line = line.strip()
+        if targets['target_file'].endswith('.csv'):
+            with open(targets['target_file']) as csvfile:
+                reader = csv.reader(csvfile)
+                # skip the header
+                next(reader)
+                for row in reader:
+                    if len(row) != 0:
+                        for target in process_targets(row[0]):
+                            for key in static_keys:
+                                if not key in target:
+                                    target[key] = static_inputs[key]
 
-            if len(line) == 0:
-                continue
+                            # Now yield for each item in each list
+                            for t in iter_target_rec(target, list(target.keys()), 0):
+                                yield t
 
-            for target in process_targets(line):
-                for key in static_keys:
-                    if not key in target:
-                        target[key] = static_inputs[key]
+        else:
+            f = open(targets['target_file'])
+            for line in f:
+                line = line.strip()
 
-                # Now yield for each item in each list
-                for t in iter_target_rec(target, list(target.keys()), 0):
-                    yield t
+                if len(line) == 0:
+                    continue
 
-        f.close()
+                for target in process_targets(line):
+                    for key in static_keys:
+                        if not key in target:
+                            target[key] = static_inputs[key]
+
+                    # Now yield for each item in each list
+                    for t in iter_target_rec(target, list(target.keys()), 0):
+                        yield t
+
+            f.close()
 
 def count_process_inputs(targets, static_inputs):
     count = 0
@@ -95,28 +113,50 @@ def count_process_inputs(targets, static_inputs):
             count += target_count
 
     if 'target_file' in targets:
-        f = open(targets['target_file'])
-        for line in f:
-            line = line.strip()
+        if targets['target_file'].endswith('.csv'):
+            with open(targets['target_file']) as csvfile:
+                reader = csv.reader(csvfile)
+                # skip the header
+                next(reader)
+                for row in reader:
+                    if len(row) != 0:
+                        for target in process_targets(row[0]):
+                            for key in static_keys:
+                                if not key in target:
+                                    target[key] = static_inputs[key]
 
-            if len(line) == 0:
-                continue
+                            target_count = 1
+                            for key in target:
+                                if type(target[key]) == list:
+                                    target_count = target_count*len(target[key])
+                                elif type(target[key]) == IPNetwork:
+                                    target_count = target_count*target[key].size
 
-            for target in process_targets(line):
-                for key in static_keys:
-                    if not key in target:
-                        target[key] = static_inputs[key]
+                            count += target_count
 
-                target_count = 1
-                for key in target:
-                    if type(target[key]) == list:
-                        target_count = target_count*len(target[key])
-                    elif type(target[key]) == IPNetwork:
-                        target_count = target_count*target[key].size
+        else:
+            f = open(targets['target_file'])
+            for line in f:
+                line = line.strip()
 
-                count += target_count
+                if len(line) == 0:
+                    continue
 
-        f.close()
+                for target in process_targets(line):
+                    for key in static_keys:
+                        if not key in target:
+                            target[key] = static_inputs[key]
+
+                    target_count = 1
+                    for key in target:
+                        if type(target[key]) == list:
+                            target_count = target_count*len(target[key])
+                        elif type(target[key]) == IPNetwork:
+                            target_count = target_count*target[key].size
+
+                    count += target_count
+
+            f.close()
 
     return count
 
