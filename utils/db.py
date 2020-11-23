@@ -517,6 +517,17 @@ class Elasticsearch(object):
             )
 
     @classmethod
+    def search(self, doc):
+        try:
+            es = self.get_es_instance()
+
+            res = helpers.scan(es[0], index=es[1], query=doc)
+
+            return res
+        except elasticsearch.exceptions.ConnectionError:
+            print("Elasticsearch: Unable to connect to elasticsearch instance")
+
+    @classmethod
     def insert_document(self, id, doc):
         try:
             es = self.get_es_instance()
