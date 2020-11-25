@@ -18,7 +18,7 @@ def bruteforce_worker(target, timeout):
 
             success, _ = postgresql.auth(target['b_username'], password)
             if success:
-                Output.write({'target': postgresql.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                Output.success({'target': postgresql.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],

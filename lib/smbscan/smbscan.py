@@ -66,7 +66,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 if 'password' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
-                        Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -84,11 +84,11 @@ def smbscan_worker(target, actions, creds, timeout):
                             # domain account 
                             pass
                     except AuthFailure as e:
-                        Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
                 elif 'hash' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
-                        Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -108,16 +108,16 @@ def smbscan_worker(target, actions, creds, timeout):
                             pass
 
                     except AuthFailure as e:
-                        Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
                 else:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password='')
-                        Output.write({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
                     except AuthFailure as e:
-                        Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
 
                 if is_admin:
-                    Output.write({'target': smbscan.url(), 'message': 'Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
+                    Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
 
             if success:
                 # Authenticated, now perform actions
@@ -141,12 +141,12 @@ def smbscan_worker(target, actions, creds, timeout):
                             }
                             DB.insert_content(db_info)
 
-                        Output.write({'target': smbscan.url(), 'message': shares})
+                        Output.highlight({'target': smbscan.url(), 'message': shares})
 
 
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'List shares: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'List shares: Access denied'})
                         else:
                             raise e
                 if 'list' in actions:
@@ -177,28 +177,28 @@ def smbscan_worker(target, actions, creds, timeout):
                                 if 'size' in content:
                                     db_info['size'] = content['size']
                                 DB.insert_content(db_info)
-                            Output.write({'target': smbscan.url(), 'message': contents})
+                            Output.highlight({'target': smbscan.url(), 'message': contents})
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
                         else:
                             raise e
                 if 'command' in actions:
                     output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True)
                     if output:
-                        Output.write({'target': smbscan.url(), 'message': 'Executed command \'%s\':\n%s' % (actions['command']['command'], output)})
+                        Output.highlight({'target': smbscan.url(), 'message': 'Executed command \'%s\':\n%s' % (actions['command']['command'], output)})
                     else:
-                        Output.write({'target': smbscan.url(), 'message': 'Failed to execute command %s' % (actions['command']['command'],)})
+                        Output.error({'target': smbscan.url(), 'message': 'Failed to execute command %s' % (actions['command']['command'],)})
                 if 'sam' in actions:
                     output = "SAM hashes:\n"
                     try:
                         entries = smbscan.dump_sam()
                         for entry in entries:
                             output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
-                        Output.write({'target': smbscan.url(), 'message': output})
+                        Output.highlight({'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'SAM dump: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'SAM dump: Access denied'})
                         else:
                             raise e
                 if 'lsa' in actions:
@@ -207,10 +207,10 @@ def smbscan_worker(target, actions, creds, timeout):
                         entries = smbscan.dump_lsa()
                         for entry in entries:
                             output += " "*60+"- %s\n" % (entry['secret'],)
-                        Output.write({'target': smbscan.url(), 'message': output})
+                        Output.highlight({'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'LSA dump: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'LSA dump: Access denied'})
                         else:
                             raise e
                 if 'users' in actions:
@@ -219,10 +219,10 @@ def smbscan_worker(target, actions, creds, timeout):
                         entries = smbscan.enum_users()
                         for entry in entries:
                             user = '%s\\%s' % (entry['domain'], entry['username'])
-                            Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
+                            Output.highlight({'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'Enum users: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'Enum users: Access denied'})
                         else:
                             raise e
                 if 'groups' in actions:
@@ -231,10 +231,10 @@ def smbscan_worker(target, actions, creds, timeout):
                         entries = smbscan.enum_groups()
                         for entry in entries:
                             group = '%s\\%s' % (entry['domain'], entry['groupname'])
-                            Output.write({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
+                            Output.highlight({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'Enum groups: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'Enum groups: Access denied'})
                         else:
                             raise e
                 if 'admins' in actions:
@@ -243,10 +243,10 @@ def smbscan_worker(target, actions, creds, timeout):
                         entries = smbscan.enum_admins()
                         for entry in entries:
                             admin = '%s\\%s' % (entry['domain'], entry['name'])
-                            Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (admin.ljust(30), entry['type'])})
+                            Output.highlight({'target': smbscan.url(), 'message': '- %s (%s)' % (admin.ljust(30), entry['type'])})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'Enum admins: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'Enum admins: Access denied'})
                         else:
                             raise e
                 if 'passpol' in actions:
@@ -262,10 +262,10 @@ def smbscan_worker(target, actions, creds, timeout):
                         if password_policy['lock_threshold'] != 0:
                             output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
 
-                        Output.write({'target': smbscan.url(), 'message': output})
+                        Output.highlight({'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
                         else:
                             raise e
                 if 'loggedin' in actions:
@@ -273,10 +273,10 @@ def smbscan_worker(target, actions, creds, timeout):
                     try:
                         entries = smbscan.enum_loggedin()
                         for entry in entries:
-                            Output.write({'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
+                            Output.highlight({'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'Enum logged in: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'Enum logged in: Access denied'})
                         else:
                             raise e
                 if 'sessions' in actions:
@@ -284,10 +284,10 @@ def smbscan_worker(target, actions, creds, timeout):
                     try:
                         entries = smbscan.enum_sessions()
                         for entry in entries:
-                            Output.write({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
+                            Output.highlight({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'Enum sessions: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'Enum sessions: Access denied'})
                         else:
                             raise e
                 if 'rid_brute' in actions:
@@ -296,10 +296,10 @@ def smbscan_worker(target, actions, creds, timeout):
                         entries = smbscan.rid_bruteforce(actions['rid_brute']['start'], actions['rid_brute']['end'])
                         for entry in entries:
                             user = '%s\\%s' % (entry['domain'], entry['name'])
-                            Output.write({'target': smbscan.url(), 'message': '- %s (%s)' % (user.ljust(30), entry['type'])})
+                            Output.highlight({'target': smbscan.url(), 'message': '- %s (%s)' % (user.ljust(30), entry['type'])})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.write({'target': smbscan.url(), 'message': 'RID brutefroce: Access denied'})
+                            Output.error({'target': smbscan.url(), 'message': 'RID brutefroce: Access denied'})
                         else:
                             raise e
 
@@ -307,7 +307,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], timeout))
             if 'bruteforce' in actions:
                 if 'username_file' in actions['bruteforce'] != None:
-                    Output.write({'target': smbscan.url(), 'message': 'Starting bruteforce:'})
+                    Output.highlight({'target': smbscan.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:
                         domain = creds['domain']
@@ -325,7 +325,7 @@ def smbscan_worker(target, actions, creds, timeout):
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
             if 'simple_bruteforce' in actions:
                 if 'username_file' in actions['bruteforce'] != None:
-                    Output.write({'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})
+                    Output.highlight({'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})
 
                     if 'domain' in creds:
                         domain = creds['domain']
@@ -340,9 +340,6 @@ def smbscan_worker(target, actions, creds, timeout):
 
                     args = (timeout,)
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-
-
-
 
     except ConnectionResetError:
         Output.write({'target': smbscan.url(), 'message': 'Connection reset by target'})

@@ -29,7 +29,7 @@ def ftpscan_worker(target, actions, creds, timeout):
                 success = ftpscan.auth()
             if success:
                 if 'username' in creds and 'password' in creds:
-                    Output.write({'target': ftpscan.url(), 'message': 'Successful connection with credentials %s:%s' % (creds['username'], creds['password'])})
+                    Output.success({'target': ftpscan.url(), 'message': 'Successful connection with credentials %s:%s' % (creds['username'], creds['password'])})
                     cred_info = {
                         'hostname': target['hostname'],
                         'port': target['port'],
@@ -42,7 +42,7 @@ def ftpscan_worker(target, actions, creds, timeout):
                     DB.insert_credential(cred_info)
 
                 else:
-                    Output.write({'target': ftpscan.url(), 'message': 'Successful anonymous connection'})
+                    Output.vuln({'target': ftpscan.url(), 'message': 'Successful anonymous connection'})
                     vuln_info = {
                         'hostname': target['hostname'],
                         'port': target['port'],
@@ -79,9 +79,9 @@ def ftpscan_worker(target, actions, creds, timeout):
                             else:
                                 content_info['share'] = 'anonymous'
                             DB.insert_content(content_info)
-                        Output.write({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)})
+                        Output.highlight({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)})
                     except socket.timeout as e:
-                        Output.write({'target': ftpscan.url(), 'message': 'Timeout while listing folder, do you have a firewall enabled ?'})
+                        Output.error({'target': ftpscan.url(), 'message': 'Timeout while listing folder, do you have a firewall enabled ?'})
 
 
         if 'bruteforce' in actions:

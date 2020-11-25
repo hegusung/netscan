@@ -120,7 +120,7 @@ class DB:
                 print('%s: %s' % (type(e), e))
 
     @classmethod
-    def inset_dns(self, dns_doc):
+    def insert_dns(self, dns_doc):
         dns_doc['doc_type'] = 'dns'
         dns_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         dns_doc = check_entry(dns_doc, ['source', 'query_type', 'target'], [])
@@ -166,7 +166,7 @@ class DB:
 
             for ip in ip_list:
                 # insert hostname in DNS database
-                self.inset_dns({
+                self.insert_dns({
                     'source': host_doc['hostname'],
                     'query_type': 'A',
                     'target': ip,
@@ -210,7 +210,7 @@ class DB:
 
             for ip in ip_list:
                 # insert hostname in DNS database
-                self.inset_dns({
+                self.insert_dns({
                     'source': script_doc['hostname'],
                     'query_type': 'A',
                     'target': ip,
@@ -254,7 +254,7 @@ class DB:
 
             for ip in ip_list:
                 # insert hostname in DNS database
-                self.inset_dns({
+                self.insert_dns({
                     'source': http_doc['hostname'],
                     'query_type': 'A',
                     'target': ip,
@@ -316,7 +316,7 @@ class DB:
 
             for ip in ip_list:
                 # insert hostname in DNS database
-                self.inset_dns({
+                self.insert_dns({
                     'source': content_doc['hostname'],
                     'query_type': 'A',
                     'target': ip,
@@ -359,7 +359,7 @@ class DB:
 
             for ip in ip_list:
                 # insert hostname in DNS database
-                self.inset_dns({
+                self.insert_dns({
                     'source': database_doc['hostname'],
                     'query_type': 'A',
                     'target': ip,
@@ -404,7 +404,7 @@ class DB:
 
             for ip in ip_list:
                 # insert hostname in DNS credential
-                self.inset_dns({
+                self.insert_dns({
                     'source': credential_doc['hostname'],
                     'query_type': 'A',
                     'target': ip,
@@ -444,7 +444,7 @@ class DB:
 
             for ip in ip_list:
                 # insert hostname in DNS vulnerability
-                self.inset_dns({
+                self.insert_dns({
                     'source': vulnerability_doc['hostname'],
                     'query_type': 'A',
                     'target': ip,

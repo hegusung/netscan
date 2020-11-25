@@ -13,7 +13,7 @@ def bruteforce_worker(target, timeout):
     stop = False
     success, _ = redis.auth(password)
     if success:
-        Output.write({'target': redis.url(), 'message': 'Authentication success with password %s' % (password,)})
+        Output.success({'target': redis.url(), 'message': 'Authentication success with password %s' % (password,)})
         cred_info = {
             'hostname': target['hostname'],
             'port': target['port'],

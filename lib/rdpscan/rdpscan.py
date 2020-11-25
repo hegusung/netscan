@@ -48,7 +48,7 @@ def rdpscan_worker(target, actions, creds, timeout):
             else:
                 user_secret = 'hash %s' % ntlm_hash
             if result:
-                Output.write({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and %s' % (user, user_secret)})
+                Output.success({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and %s' % (user, user_secret)})
                 if domain in [None, 'WORKGROUP']:
                     # local account
                     if password:
@@ -79,11 +79,11 @@ def rdpscan_worker(target, actions, creds, timeout):
                     pass
 
             else:
-                Output.write({'target': rdp.url(), 'message': 'Authentication failure with credentials %s and %s' % (user, user_secret)})
+                Output.minor({'target': rdp.url(), 'message': 'Authentication failure with credentials %s and %s' % (user, user_secret)})
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
-                Output.write({'target': rdp.url(), 'message': 'Starting bruteforce:'})
+                Output.highlight({'target': rdp.url(), 'message': 'Starting bruteforce:'})
 
                 if 'domain' in creds:
                     domain = creds['domain']
@@ -101,7 +101,7 @@ def rdpscan_worker(target, actions, creds, timeout):
                 dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
         if 'simple_bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
-                Output.write({'target': rdp.url(), 'message': 'Starting simple bruteforce:'})
+                Output.highlight({'target': rdp.url(), 'message': 'Starting simple bruteforce:'})
 
                 if 'domain' in creds:
                     domain = creds['domain']

@@ -19,7 +19,7 @@ class Module:
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:
-            Output.write({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to MS17-010 (EternalBlue)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to MS17-010 (EternalBlue)'})
 
             vuln_info = {
                 'hostname': target['hostname'],

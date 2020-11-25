@@ -37,7 +37,7 @@ def sshscan_worker(target, actions, creds, timeout):
 
             success = ssh.auth(creds['username'], creds['password'])
             if success:
-                Output.write({'target': ssh.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
+                Output.success({'target': ssh.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -55,11 +55,11 @@ def sshscan_worker(target, actions, creds, timeout):
                     output += ssh.execute(actions['command']['command'])
                     Output.write({'target': target['hostname'], 'message': output})
             else:
-                Output.write({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+                Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
-                Output.write({'target': ssh.url(), 'message': 'Starting bruteforce:'})
+                Output.highlight({'target': ssh.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']
                 password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
@@ -73,9 +73,9 @@ def sshscan_worker(target, actions, creds, timeout):
                 dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except paramiko.AuthenticationException as e:
-        Output.write({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+        Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
     except ValueError as e:
-        Output.write({'target': ssh.url(), 'message': "Authentication failure because of crypto failure: %s" % str(e)})
+        Output.minor({'target': ssh.url(), 'message': "Authentication failure because of crypto failure: %s" % str(e)})
     except paramiko.SSHException as e:
         pass
     except socket.error:

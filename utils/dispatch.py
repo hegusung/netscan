@@ -1,5 +1,4 @@
 from utils.process_inputs import process_inputs, count_process_inputs
-from utils.output import Output
 from multiprocessing import Process, Queue, Manager
 import queue
 import time
@@ -10,6 +9,11 @@ import json
 
 STOP_WAIT_SECS = 1
 
+manager = Manager()
+
+pg_lock = manager.RLock()
+tqdm.set_lock(pg_lock)
+
 def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10, process=True, pg_name=None):
     # Parse inputs
     target_gen = process_inputs(targets, static_inputs)
@@ -19,8 +23,6 @@ def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10,
 
 def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None):
     try:
-        manager = Manager()
-
         worker_list = []
 
         if process:
@@ -49,22 +51,23 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
         if process:
             # Start processes
             for _ in range(n_process):
-                p = Process(target=process_worker, args=(feed_queue, worker_func, func_args, pg_queue, n_threads)) 
+                p = Process(target=process_worker, args=(feed_queue, worker_func, func_args, pg_queue, n_threads))
                 p.start()
                 worker_list.append(p)
         else:
             for _ in range(n_threads):
-                t = Thread(target=thread_worker, args=(feed_queue, worker_func, func_args, pg_queue)) 
+                t = Thread(target=thread_worker, args=(feed_queue, worker_func, func_args, pg_queue))
                 t.start()
                 worker_list.append(t)
 
         pg_thread.join()
+
     except KeyboardInterrupt:
-        Output.write("Scan interrupted")
+        tqdm.write("Scan interrupted")
     finally:
         if process:
             num_terminated = 0
-            num_failed = 0 
+            num_failed = 0
             end_time = time.time() + STOP_WAIT_SECS
             for p in worker_list:
                 join_secs = max(0.0, min(end_time - time.time(), STOP_WAIT_SECS))
@@ -113,10 +116,11 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue):
         pass
 
 def progressbar_worker(target_size, pg_queue, pg_name):
+
     if pg_name == None:
-        pg = tqdm(total=target_size, mininterval=1)
+        pg = tqdm(total=target_size, mininterval=1, leave=False)
     else:
-        pg = tqdm(total=target_size, mininterval=1, desc=pg_name)
+        pg = tqdm(total=target_size, mininterval=1, desc=pg_name, leave=False)
     count = 0
 
     while True:
@@ -133,7 +137,7 @@ def progressbar_worker(target_size, pg_queue, pg_name):
         if count >= target_size:
             break
 
-    #pg_queue.close()
+    pg.close()
 
 def feedqueue_worker(target_gen, feed_queue, nb_workers):
     try:

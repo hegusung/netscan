@@ -19,7 +19,7 @@ class Module:
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:
-            Output.write({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2020-0796 (SMBGhost)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2020-0796 (SMBGhost)'})
 
             vuln_info = {
                 'hostname': target['hostname'],

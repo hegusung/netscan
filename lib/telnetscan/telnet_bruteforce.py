@@ -20,7 +20,7 @@ def bruteforce_worker(target, timeout):
 
             success = telnet.auth(username, password)
             if success:
-                Output.write({'target': telnet.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                Output.success({'target': telnet.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],

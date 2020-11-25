@@ -6,18 +6,33 @@ import tqdm
 from tqdm import tqdm
 
 # Sometimes tqdm hangs during write
-tqdm.get_lock().locks = []
+#tqdm.get_lock().locks = []
+from utils.dispatch import pg_lock
+tqdm.set_lock(pg_lock)
+
+# Colors:
+GREY = "\033[90m"
+LIGHT_GREY = "\033[37m"
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+BLUE = "\033[94m"
+MAGENTA = "\033[95m"
+CYAN = "\033[96m"
+WHITE = "\033[97m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
 
 time_format = "%Y/%m/%d %H:%M:%S"
-simple_output_format =         "[{time}]     {message}"
-target_output_format =         "[{time}]     {target:50} {message}"
-http_output_format =           "[{time}]     {target:50} {code}   {server:40} {title}"
-dns_output_format =            "[{time}]     {target:50} {query_type:5}   {resolved}"
-port_service_output_format =   "[{time}]     {target:50} {service:30} {version}"
-smb_output_format =            "[{time}]     {target:50} {domain:30} {hostname:30} {server_os}"
-mssql_output_format =          "[{time}]     {target:50} {version}"
-mysql_output_format =          "[{time}]     {target:50} {version}"
-postgresql_output_format =     "[{time}]     {target:50} {version}"
+simple_output_format =         "[{time}]     {color}{message}{reset}"
+target_output_format =         "[{time}]     {color}{target:50} {message}{reset}"
+http_output_format =           "[{time}]     {color}{target:50} {code}   {server:40} {title}{reset}"
+dns_output_format =            "[{time}]     {color}{target:50} {query_type:5}   {resolved}{reset}"
+port_service_output_format =   "[{time}]     {color}{target:50} {service:30} {version}{reset}"
+smb_output_format =            "[{time}]     {color}{target:50} {domain:30} {hostname:30} {server_os}{reset}"
+mssql_output_format =          "[{time}]     {color}{target:50} {version}{reset}"
+mysql_output_format =          "[{time}]     {color}{target:50} {version}{reset}"
+postgresql_output_format =     "[{time}]     {color}{target:50} {version}{reset}"
 
 class Output:
 
@@ -40,6 +55,55 @@ class Output:
     @classmethod
     def write(self, message):
         self.output_queue.put(message)
+
+    @classmethod
+    def vuln(self, message):
+        message['type'] = 'vuln'
+        self.write(message)
+
+    @classmethod
+    def major(self, message):
+        message['type'] = 'major'
+        self.write(message)
+
+    @classmethod
+    def success(self, message):
+        message['type'] = 'success'
+        self.write(message)
+
+    @classmethod
+    def highlight(self, message):
+        message['type'] = 'highlight'
+        self.write(message)
+
+    @classmethod
+    def minor(self, message):
+        message['type'] = 'minor'
+        self.write(message)
+
+    @classmethod
+    def error(self, message):
+        message['type'] = 'error'
+        self.write(message)
+
+    @classmethod
+    def color(self, message, message_type):
+        if message_type in ['vuln', 'major']:
+            message['color'] = RED
+        elif message_type in ['success']:
+            message['color'] = GREEN
+        elif message_type in ['highlight']:
+            message['color'] = YELLOW
+        elif message_type in ['minor']:
+            message['color'] = BLUE
+        elif message_type in ['error']:
+            message['color'] = BOLD + RED
+        else:
+            message['color'] = WHITE
+
+        message['reset'] = RESET
+
+        return message
 
     @classmethod
     def output_worker(self, output_queue):
@@ -73,6 +137,13 @@ class Output:
                 output_format = target_output_format
             else:
                 output_format = simple_output_format
+
+            if 'type' in message:
+                message_type = message['type']
+            else:
+                message_type = None
+
+            self.color(message, message_type)
 
             # Remove control characters which breaks terminal
             message = output_format.format(**message)

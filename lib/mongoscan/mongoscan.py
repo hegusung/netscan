@@ -37,7 +37,7 @@ def mongoscan_worker(target, actions, creds, timeout):
                 'version': 'Mongodb %s' % version,
             })
 
-            Output.write({'target': mongo.url(), 'message': 'Authentication success with anonymous credentials'})
+            Output.vuln({'target': mongo.url(), 'message': 'Authentication success with anonymous credentials'})
             account = 'anonymous'
             vuln_info = {
                 'hostname': target['hostname'],
@@ -65,7 +65,7 @@ def mongoscan_worker(target, actions, creds, timeout):
                         'version': version,
                     })
 
-                Output.write({'target': mongo.url(), 'message': 'Authentication success with username %s and password %s for database \'%s\'' % (creds['username'], creds['password'], target['database'])})
+                Output.success({'target': mongo.url(), 'message': 'Authentication success with username %s and password %s for database \'%s\'' % (creds['username'], creds['password'], target['database'])})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -110,11 +110,11 @@ def mongoscan_worker(target, actions, creds, timeout):
                         if account != None:
                             db_info['account'] = account
                         DB.insert_database(db_info)
-                Output.write({'target': mongo.url(), 'message': output})
+                Output.highlight({'target': mongo.url(), 'message': output})
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
-                Output.write({'target': mongo.url(), 'message': 'Starting bruteforce:'})
+                Output.highlight({'target': mongo.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']
                 password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None

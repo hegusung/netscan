@@ -40,7 +40,7 @@ def postgrescan_worker(target, actions, creds, timeout):
             })
 
             if success:
-                Output.write({'target': postgresql.url(), 'message': 'Successful authentication with credentials %s and password %s' % (username, password)})
+                Output.success({'target': postgresql.url(), 'message': 'Successful authentication with credentials %s and password %s' % (username, password)})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -70,15 +70,15 @@ def postgrescan_worker(target, actions, creds, timeout):
                             db_info['account'] = username
                             DB.insert_database(db_info)
 
-                    Output.write({'target': postgresql.url(), 'message': output})
+                    Output.highlight({'target': postgresql.url(), 'message': output})
                 if 'cmd' in actions:
                     output = "Command result:\n"
                     output += postgresql.execute_cmd(actions['cmd']['command'])
 
-                    Output.write({'target': postgresql.url(), 'message': output})
+                    Output.highlight({'target': postgresql.url(), 'message': output})
             else:
                 if username != None:
-                    Output.write({'target': postgresql.url(), 'message': 'Authentication failure with credentials %s and password %s' % (username, password)})
+                    Output.minor({'target': postgresql.url(), 'message': 'Authentication failure with credentials %s and password %s' % (username, password)})
         except psycopg2.OperationalError as e:
             if "could not connect to server" in str(e) or "timeout expired" in str(e) or "Connection refused" in str(e) or "server closed the connection unexpectedly" in str(e) or "Network is unreachable" in str(e):
                 pass
@@ -114,7 +114,7 @@ def postgrescan_worker(target, actions, creds, timeout):
         if postgresql_server == True:
             if 'bruteforce' in actions:
                 if 'username_file' in actions['bruteforce'] != None:
-                    Output.write({'target': postgresql.url(), 'message': 'Starting bruteforce:'})
+                    Output.highlight({'target': postgresql.url(), 'message': 'Starting bruteforce:'})
 
                     username_file = actions['bruteforce']['username_file']
                     password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None

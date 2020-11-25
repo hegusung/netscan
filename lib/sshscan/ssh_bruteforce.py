@@ -22,7 +22,7 @@ def bruteforce_worker(target, timeout, bruteforce_delay):
 
             success = ssh.auth(username, password)
             if success:
-                Output.write({'target': ssh.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                Output.success({'target': ssh.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -41,7 +41,7 @@ def bruteforce_worker(target, timeout, bruteforce_delay):
         except ValueError as e:
             stop = True
         except paramiko.SSHException as e:
-            print(e)
+            #print(e)
             Output.write({'target': ssh.url(), 'message': 'Server overloaded, try reducing amount of workers'})
             stop = True
         except socket.error:

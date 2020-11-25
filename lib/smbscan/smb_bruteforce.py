@@ -21,7 +21,7 @@ def bruteforce_worker(target, timeout):
         stop = False
         try:
             success, is_admin = smbscan.auth(target['b_domain'], target['b_username'], password)
-            Output.write({'target': smbscan.url(), 'message': 'Authentication success with credentials %s\\%s and password %s' % (domain, username, password)})
+            Output.success({'target': smbscan.url(), 'message': 'Authentication success with credentials %s\\%s and password %s' % (domain, username, password)})
             if domain in [None, 'WORKGROUP']:
                 # local account
                 cred_info = {
@@ -41,7 +41,7 @@ def bruteforce_worker(target, timeout):
 
 
             if is_admin:
-                Output.write({'target': smbscan.url(), 'message': 'Administrative privileges with credentials %s\\%s' % (domain, username)})
+                Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials %s\\%s' % (domain, username)})
 
             stop = True
 
