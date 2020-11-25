@@ -39,7 +39,7 @@ def vncscan_worker(target, actions, creds, timeout):
             code, _ = vnc.auth("None")
             if code == 0:
                 auth = True
-                Output.write({'target': vnc.url(), 'message': 'Authentication success without credentials'})
+                Output.vuln({'target': vnc.url(), 'message': 'Authentication success without credentials'})
                 vuln_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -55,7 +55,7 @@ def vncscan_worker(target, actions, creds, timeout):
                 code, _ = vnc.auth("VNC Authentication", password=creds['password'])
                 if code == 0:
                     auth = True
-                    Output.write({'target': vnc.url(), 'message': 'Authentication success with password: %s' % creds['password']})
+                    Output.success({'target': vnc.url(), 'message': 'Authentication success with password: %s' % creds['password']})
                     cred_info = {
                         'hostname': target['hostname'],
                         'port': target['port'],
@@ -68,9 +68,9 @@ def vncscan_worker(target, actions, creds, timeout):
                     DB.insert_credential(cred_info)
 
                 else:
-                    Output.write({'target': vnc.url(), 'message': 'Authentication failure with password: %s' % creds['password']})
+                    Output.minor({'target': vnc.url(), 'message': 'Authentication failure with password: %s' % creds['password']})
         elif 'password' in creds:
-            Output.write({'target': vnc.url(), 'message': 'No supported authentication mechanism found: %s' % vnc.supported_security_types})
+            Output.error({'target': vnc.url(), 'message': 'No supported authentication mechanism found: %s' % vnc.supported_security_types})
 
         if auth:
             if 'screenshot' in actions:
@@ -80,22 +80,22 @@ def vncscan_worker(target, actions, creds, timeout):
                 screenshot_path = os.path.join(os.path.dirname(sys.argv[0]),"screenshots", screenshot_name)
                 screenshot_path = os.path.abspath(screenshot_path)
                 img.save(screenshot_path)
-                Output.write({'target': vnc.url(), 'message': 'Screenshot saved at: %s' % screenshot_path})
+                Output.highlight({'target': vnc.url(), 'message': 'Screenshot saved at: %s' % screenshot_path})
             if 'ducky' in actions:
                 run_ducky(vnc, actions['ducky']['ducky_script'])
-                Output.write({'target': vnc.url(), 'message': 'Ducky script executed'})
+                Output.highlight({'target': vnc.url(), 'message': 'Ducky script executed'})
 
         if 'bruteforce' in actions:
             if "VNC Authentication" in vnc.supported_security_types:
                 if 'password_file' in actions['bruteforce'] != None:
-                    Output.write({'target': vnc.url(), 'message': 'Starting bruteforce:'})
+                    Output.highlight({'target': vnc.url(), 'message': 'Starting bruteforce:'})
                     for password in open(actions['bruteforce']['password_file']):
                         password = password.strip()
                         v = VNC(target['hostname'], target['port'], timeout)
                         v.connect()
                         code, _ = v.auth("VNC Authentication", password=password)
                         if code == 0:
-                            Output.write({'target': vnc.url(), 'message': 'Authentication success with password: %s' % password})
+                            Output.success({'target': vnc.url(), 'message': 'Authentication success with password: %s' % password})
                             cred_info = {
                                 'hostname': target['hostname'],
                                 'port': target['port'],
@@ -110,7 +110,7 @@ def vncscan_worker(target, actions, creds, timeout):
                         v.disconnect()
                         sleep(0.5)
             else:
-                Output.write({'target': vnc.url(), 'message': 'Unsupported authentication mechanism for bruteforce'})
+                Output.error({'target': vnc.url(), 'message': 'Unsupported authentication mechanism for bruteforce'})
     except ConnectionRefusedError:
         pass
     except OSError as e:

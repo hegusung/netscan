@@ -81,7 +81,7 @@ def httpscan_worker(target, actions, useragent, proxy, dir_bruteforce, extension
                     gen = dir_bruteforce_generator(target, dir_bruteforce, extension_list)
                     gen_size = dir_file_count(dir_bruteforce)*len(extension_list)
 
-                    args = (useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, [400, 404])
+                    args = ({}, useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, [400, 404])
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
     except ConnectionRefusedError:
         pass

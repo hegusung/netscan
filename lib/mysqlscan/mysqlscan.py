@@ -49,7 +49,7 @@ def mysqlscan_worker(target, actions, creds, timeout):
 
             try:
                 success, version = mysqlscan.auth(username, password)
-                Output.write({'target': mysqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (username, password)})
+                Output.success({'target': mysqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (username, password)})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -62,7 +62,7 @@ def mysqlscan_worker(target, actions, creds, timeout):
                 DB.insert_credential(cred_info)
 
             except AuthFailure as e:
-                Output.write({'target': mysqlscan.url(), 'message': 'Authentication failure with credentials %s and password %s: %s' % (username, password, str(e))})
+                Output.minor({'target': mysqlscan.url(), 'message': 'Authentication failure with credentials %s and password %s: %s' % (username, password, str(e))})
 
             if success:
                 if 'list_dbs' in actions:
@@ -84,26 +84,26 @@ def mysqlscan_worker(target, actions, creds, timeout):
                             db_info['account'] = username
                             DB.insert_database(db_info)
 
-                    Output.write({'target': mysqlscan.url(), 'message': output})
+                    Output.highlight({'target': mysqlscan.url(), 'message': output})
                 if 'list_hashes' in actions:
                     hashes = mysqlscan.list_hashes()
                     output = "Hashes:\n"
                     for account in hashes:
                         user = "%s%%%s" % (account['username'], account['host'])
                         output += " "*60+"- %s   %s\n" % (user, account['hash'])
-                    Output.write({'target': mysqlscan.url(), 'message': output})
+                    Output.highlight({'target': mysqlscan.url(), 'message': output})
                 if 'sql' in actions:
                     output = "Query result:\n"
                     result = mysqlscan.execute_sql(actions['sql']['query'])
                     for item in result:
                         output += "- %s\n" % (item,)
 
-                    Output.write({'target': mysqlscan.url(), 'message': output})
+                    Output.highlight({'target': mysqlscan.url(), 'message': output})
 
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
-                Output.write({'target': mysqlscan.url(), 'message': 'Starting bruteforce:'})
+                Output.highlight({'target': mysqlscan.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']
                 password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None

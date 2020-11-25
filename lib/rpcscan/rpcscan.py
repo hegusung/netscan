@@ -82,6 +82,8 @@ def rpcscan_worker(target, actions, timeout):
                     }
                     DB.insert_vulnerability(vuln_info)
 
+                    Output.vuln({'target': 'nfs://%s:%d' % (target['hostname'], nfs_port), 'message': 'NFS share is accessible from any IP address'})
+
             nfs = NFS(target['hostname'], nfs_port, timeout)
             nfs.connect()
 
@@ -128,7 +130,7 @@ def rpcscan_worker(target, actions, timeout):
                             if 'size' in content:
                                 db_info['size'] = content['size']
                             DB.insert_content(db_info)
-                        Output.write({'target': 'nfs://%s:%d' % (target['hostname'], nfs_port) , 'message': contents})
+                        Output.highlight({'target': 'nfs://%s:%d' % (target['hostname'], nfs_port) , 'message': contents})
                     except MountAccessError as e:
                         print("%s: %s" % (type(e), e))
                         continue

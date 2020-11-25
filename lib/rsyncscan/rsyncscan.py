@@ -35,6 +35,8 @@ def rsyncscan_worker(target, timeout):
                 }
                 DB.insert_vulnerability(vuln_info)
 
+                Output.vuln({'target': rsync.url(), 'message': 'Anonymous account can connect to rsync service: %s' % share['name']})
+
             else:
                 output += ' '*60+'- %s   %s  (%s)\n' % (share['name'].ljust(30), share['description'].ljust(60), share['auth_message'])
 

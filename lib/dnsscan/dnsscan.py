@@ -26,7 +26,7 @@ def dnsscan_worker(target, dn_server, actions, timeout):
 
     for action in actions:
         if action[0] == 'bruteforce':
-            Output.write({"target": target['hostname'], "message": "Starting subdomain bruteforce"})
+            Output.highlight({"target": target['hostname'], "message": "Starting subdomain bruteforce"})
             for resolved in dnsscan.subdomain_bruteforce(action[1]):
                 DB.insert_dns({
                     'source': resolved['target'],
@@ -35,7 +35,6 @@ def dnsscan_worker(target, dn_server, actions, timeout):
                 })
                 Output.write({"message_type": "dns", "target": resolved['target'], "query_type": resolved["query_type"], "resolved": resolved['resolved']})
         if action[0] == 'axfr':
-            Output.write({"target": target['hostname'], "message": "Starting AXFR check"})
             dnsscan.axfr()
 
 
@@ -102,7 +101,7 @@ class DNSScan:
             return
 
         for ns_server in self.get_nameservers():
-            Output.write({"target": ns_server['target'], "message": "Checking AXFR against nameserver %s" % ns_server['resolved']})
+            Output.highlight({"target": ns_server['target'], "message": "Checking AXFR against nameserver %s" % ns_server['resolved']})
 
             # resolve nameserver IP
             resolver = dns.resolver.Resolver()
@@ -126,6 +125,8 @@ class DNSScan:
                 }
                 DB.insert_vulnerability(vuln_info)
 
+                Output.vuln({'target': 'dns://%s:%d' % (str(ns_ip), 53), 'message': 'Successful zone transfer (AXFR) from domain: %s' % self.hostname})
+
                 for name, node in axfr.nodes.items():
                     name = str(name)
                     if name == "@":
@@ -143,7 +144,7 @@ class DNSScan:
                                         resolved = "%s.%s" % (parts[4], self.hostname)
                                     Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
                                     if query_type in ['MX']:
-                                        DB.inset_dns({
+                                        DB.insert_dns({
                                             'source': str(name),
                                             'query_type': str(query_type),
                                             'target': str(resolved),
@@ -152,7 +153,7 @@ class DNSScan:
                                     resolved = parts[3]
                                     Output.write({"target": ns_server['target'], "message": "%s %s %s" % (name, query_type, resolved)})
                                     if query_type in ['A']:
-                                        DB.inset_dns({
+                                        DB.insert_dns({
                                             'source': str(name),
                                             'query_type': str(query_type),
                                             'target': str(resolved),

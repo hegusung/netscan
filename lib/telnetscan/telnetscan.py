@@ -35,7 +35,7 @@ def telnetscan_worker(target, actions, creds, timeout):
 
             success = telnet.auth(creds['username'], creds['password'])
             if success:
-                Output.write({'target': telnet.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
+                Output.success({'target': telnet.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -50,13 +50,13 @@ def telnetscan_worker(target, actions, creds, timeout):
                 if 'command' in actions:
                     output = "Command '%s':\n" % actions['command']['command']
                     output += telnet.execute(actions['command']['command'])
-                    Output.write({'target': target['hostname'], 'message': output})
+                    Output.highlight({'target': target['hostname'], 'message': output})
             else:
-                Output.write({'target': telnet.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+                Output.minor({'target': telnet.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
-                Output.write({'target': telnet.url(), 'message': 'Starting bruteforce:'})
+                Output.highlight({'target': telnet.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']
                 password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None

@@ -23,7 +23,7 @@ def bruteforce_worker(target, timeout):
             else:
                 user = username
 
-            Output.write({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
+            Output.success({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
             stop = True
 
             if domain in [None, 'WORKGROUP']:
