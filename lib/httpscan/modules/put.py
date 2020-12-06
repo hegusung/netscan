@@ -9,7 +9,7 @@ class Module:
     name = 'PUT'
     description = 'Attempt a PUT request to check file upload (webdav)'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         random_str = gen_random_string()
@@ -20,7 +20,7 @@ class Module:
             response = http.get(os.path.join(target['path'], '%s.txt' % random_str))
 
             if response and payload in response['html']:
-                Output.write({'target': http.url(target['path']), 'message': 'Vulnerable to PUT file upload'})
+                Output.vuln({'target': http.url(target['path']), 'message': 'Vulnerable to PUT file upload'})
 
                 vuln_info = {
                     'hostname': target['hostname'],

@@ -47,6 +47,11 @@ def export(session, service, output_dir):
         print('The destination must be a folder')
         return
 
+    export_ip_ports(session, service, output_dir)
+    export_http_urls(session, output_dir)
+
+def export_ip_ports(session, service, output_dir):
+
     query = {
       "query": {
         "bool": {
@@ -62,6 +67,11 @@ def export(session, service, output_dir):
     if service:
         query['query']['bool']['must'].append({'match': {'service': service}})
 
+    ip_filename = os.path.join(output_dir, '%s_ips.txt' % session)
+    ip_file = open(ip_filename, 'a')
+    ip_port_filename = os.path.join(output_dir, '%s_ip_ports.txt' % session)
+    ip_port_file = open(ip_port_filename, 'a')
+
     output_files = {}
     for service in service_filters:
         filename = os.path.join(output_dir, '%s_%s.txt' % (session, service))
@@ -74,6 +84,9 @@ def export(session, service, output_dir):
     for item in res:
         source = item['_source']
         s_service = None
+
+        ip_file.write('%s\n' % source['ip'])
+        ip_port_file.write('%s:%d\n' % (source['ip'], source['port']))
 
         if 'service' in source:
             s_service = source['service']
@@ -105,6 +118,14 @@ def export(session, service, output_dir):
         c += 1
     print(c)
 
+    ip_file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_filename))
+
+    ip_port_file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_port_filename))
+
     for service, f in output_files.items():
         f['file'].close()
 
@@ -114,4 +135,37 @@ def export(session, service, output_dir):
         os.system('sort %s | uniq > %s_tmp; mv %s_tmp %s' % (f['filename'], f['filename'], f['filename'], f['filename']))
 
 
+def export_http_urls(session, output_dir):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "http"        }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    url_filename = os.path.join(output_dir, '%s_http_urls.txt' % session)
+    url_file = open(url_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        s_service = None
+
+        url_file.write('%s\n' % source['url'])
+        c += 1
+    print(c)
+
+    url_file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(url_filename))
 

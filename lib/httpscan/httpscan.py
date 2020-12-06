@@ -1,4 +1,5 @@
 from time import sleep
+import os.path
 import OpenSSL
 
 from .http import HTTP
@@ -63,15 +64,23 @@ def httpscan_worker(target, actions, useragent, proxy, dir_bruteforce, extension
             }
             DB.insert_http_url(http_info)
 
+            if 'modules' in actions or dir_bruteforce:
+                ignored_code = None
+                safe = True
+                # Try a random uri first to prevent false positives
+                random_uri = os.path.join(target['path'], gen_random_string())
+                output = httpscan.get(random_uri)
+                if output != None and output['code'] in [200, 401, 503]:
+                    safe = False
+                if output != None:
+                    ignored_code = output['code']
+
             if 'modules' in actions:
-                http_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], useragent, proxy, timeout))
+                http_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], useragent, proxy, timeout, safe))
 
             if dir_bruteforce:
-                # Try a random uri first to prevent false positives
-                random_uri = '/%s' % gen_random_string()
-                output = httpscan.get(random_uri)
-                if output == None or output['code'] in [200, 401, 503]:
-                    Output.write({"target": httpscan.url(target['path']), "message": "Directory bruteforce aborted because this server will generate a lot of false positives"})
+                if not safe:
+                    Output.highlight({"target": httpscan.url(target['path']), "message": "Directory bruteforce aborted because this server will generate a lot of false positives"})
                 else:
                     extension_list = ['']
                     if extensions != None:
@@ -81,7 +90,11 @@ def httpscan_worker(target, actions, useragent, proxy, dir_bruteforce, extension
                     gen = dir_bruteforce_generator(target, dir_bruteforce, extension_list)
                     gen_size = dir_file_count(dir_bruteforce)*len(extension_list)
 
-                    args = ({}, useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, [400, 404])
+                    excluded_code_arg = [400, 404]
+                    if ignored_code != None:
+                        excluded_code_arg.append(ignored_code)
+
+                    args = ({}, useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg)
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
     except ConnectionRefusedError:
         pass

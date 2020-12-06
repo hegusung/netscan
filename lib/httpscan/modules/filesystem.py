@@ -13,7 +13,7 @@ class Module:
     name = 'Filesystem'
     description = 'Search for web servers making their filesystem accessible and crawl'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         self.search_filesystem(target, http, target['path'])
@@ -30,7 +30,7 @@ class Module:
             soup = BeautifulSoup(data["html"], "html.parser")
 
             if target['path'] == path:
-                Output.write({'target': http.url(path), 'message': 'HTTP server sharing its filesystem found, enumerating to db...'})
+                Output.highlight({'target': http.url(path), 'message': 'HTTP server sharing its filesystem found, enumerating to db...'})
 
                 # Add to database
                 content_info = {

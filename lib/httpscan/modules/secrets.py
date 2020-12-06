@@ -95,7 +95,7 @@ class Module:
     name = 'Secrets'
     description = 'Search for secrets in specific files'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         for secret in secrets:
@@ -187,5 +187,5 @@ class Module:
 
             output['message_type'] = 'http'
             output['target'] = http.url(url)
-            Output.write(output)
+            Output.highlight(output)
 

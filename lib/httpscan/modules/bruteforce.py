@@ -20,7 +20,7 @@ class Module:
     name = 'Bruteforce'
     description = 'Discover and bruteforce authentication forms'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         res = http.get(target['path'])
@@ -58,10 +58,10 @@ class Module:
                 }
                 DB.insert_http_url(http_info)
 
-                Output.write({'target': http.url(target['path']), 'message': 'Authentication form'})
+                Output.highlight({'target': http.url(target['path']), 'message': 'Authentication form'})
 
                 if args['bruteforce'] != None:
-                    Output.write({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
+                    Output.highlight({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
                     for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                         username, password = cred.split(':')
 
@@ -95,10 +95,10 @@ class Module:
                                 pass_found = True
 
                         if not user_found:
-                            Output.write({'target': http.url(target['path']), 'message': 'Unable to find username field'})
+                            Output.error({'target': http.url(target['path']), 'message': 'Unable to find username field'})
                             return
                         elif not pass_found:
-                            Output.write({'target': http.url(target['path']), 'message': 'Unable to find password field'})
+                            Output.error({'target': http.url(target['path']), 'message': 'Unable to find password field'})
                             return
 
                         headers = {
@@ -120,7 +120,7 @@ class Module:
                         if after_auth_form != None:
                             continue
 
-                        Output.write({'target': http.url(target['path']), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                        Output.success({'target': http.url(target['path']), 'message': 'Authentication success with login %s and password %s' % (username, password)})
 
                         cred_info = {
                             'hostname': target['hostname'],
@@ -153,7 +153,7 @@ class Module:
             Output.write({'target': http.url(target['path']), 'message': 'Authentication form'})
 
             if args['bruteforce'] != None:
-                Output.write({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
+                Output.highlight({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
                 try:
                     auth_type = res['auth_type']
 
@@ -163,7 +163,7 @@ class Module:
                         output = http.get(target['path'], auth=(auth_type, username, password))
 
                         if output['code'] in [200]:
-                            Output.write({'target': http.url(target['path']), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                            Output.success({'target': http.url(target['path']), 'message': 'Authentication success with login %s and password %s' % (username, password)})
 
                             cred_info = {
                                 'hostname': target['hostname'],

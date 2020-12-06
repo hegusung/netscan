@@ -51,7 +51,7 @@ class Module:
     name = 'JBoss'
     description = 'Discover and exploit JBoss (weak/default password, no authentication)'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         for url in jboss_urls + auth_5_6_urls + auth_7_8_urls:
@@ -59,7 +59,7 @@ class Module:
 
             res = http.get(full_url)
 
-            if not res['code'] in [200,401]:
+            if not res or not res['code'] in [200,401]:
                 continue
 
             http_info = {
@@ -85,8 +85,9 @@ class Module:
 
 
             if url in jboss_urls:
-                if res['code'] in [200]:
-                    Output.write({'target': http.url(full_url), 'message': 'JBoss url accessible without authentication'})
+                # JBoss should be a safe service
+                if safe and res['code'] in [200]:
+                    Output.vuln({'target': http.url(full_url), 'message': 'JBoss url accessible without authentication'})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -102,14 +103,14 @@ class Module:
                         auth_type = res['auth_type']
 
                         if args['bruteforce']:
-                            Output.write({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
+                            Output.highlight({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
                             for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                                 username, password = cred.split(':')
 
                                 res = http.get(full_url, auth=(auth_type, username, password))
 
                                 if res['code'] in [200]:
-                                    Output.write({'target': http.url(full_url), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                                    Output.success({'target': http.url(full_url), 'message': 'Authentication success with login %s and password %s' % (username, password)})
 
                                     cred_info = {
                                         'hostname': target['hostname'],
@@ -127,7 +128,7 @@ class Module:
                         pass
             elif url in auth_5_6_urls:
                 if res['code'] in [200] and 'jboss' in res['title'].lower():
-                    Output.write({'target': http.url(full_url), 'message': 'JBoss interface'})
+                    Output.highlight({'target': http.url(full_url), 'message': 'JBoss interface'})
 
                     form = None
                     for f in res['forms']:
@@ -139,10 +140,10 @@ class Module:
                             break
 
                     if not form:
-                        Output.write({'target': http.url(full_url), 'message': 'Unable to find JBoss authentication form'})
+                        Output.error({'target': http.url(full_url), 'message': 'Unable to find JBoss authentication form'})
                     else:
                         if args['bruteforce']:
-                            Output.write({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
+                            Output.highlight({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
                             for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                                 username, password = cred.split(':')
 
@@ -184,7 +185,7 @@ class Module:
                                 if after_auth_form != None:
                                     continue
 
-                                Output.write({'target': http.url(full_url), 'message': 'Authentication success to PhpMyAdmin with login %s and password %s' % (username, password)})
+                                Output.success({'target': http.url(full_url), 'message': 'Authentication success to PhpMyAdmin with login %s and password %s' % (username, password)})
 
                                 cred_info = {
                                     'hostname': target['hostname'],
@@ -215,14 +216,14 @@ class Module:
                             auth_type = res_management['auth_type']
 
                             if args['bruteforce']:
-                                Output.write({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
+                                Output.highlight({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
                                 for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                                     username, password = cred.split(':')
 
                                     res_management = http.get(management_url, auth=(auth_type, username, password))
 
                                     if res_management['code'] in [200]:
-                                        Output.write({'target': http.url(full_url), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                                        Output.success({'target': http.url(full_url), 'message': 'Authentication success with login %s and password %s' % (username, password)})
 
                                         cred_info = {
                                             'hostname': target['hostname'],
