@@ -144,5 +144,7 @@ def feedqueue_worker(target_gen, feed_queue, nb_workers):
         for target in target_gen:
             feed_queue.put(json.dumps(target))
 
+    except BrokenPipeError:
+        pass
     except Exception as e:
         print("%s: %s" % (type(e), e))

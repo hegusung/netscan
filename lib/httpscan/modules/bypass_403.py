@@ -13,7 +13,7 @@ class Module:
     name = '403'
     description = 'Attempt to bypass 403 forbidden using various techniques'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         res = http.get(target['path'])

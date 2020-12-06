@@ -17,7 +17,7 @@ class Module:
     name = 'Heartbleed'
     description = 'Check if server is vulnerable to heartbleed'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         if target['method'] != 'https':
             pass
 
@@ -39,7 +39,7 @@ class Module:
             sock.send(hb)
 
             if hit_hb(sock):
-                Output.write({'target': url, 'message': 'Vulnerable to heartbleed'})
+                Output.vuln({'target': url, 'message': 'Vulnerable to heartbleed'})
 
                 vuln_info = {
                     'hostname': target['hostname'],

@@ -37,7 +37,7 @@ class Module:
     name = 'PHPMyAdmin'
     description = 'Discover and bruteforce phpmyadmin'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
         for url in pma_urls:
@@ -52,7 +52,7 @@ class Module:
 
             res = http.get(url)
 
-            if res['code'] in [200] and 'phpmyadmin' in res['title'].lower():
+            if res and res['code'] in [200] and 'phpmyadmin' in res['title'].lower():
                 http_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -70,7 +70,7 @@ class Module:
                 }
                 DB.insert_http_url(http_info)
 
-                Output.write({'target': http.url(url), 'message': 'PhpMyAdmin interface'})
+                Output.highlight({'target': http.url(url), 'message': 'PhpMyAdmin interface'})
 
                 form = None
                 for f in res['forms']:
@@ -95,10 +95,10 @@ class Module:
                     }
                     DB.insert_vulnerability(vuln_info)
 
-                    Output.write({'target': http.url(url), 'message': 'PhpMyAdmin accessible without authentication'})
+                    Output.vuln({'target': http.url(url), 'message': 'PhpMyAdmin accessible without authentication'})
                 else:
                     if args['bruteforce']:
-                        Output.write({'target': http.url(url), 'message': 'Starting bruteforce...'})
+                        Output.highlight({'target': http.url(url), 'message': 'Starting bruteforce...'})
                         for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                             username, password = cred.split(':')
 
@@ -140,7 +140,7 @@ class Module:
                             if after_auth_form != None:
                                 continue
 
-                            Output.write({'target': http.url(url), 'message': 'Authentication success to PhpMyAdmin with login %s and password %s' % (username, password)})
+                            Output.success({'target': http.url(url), 'message': 'Authentication success to PhpMyAdmin with login %s and password %s' % (username, password)})
 
                             cred_info = {
                                 'hostname': target['hostname'],

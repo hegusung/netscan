@@ -116,6 +116,8 @@ class DB:
                 if len(inserts) > 0:
                     Elasticsearch.insert_bulk(inserts)
                     inserts = []
+            except BrokenPipeError:
+                break
             except Exception as e:
                 print('%s: %s' % (type(e), e))
 

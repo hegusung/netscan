@@ -10,7 +10,7 @@ class Module:
     name = 'Robots'
     description = 'Search for robots.txt file'
 
-    def run(self, target, args, useragent, proxy, timeout):
+    def run(self, target, args, useragent, proxy, timeout, safe):
         googlebot_useragent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 
         http = HTTP(target['method'], target['hostname'], target['port'], googlebot_useragent, proxy, timeout)
@@ -18,7 +18,7 @@ class Module:
         response = http.get('/robots.txt')
         if response and response['code'] in [200]:
 
-            Output.write({'target': http.url('/robots.txt'), 'message': 'robots.txt present'})
+            Output.highlight({'target': http.url('/robots.txt'), 'message': 'robots.txt present'})
 
             http_info = {
                 'hostname': target['hostname'],
