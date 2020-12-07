@@ -29,6 +29,12 @@ class PostgreSQL:
     def auth(self, username, password):
         success = False
 
+        # A username and password must be set: if not the current user will be sent, which is not what we want....
+        if username == None:
+            username = 'postgres'
+        if password == None:
+            password = 'postgres'
+
         self.conn = psycopg2.connect(host=self.hostname, port=self.port, user=username, password=password, connect_timeout=self.timeout, dbname='')
 
         self.username = username
