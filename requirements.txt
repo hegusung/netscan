@@ -16,3 +16,4 @@ pillow
 psycopg2
 redis
 pypsrp
+chardet

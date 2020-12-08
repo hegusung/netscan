@@ -39,4 +39,25 @@ def check_ip(ip):
     else:
         return False
 
+def detect_encoding(file, encodings=['utf8', 'iso-8859-1', 'utf16']):
+    chunk_size = 1000
+    try:
+        f = open(file, encoding=encodings[0])
+        while True:
+            data = f.read(chunk_size)
+            if not data:
+                break
+    except UnicodeDecodeError:
+        try:
+            f.close()
+        except:
+            pass
+
+        if len(encodings) > 1:
+            return detect_encoding(file, encodings=encodings[1:])
+        else:
+            raise Exception('detect_encoding: Unable to detect encoding for file: %s' % f)
+    f.close()
+
+    return encodings[0]
 
