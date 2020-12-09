@@ -150,7 +150,7 @@ class Module:
                 'tags': ['authentication_form']
             }
             DB.insert_http_url(http_info)
-            Output.write({'target': http.url(target['path']), 'message': 'Authentication form'})
+            Output.highlight({'target': http.url(target['path']), 'message': 'Authentication form'})
 
             if args['bruteforce'] != None:
                 Output.highlight({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
