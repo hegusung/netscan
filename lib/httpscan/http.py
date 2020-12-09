@@ -7,6 +7,7 @@ import ssl
 from requests.adapters import HTTPAdapter
 from requests.auth import HTTPDigestAuth, HTTPBasicAuth
 from requests.packages.urllib3.poolmanager import PoolManager
+from requests.cookies import RequestsCookieJar
 
 # Cert related imports
 import idna
@@ -103,13 +104,14 @@ class HTTP:
             else:
                 raise Exception('Unknown auth method: %s' % auth[0])
 
-            if type(cookies) == requests.cookies.RequestsCookieJar:
-                tmp_c = cookies
-                cookies = {}
-                for c in tmp_c:
-                    cookies[c.name] = c.value
-
             with requests.Session() as session:
+                if type(cookies) == dict:
+                    cj = RequestsCookieJar()
+                    for c in cookies:
+                        cj.set(c, cookies[c])
+                    cookies = cj
+                if cookies != None:
+                    session.cookies = cookies
                 session.mount('https://', SSLAdapter(ssl_version))
                 req = requests.Request(method, url, params=params, data=data, headers=headers, auth=r_auth, cookies=cookies)
                 prepped = session.prepare_request(req)
@@ -213,7 +215,7 @@ class HTTP:
             'html': html,
             'headers': headers,
             #'cookies': res.cookies,
-            'cookies': session.cookies.get_dict(),
+            'cookies': session.cookies,
             'forms': forms,
             'response_url': res.url,
         }
