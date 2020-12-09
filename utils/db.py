@@ -27,6 +27,7 @@ es_ids = {
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
+    'smb_host': 'smb_host_{session}_{domain}_{hostname}',
 }
 
 es_mapping = {
@@ -464,6 +465,41 @@ class DB:
                 del doc['tags']
                 doc['append'] = append
             self.send(doc)
+
+    @classmethod
+    def insert_smb_host(self, host_doc):
+        host_doc['doc_type'] = 'smb_host'
+        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        host_doc = check_entry(host_doc, ['domain', 'hostname', 'os'], ['hostname_ip'])
+
+        host_doc['domain'] = host_doc['domain'].lower()
+
+        if len(host_doc['hostname']) == 0:
+            if 'hostname_ip' in host_doc:
+                host_doc['hostname'] = host_doc['hostname_ip']
+        else:
+            host_doc['hostname'] = host_doc['hostname'].lower()
+
+        if 'hostname_ip' in host_doc:
+            if check_ip(host_doc['hostname_ip']):
+                # 'host' is an IP
+                host_doc['ip'] = [host_doc['hostname_ip']]
+                del host_doc['hostname_ip']
+            else:
+                # 'host' is a hostname
+                ip_list = resolve_hostname(host_doc['hostname_ip'])
+                host_doc['ip'] = [ip_list]
+                del host_doc['hostname_ip']
+        else:
+            # lets try to resolve from hostname + domain
+            if '.' in host_doc['domain'] and len(host_doc['hostname']) != 0:
+                hostname = '%s.%s' % (host_doc['hostname'], host_doc['domain'])
+                ip_list = resolve_hostname(hostname)
+                if len(ip_list) != 0:
+                    host_doc['ip'] = [ip_list]
+
+        self.send(host_doc)
+
 
 def check_entry(entry, required_list, optional_list):
     for required in required_list:

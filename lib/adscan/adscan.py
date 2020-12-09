@@ -167,6 +167,15 @@ def adscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': ldapscan.url(), 'message': 'Hosts:'})
                 if ldap_authenticated:
                     for entry in ldapscan.list_hosts():
+                        DB.insert_smb_host({
+                            'domain': entry['domain'],
+                            'os': entry['os'],
+                            'hostname': entry['hostname'],
+                            'comment': entry['comment'],
+                            'tags': entry['tags'],
+                            'sid': entry['sid'],
+                        })
+
                         host = '%s\\%s' % (entry['domain'], entry['hostname'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s  [%s]' % (host.ljust(30), entry['os'].ljust(20), entry['comment'].ljust(25), ','.join(entry['tags']))})
                 else:
