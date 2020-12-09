@@ -66,6 +66,10 @@ class DB:
         self.db_thread.start()
 
         self.session = Config.config.get('Global', 'session')
+        db_enabled = Config.config.get('Elasticsearch', 'enabled')
+
+        if self.nodb == False and db_enabled == False:
+            self.nodb = True
 
     @classmethod
     def stop_worker(self):
