@@ -44,6 +44,12 @@ def smbscan_worker(target, actions, creds, timeout):
                     'signing': smb_info['signing'],
                 }
             })
+            DB.insert_smb_host({
+                'hostname_ip': target['hostname'],
+                'os': smb_info['server_os'],
+                'domain': smb_info['domain'],
+                'hostname': smb_info['hostname'],
+            })
 
             smbscan.disconnect()
 
