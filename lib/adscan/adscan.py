@@ -151,6 +151,16 @@ def adscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': ldapscan.url(), 'message': 'Users:'})
                 if ldap_authenticated:
                     for entry in ldapscan.list_users():
+                        DB.insert_domain_user({
+                            'domain': entry['domain'],
+                            'username': entry['username'],
+                            'fullname': entry['fullname'],
+                            'comment': entry['comment'],
+                            'sid': entry['sid'],
+                            'rid': entry['rid'],
+                            'dn': entry['dn'],
+                            'tags': entry['tags'],
+                        })
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
                 else:
@@ -159,6 +169,16 @@ def adscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': ldapscan.url(), 'message': 'Groups:'})
                 if ldap_authenticated:
                     for entry in ldapscan.list_groups():
+                        DB.insert_domain_group({
+                            'domain': entry['domain'],
+                            'groupname': entry['groupname'],
+                            'comment': entry['comment'],
+                            'sid': entry['sid'],
+                            'rid': entry['rid'],
+                            'dn': entry['dn'],
+                            'members': entry['members'],
+                        })
+
                         group = '%s\\%s' % (entry['domain'], entry['groupname'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s' % (group.ljust(40), len(entry['members']), entry['comment'])})
                 else:
@@ -167,7 +187,7 @@ def adscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': ldapscan.url(), 'message': 'Hosts:'})
                 if ldap_authenticated:
                     for entry in ldapscan.list_hosts():
-                        DB.insert_smb_host({
+                        DB.insert_domain_host({
                             'domain': entry['domain'],
                             'os': entry['os'],
                             'hostname': entry['hostname'],
