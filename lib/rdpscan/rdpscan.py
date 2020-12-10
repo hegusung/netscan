@@ -76,7 +76,20 @@ def rdpscan_worker(target, actions, creds, timeout):
 
                 else:
                     # domain account 
-                    pass
+                    if password:
+                        cred_info = {
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'password': creds['password'],
+                        }
+                        DB.insert_domain_user(cred_info)
+                    else:
+                        cred_info = {
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'hash': creds['hash'],
+                        }
+                        DB.insert_domain_user(cred_info)
 
             else:
                 Output.minor({'target': rdp.url(), 'message': 'Authentication failure with credentials %s and %s' % (user, user_secret)})

@@ -44,7 +44,7 @@ def smbscan_worker(target, actions, creds, timeout):
                     'signing': smb_info['signing'],
                 }
             })
-            DB.insert_smb_host({
+            DB.insert_domain_host({
                 'hostname_ip': target['hostname'],
                 'os': smb_info['server_os'],
                 'domain': smb_info['domain'],
@@ -88,6 +88,13 @@ def smbscan_worker(target, actions, creds, timeout):
 
                         else:
                             # domain account 
+                            cred_info = {
+                                'domain': creds['domain'],
+                                'username': creds['username'],
+                                'password': creds['password'],
+                            }
+                            DB.insert_domain_user(cred_info)
+
                             pass
                     except AuthFailure as e:
                         Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
@@ -111,7 +118,12 @@ def smbscan_worker(target, actions, creds, timeout):
 
                         else:
                             # domain account 
-                            pass
+                            cred_info = {
+                                'domain': creds['domain'],
+                                'username': creds['username'],
+                                'hash': creds['hash'],
+                            }
+                            DB.insert_domain_user(cred_info)
 
                     except AuthFailure as e:
                         Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
@@ -124,6 +136,16 @@ def smbscan_worker(target, actions, creds, timeout):
 
                 if is_admin:
                     Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
+
+                    if 'domain' in creds and not creds['domain'] in [None, 'WORKGROUP']:
+                            # domain account 
+                            cred_info = {
+                                'domain': creds['domain'],
+                                'username': creds['username'],
+                                'admin_of': target['hostname'],
+                            }
+                            DB.insert_domain_user(cred_info)
+
 
             if success:
                 # Authenticated, now perform actions

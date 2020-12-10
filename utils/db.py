@@ -27,7 +27,9 @@ es_ids = {
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
-    'smb_host': 'smb_host_{session}_{domain}_{hostname}',
+    'domain_host': 'domain_host_{session}_{domain}_{hostname}',
+    'domain_user': 'domain_user_{session}_{domain}_{username}',
+    'domain_group': 'domain_group_{session}_{domain}_{groupname}',
 }
 
 es_mapping = {
@@ -471,12 +473,15 @@ class DB:
             self.send(doc)
 
     @classmethod
-    def insert_smb_host(self, host_doc):
-        host_doc['doc_type'] = 'smb_host'
+    def insert_domain_host(self, host_doc):
+        host_doc['doc_type'] = 'domain_host'
         host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         host_doc = check_entry(host_doc, ['domain', 'hostname', 'os'], ['hostname_ip'])
 
         host_doc['domain'] = host_doc['domain'].lower()
+
+        if len(host_doc['domain']) == 0 or host_doc['domain'] == 'workgroup':
+            return
 
         if len(host_doc['hostname']) == 0:
             if 'hostname_ip' in host_doc:
@@ -502,8 +507,65 @@ class DB:
                 if len(ip_list) != 0:
                     host_doc['ip'] = [ip_list]
 
+        if 'admin_of' in host_doc:
+            if check_ip(host_doc['admin_of']):
+                # 'host' is an IP
+                append = {'admin_of': [host_doc['admin_of']]}
+                host_doc['append'] = append
+                del host_doc['admin_of']
+            else:
+                # 'host' is a hostname
+                ip_list = resolve_hostname(host_doc['admin_of'])
+                append = {'admin_of': ip_list}
+                del host_doc['admin_of']
+                host_doc['append'] = append
+
         self.send(host_doc)
 
+    @classmethod
+    def insert_domain_user(self, user_doc):
+        user_doc['doc_type'] = 'domain_user'
+        user_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        user_doc = check_entry(user_doc, ['domain', 'username'], [])
+
+        user_doc['domain'] = user_doc['domain'].lower()
+        user_doc['username'] = user_doc['username'].lower()
+
+        if len(user_doc['domain']) == 0 or user_doc['domain'] == 'workgroup':
+            return
+
+        if 'password' in user_doc:
+            if not 'append' in user_doc:
+                append = {'password': [user_doc['password']] }
+                user_doc['append'] = append
+            else:
+                user_doc['append']['password'] = [user_doc['password']]
+            del user_doc['password']
+
+        if 'hash' in user_doc:
+            if not 'append' in user_doc:
+                append = {'hash': [user_doc['hash']] }
+                user_doc['append'] = append
+            else:
+                user_doc['append']['hash'] = [user_doc['hash']]
+            del user_doc['hash']
+
+
+        self.send(user_doc)
+
+    @classmethod
+    def insert_domain_group(self, group_doc):
+        group_doc['doc_type'] = 'domain_group'
+        group_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        group_doc = check_entry(group_doc, ['domain', 'groupname'], [])
+
+        group_doc['domain'] = group_doc['domain'].lower()
+        group_doc['groupname'] = group_doc['groupname'].lower()
+
+        if len(group_doc['domain']) == 0 or group_doc['domain'] == 'workgroup':
+            return
+
+        self.send(group_doc)
 
 def check_entry(entry, required_list, optional_list):
     for required in required_list:
