@@ -197,7 +197,7 @@ class LDAPScan:
             }
 
     def list_dns(self):
-        entry_generator = self.conn.extend.standard.paged_search(search_base='%s' % self.defaultdomainnamingcontext,
+        entry_generator = self.conn.extend.standard.paged_search(search_base='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext,
                                   search_filter="(objectClass=dnsNode)",
                                   search_scope=ldap3.SUBTREE,
                                   attributes=ldap3.ALL_ATTRIBUTES,

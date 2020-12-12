@@ -158,6 +158,7 @@ class Enum:
         dce.disconnect()
 
         return {
+            'domain': domain,
             'complexity': pass_complexity,
             'minimum_length': min_pass_len,
             'history_length': pass_hst_len,

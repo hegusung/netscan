@@ -47,6 +47,7 @@ class DNSScan:
 
         self.resolver = dns.resolver.Resolver()
         self.resolver.timeout = timeout
+        self.resolver.lifetime = timeout
         if dn_server != None:
             self.resolver.nameservers = [dn_server]
 
@@ -104,8 +105,8 @@ class DNSScan:
             Output.highlight({"target": ns_server['target'], "message": "Checking AXFR against nameserver %s" % ns_server['resolved']})
 
             # resolve nameserver IP
-            resolver = dns.resolver.Resolver()
-            resolver.timeout = self.timeout
+            #resolver = dns.resolver.Resolver()
+            #resolver.timeout = self.timeout
             if self.dn_server != None:
                 self.resolver.nameservers = [self.dn_server]
             answer = self.resolver.query(ns_server['resolved'], "A")

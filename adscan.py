@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
     parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
     # Bruteforce
-    parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
+    parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', const='nofile', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
     # Dump
     parser.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
     # Modules
