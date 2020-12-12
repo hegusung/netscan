@@ -5,6 +5,8 @@ import traceback
 import struct
 import copy
 
+import dns.resolver
+
 from lib.smbscan.smb import SMBScan
 from .ldap import LDAPScan
 from .kerberos import Kerberos
@@ -203,13 +205,57 @@ def adscan_worker(target, actions, creds, timeout):
             if 'dns' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'DNS entries:'})
                 if ldap_authenticated:
+                    dns_timeout = False
                     for entry in ldapscan.list_dns():
-                        Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
+                        # resolve dns entry
+
+                        if not dns_timeout:
+                            try:
+                                resolver = dns.resolver.Resolver()
+                                resolver.timeout = 5
+                                resolver.lifetime = 5
+                                resolver.nameservers = [target['hostname']]
+                                answer = resolver.query(entry, "A")
+                                ips = [str(r) for r in answer]
+                            except dns.resolver.NXDOMAIN:
+                                ips = []
+                            except dns.resolver.NoAnswer:
+                                ips = []
+                            except dns.exception.Timeout:
+                                ips = []
+                                dns_timeout = True
+                        else:
+                            ips = []
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s (%s)' % (entry.ljust(50), ','.join(ips))})
+
+                        if len(ips) != 0:
+                            for ip in ips:
+                                DB.insert_dns({
+                                    'source': entry,
+                                    'query_type': 'A',
+                                    'target': ip,
+                                })
+
             if 'gpps' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'Passwords in GPPs:'})
                 if smb_authenticated:
                     for entry in smbscan.list_gpps():
+                        # insert domain vulnerability
+                        DB.insert_domain_vulnerability({
+                            'domain': entry['domain'],
+                            'name': 'Password in GPP',
+                            'description': 'Password in GPP: User => %s, Password => %s' % (entry['username'], entry['password']),
+                        })
+
+                        DB.insert_domain_user({
+                            'domain': entry['domain'],
+                            'username': entry['username'],
+                            'password': entry['password'],
+                        })
+
                         Output.write({'target': smbscan.url(), 'message': '- %s   %s' % (entry['username'].ljust(40), entry['password'].ljust(20))})
+
             if 'spns' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'SPNs:'})
                 if smb_authenticated:
@@ -217,6 +263,22 @@ def adscan_worker(target, actions, creds, timeout):
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         tgs_hash = entry['tgs']['tgs'] if 'tgs' in entry['tgs'] else 'Unable to retreive TGS hash'
                         Output.write({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
+
+                        # insert domain SPN
+                        DB.insert_domain_spn({
+                            'domain': entry['domain'],
+                            'spn': entry['spn'],
+                            'username': entry['username'],
+                        })
+
+
+                        if 'tgs' in entry['tgs']:
+                            DB.insert_domain_user({
+                                'domain': entry['domain'],
+                                'username': entry['username'],
+                                'hash': entry['tgs']['tgs'],
+                            })
+
             if 'passpol' in actions:
                 if smb_authenticated:
                     try:
@@ -230,6 +292,14 @@ def adscan_worker(target, actions, creds, timeout):
                         output += " "*60+"- Lock threshold:   %s\n" % (str(password_policy['lock_threshold']) if password_policy['lock_threshold'] != 0 else "Disabled",)
                         if password_policy['lock_threshold'] != 0:
                             output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
+
+                        # insert domain vulnerability if lock_threshold == 0
+                        if password_policy['lock_threshold'] == 0:
+                            DB.insert_domain_vulnerability({
+                                'domain': password_policy['domain'],
+                                'name': 'No account lockout',
+                                'description': 'No account lockout for domain %s, accounts can be bruteforced' % (password_policy['domain'],),
+                            })
 
                         Output.highlight({'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
@@ -246,12 +316,34 @@ def adscan_worker(target, actions, creds, timeout):
                         else:
                             kerberos = Kerberos(target['hostname'], creds['domain'])
                             Output.highlight({'target': smbscan.url(), 'message': 'Valid users:'})
-                            for valid_user in kerberos.check_users_dump_asreq(actions['users_brute']['username_file']):
+
+                            # if no file is specified, dump a list of users through ldap
+                            gen = kerberos.check_users_dump_asreq(ldapscan, username_file=actions['users_brute']['username_file'])
+                            for valid_user in gen:
                                 user = '%s\\%s' % (valid_user['domain'], valid_user['username'])
                                 if 'asreq' in valid_user:
                                     Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberos pre-auth disabled !!!)\n%s' % (user.ljust(50), valid_user['asreq'])})
+
+                                    # insert domain vulnerability
+                                    DB.insert_domain_vulnerability({
+                                        'domain': valid_user['domain'],
+                                        'name': 'Kerberos pre-auth disabled',
+                                        'description': 'Kerberos pre-auth is disabled for user %s\%s' % (valid_user['domain'], valid_user['username']),
+                                    })
+
+                                    DB.insert_domain_user({
+                                        'domain': valid_user['domain'],
+                                        'username': valid_user['username'],
+                                        'hash': valid_user['asreq'],
+                                    })
                                 else:
                                     Output.write({'target': smbscan.url(), 'message': '- %s' % user})
+
+                                    DB.insert_domain_user({
+                                        'domain': valid_user['domain'],
+                                        'username': valid_user['username'],
+                                    })
+
 
                     except Exception as e:
                         raise e
@@ -262,6 +354,13 @@ def adscan_worker(target, actions, creds, timeout):
                         def ntds_hash(entry):
                             user = '%s\\%s' % (entry['domain'], entry['username'])
                             Output.write({'target': smbscan.url(), 'message': '- %s   %s   (%s)' % (user.ljust(40), entry['hash'].ljust(70), entry['hash_type'])})
+
+                            DB.insert_domain_user({
+                                'domain': entry['domain'],
+                                'username': entry['username'],
+                                'hash': entry['hash'],
+                            })
+
                         dumped = smbscan.dump_ntds(actions['dump_ntds']['method'], callback_func=ntds_hash)
                         Output.write({'target': smbscan.url(), 'message': 'Dumped %d hashes' % dumped})
                     except Exception as e:

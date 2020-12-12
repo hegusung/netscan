@@ -30,6 +30,7 @@ es_ids = {
     'domain_host': 'domain_host_{session}_{domain}_{hostname}',
     'domain_user': 'domain_user_{session}_{domain}_{username}',
     'domain_group': 'domain_group_{session}_{domain}_{groupname}',
+    'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
 }
 
 es_mapping = {
@@ -566,6 +567,33 @@ class DB:
             return
 
         self.send(group_doc)
+
+    @classmethod
+    def insert_domain_spn(self, spn_doc):
+        spn_doc['doc_type'] = 'domain_spn'
+        spn_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        spn_doc = check_entry(spn_doc, ['domain', 'spn', 'username'], [])
+
+        spn_doc['domain'] = spn_doc['domain'].lower()
+        spn_doc['username'] = spn_doc['username'].lower()
+
+        if len(spn_doc['domain']) == 0 or spn_doc['domain'] == 'workgroup':
+            return
+
+        self.send(spn_doc)
+
+    @classmethod
+    def insert_domain_vulnerability(self, vuln_doc):
+        vuln_doc['doc_type'] = 'domain_vuln'
+        vuln_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        vuln_doc = check_entry(vuln_doc, ['domain', 'name', 'description'], [])
+
+        vuln_doc['domain'] = vuln_doc['domain'].lower()
+
+        if len(vuln_doc['domain']) == 0 or vuln_doc['domain'] == 'workgroup':
+            return
+
+        self.send(vuln_doc)
 
 def check_entry(entry, required_list, optional_list):
     for required in required_list:
