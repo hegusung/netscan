@@ -7,6 +7,7 @@ ldap3
 mysqlclient
 mysql-connector
 pyCrypto
+pycryptodome
 netaddr
 paramiko
 tqdm

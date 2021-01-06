@@ -51,6 +51,9 @@ class DB:
     @classmethod
     def start_worker(self, nodb):
         self.nodb = nodb
+        db_enabled = False if Config.config.get('Elasticsearch', 'enabled') in ['false', 'False'] else True
+        if self.nodb == False and db_enabled == False:
+            self.nodb = True
 
         # Check elasticsearch status
         if not self.nodb:
@@ -69,10 +72,6 @@ class DB:
         self.db_thread.start()
 
         self.session = Config.config.get('Global', 'session')
-        db_enabled = Config.config.get('Elasticsearch', 'enabled')
-
-        if self.nodb == False and db_enabled == False:
-            self.nodb = True
 
     @classmethod
     def stop_worker(self):
