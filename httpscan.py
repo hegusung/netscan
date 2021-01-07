@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--path', metavar='path', nargs='?', type=str_comma, help='HTTP path', default='/', dest='path')
     parser.add_argument('--useragent', metavar='useragent', nargs='?', type=str, help='User agent', default='Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0', dest='useragent')
     parser.add_argument('--dir-bruteforce', metavar='file', nargs='?', type=str, help='Bruteforce path', default=None, dest='dir_bruteforce')
+    parser.add_argument('--http-auth', metavar='timeout', nargs='?', type=str, help='401 authentication, format username:password', default=None, dest='http_auth')
     parser.add_argument('-x', metavar='extentions', nargs='?', type=str, help='Bruteforce file extensions', default='', dest='extensions')
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the directory bruteforce', default=5, dest='dir_bruteforce_workers')
     parser.add_argument('--proxy', metavar='http://ip:port', nargs='?', type=str, help='Proxy', default=None, dest='proxy')
@@ -68,14 +69,14 @@ def main():
         actions['modules'] = {'modules': args.modules, 'args': module_args}
 
     Output.setup()
-    httpscan(targets, static_inputs, args.workers, actions, args.useragent, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout)
+    httpscan(targets, static_inputs, args.workers, actions, args.useragent, args.http_auth, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout)
 
     DB.stop_worker()
     Output.stop()
 
-def httpscan(input_targets, static_inputs, workers, actions, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout):
+def httpscan(input_targets, static_inputs, workers, actions, useragent, http_auth, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout):
 
-    args = (actions, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout)
+    args = (actions, useragent, http_auth, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout)
 
     dispatch_targets(input_targets, static_inputs, httpscan_worker, args, workers=workers)
 
