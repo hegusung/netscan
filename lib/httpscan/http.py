@@ -22,7 +22,7 @@ auth_pattern = re.compile(r'''\s*(.*)\s+realm=['"]?([^'"]+)['"]?''', re.IGNORECA
 
 class HTTP:
 
-    def __init__(self, method, hostname, port, useragent, proxy, connect_timeout):
+    def __init__(self, method, hostname, port, useragent, proxy, connect_timeout, auth=None):
         self.method = method
         self.hostname = hostname
         self.port = port
@@ -30,6 +30,13 @@ class HTTP:
         self.useragent = useragent
         self.proxy = proxy
         self.read_timeout = 60
+
+        if type(auth) == tuple:
+            self.auth = auth
+        elif ':' in auth:
+            self.auth = (auth.split(':', 1)[0], auth.split(':', 1)[-1])
+        else:
+            self.auth = None
 
     def url(self, path):
         if '://' in path:
@@ -77,6 +84,9 @@ class HTTP:
         return self.request(method, url, ssl_version=ssl_version, data=form['args'], auth=auth, cookies=cookies, headers=headers)
 
     def request(self, method, path, params=None, ssl_version=ssl.PROTOCOL_TLSv1_2, data=None, auth=None, cookies={}, recurse=6, headers={}):
+        if auth == None and self.auth != None:
+            auth = self.auth
+
         try:
             if not '://' in path:
                 url = self.url(path)
@@ -94,13 +104,33 @@ class HTTP:
             headers['User-Agent'] = self.useragent
             headers['Connection'] = 'close' # no need to keep the connection opened once we got our answer
 
+            # TODO: if basic/digest not specified, make an initial request to get auth 
             r_auth = None
             if auth == None:
                 pass
-            elif auth[0].lower() == 'basic':
-                r_auth = HTTPBasicAuth(auth[1], auth[2])
-            elif auth[0].lower() == 'digest':
-                r_auth = HTTPDigestAuth(auth[1], auth[2])
+            elif len(auth) == 0:
+                pass
+            elif len(auth) == 2:
+                # Get auth type
+                res = self.request(method, path, params, ssl_version, data, (), cookies, recurse, headers)
+                if not res:
+                    return res
+                if not 'auth_type' in res:
+                    return res
+
+                if res['auth_type'] == 'basic':
+                    r_auth = HTTPBasicAuth(auth[0], auth[1])
+                elif res['auth_type'] == 'digest':
+                    r_auth = HTTPDigestAuth(auth[0], auth[1])
+                else:
+                    raise Exception('Unknown auth method: %s' % res['auth_type'])
+            if len(auth) == 3:
+                if auth[0].lower() == 'basic':
+                    r_auth = HTTPBasicAuth(auth[1], auth[2])
+                elif auth[0].lower() == 'digest':
+                    r_auth = HTTPDigestAuth(auth[1], auth[2])
+                else:
+                    raise Exception('Unknown auth method: %s' % auth[0])
             else:
                 raise Exception('Unknown auth method: %s' % auth[0])
 

@@ -13,7 +13,7 @@ from utils.modulemanager import ModuleManager
 
 http_modules = ModuleManager('lib/httpscan/modules')
 
-def httpscan_worker(target, actions, useragent, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[]):
+def httpscan_worker(target, actions, useragent, http_auth, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[]):
     try:
         httpscan = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
