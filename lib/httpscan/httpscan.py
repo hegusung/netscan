@@ -13,9 +13,9 @@ from utils.modulemanager import ModuleManager
 
 http_modules = ModuleManager('lib/httpscan/modules')
 
-def httpscan_worker(target, actions, useragent, http_auth, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[]):
+def httpscan_worker(target, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[]):
     try:
-        httpscan = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
+        httpscan = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout, headers=header_dict, auth=http_auth, cookies=cookie_dict)
 
         output = httpscan.get(target['path'])
         if output != None and not output['code'] in excluded_code:
