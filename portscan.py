@@ -18,7 +18,7 @@ def main():
     parser.add_argument('--top-ports', metavar='top-N', nargs='?', type=top_ports, help='top n ports', default=None, dest='top_ports')
     parser.add_argument('-p-', action='store_true', help='Scan all ports', dest='all_ports')
     parser.add_argument('-sV', action='store_true', help='Service scan (nmap)', dest='service_scan')
-    parser.add_argument('--script', metavar='nmap scripts', type=str, nargs='?', help='Execute nmap scripts', const='default', default=None, dest='scripts')
+    parser.add_argumen?!?jedi=23, t('--script', metavar='nmap scripts', type=str, nargs='?', help='Execute nmap scripts', const='default', default=None, dest='scripts')?!? (*name_or_flags: Text, action: Union[Text, Type[Action]]=..., nargs: Union[int, Text]=..., const: Any=..., default: Any=..., type: Union[Callable[[Text], _T], Callable[[str], _T], FileType]=..., choices: Iterable[_T]=..., required: bool=..., *_*help: Optional[Text]=...*_*, metavar: Optional[Union[Text, Tuple[Text, ...]]]=..., dest: Optional[Text]=..., version: Text=..., **kwargs: Any) ?!?jedi?!?' ' ' ' ' ' ' ' ' ' ' '
     parser.add_argument('--script-args', metavar='nmap scripts args', type=str, nargs='?', help='Nmap script arguments', default=None, dest='script_args')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
