@@ -5,3 +5,5 @@ __pycache__/
 *$py.class
 screenshots/*.jpg
 screenshots/*.png
+server/uploads/*
+server/files/*

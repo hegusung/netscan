@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
- 
+
 """Simple HTTP Server With Upload.
 
 This module builds on BaseHTTPServer by implementing the standard GET
 and HEAD requests in a fairly straightforward manner.
 
-see: https://gist.github.com/UniIsland/3346170
+Original author see: https://gist.github.com/UniIsland/3346170
 """
- 
- 
-__version__ = "0.1"
-__all__ = ["SimpleHTTPRequestHandler"]
-__author__ = "bones7456"
-__home_page__ = "http://li2z.cn/"
- 
+
 import os
+from datetime import datetime
 import posixpath
 import http.server
 import urllib.request, urllib.parse, urllib.error
@@ -22,11 +17,21 @@ import html
 import shutil
 import mimetypes
 import re
+import argparse
 from io import BytesIO
- 
- 
+import hashlib
+
+__version__ = '1.0'
+
+def md5(fname):
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
 class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
- 
+
     """Simple HTTP request handler with GET/HEAD/POST commands.
 
     This serves files from the current directory and any of its
@@ -38,25 +43,41 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     request omits the actual contents of the file.
 
     """
- 
+
     server_version = "SimpleHTTPWithUpload/" + __version__
- 
+
     def do_GET(self):
         """Serve a GET request."""
-        f = self.send_head()
+        print(self.path)
+        if self.path.startswith('/ressources/'):
+            file_md5 = self.path.split('/')[-1]
+            print(file_md5)
+
+            f = self.send_ressource_file(file_md5)
+        else:
+            # Move to file directory
+            self.path = "/files" + self.path
+
+            f = self.send_head()
         if f:
             self.copyfile(f, self.wfile)
             f.close()
- 
+
     def do_HEAD(self):
         """Serve a HEAD request."""
         f = self.send_head()
         if f:
             f.close()
- 
+
     def do_POST(self):
         """Serve a POST request."""
-        r, info = self.deal_post_data()
+
+        if self.path.startswith('/ressources/'):
+            print(self.path)
+            file_name = self.path.split('/')[-1]
+            r, info = self.post_ressource_result(file_name)
+        else:
+            r, info = self.deal_post_data()
         print((r, info, "by: ", self.client_address))
         f = BytesIO()
         f.write(b'<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">')
@@ -81,7 +102,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         if f:
             self.copyfile(f, self.wfile)
             f.close()
-        
+
     def deal_post_data(self):
         content_type = self.headers['content-type']
         if not content_type:
@@ -107,7 +128,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             out = open(fn, 'wb')
         except IOError:
             return (False, "Can't create file to write, do you have permission to write?")
-                
+
         preline = self.rfile.readline()
         remainbytes -= len(preline)
         while remainbytes > 0:
@@ -124,7 +145,22 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 out.write(preline)
                 preline = line
         return (False, "Unexpect Ends of data.")
- 
+
+    def post_ressource_result(self, filename):
+        remainbytes = int(self.headers['content-length'])
+        data = self.rfile.read(remainbytes)
+
+        now = datetime.now()
+        timestamp = now.strftime('%Y%m%d_%H%M%S')
+
+        path = os.path.join(os.path.dirname(__file__), 'uploads', '%s_%s_%s' % (timestamp, self.client_address[0], filename))
+
+        f = open(path, 'wb')
+        f.write(data)
+        f.close()
+
+        return (True, "Upload success")
+
     def send_head(self):
         """Common code for GET and HEAD commands.
 
@@ -168,7 +204,40 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
         self.end_headers()
         return f
- 
+
+    def send_string(self, string):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.send_header("Content-Length", len(string))
+        self.end_headers()
+
+        f = BytesIO()
+        f.write(string.encode())
+        f.seek(0)
+
+        return f
+
+    def send_ressource_file(self, file_md5):
+        file_md5 = file_md5.lower()
+
+        files_path = os.path.join(os.path.dirname(__file__), 'ressources')
+        for f_name in os.listdir(files_path):
+            path = os.path.join(files_path, f_name)
+
+            if md5(path) == file_md5:
+                ctype = self.guess_type(path)
+                f = open(path, 'rb')
+                self.send_response(200)
+                self.send_header("Content-type", ctype)
+                fs = os.fstat(f.fileno())
+                self.send_header("Content-Length", str(fs[6]))
+                self.end_headers()
+
+                return f
+
+        self.send_error(404, "File not found")
+        return None
+
     def list_directory(self, path):
         """Helper to produce a directory listing (absent index.html).
 
@@ -213,7 +282,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(length))
         self.end_headers()
         return f
- 
+
     def translate_path(self, path):
         """Translate a /-separated PATH to the local filename syntax.
 
@@ -235,7 +304,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             if word in (os.curdir, os.pardir): continue
             path = os.path.join(path, word)
         return path
- 
+
     def copyfile(self, source, outputfile):
         """Copy all data between two file objects.
 
@@ -251,7 +320,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
         """
         shutil.copyfileobj(source, outputfile)
- 
+
     def guess_type(self, path):
         """Guess the type of a file.
 
@@ -291,4 +360,12 @@ def run(bind_ip, bind_port):
     httpd.serve_forever()
 
 if __name__ == '__main__':
-    run('0.0.0.0', 8000)
+    parser = argparse.ArgumentParser(description='HTTP Server')
+    parser.add_argument('ip', help='Listening IP', type=str, nargs='?', default='0.0.0.0')
+    parser.add_argument('port', help='Listening port', type=int, nargs='?', default=8000)
+
+    args = parser.parse_args()
+
+    print('Starting listrening server on http://%s:%d/' % (args.ip, args.port))
+
+    run(args.ip, args.port)
