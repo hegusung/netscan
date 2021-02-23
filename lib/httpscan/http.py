@@ -22,7 +22,7 @@ auth_pattern = re.compile(r'''\s*(.*)\s+realm=['"]?([^'"]+)['"]?''', re.IGNORECA
 
 class HTTP:
 
-    def __init__(self, method, hostname, port, useragent, proxy, connect_timeout, auth=None):
+    def __init__(self, method, hostname, port, useragent, proxy, connect_timeout, headers=None, auth=None, cookies={}):
         self.method = method
         self.hostname = hostname
         self.port = port
@@ -30,8 +30,12 @@ class HTTP:
         self.useragent = useragent
         self.proxy = proxy
         self.read_timeout = 60
+        self.headers = headers
+        self.cookies = cookies
 
-        if type(auth) == tuple:
+        if auth == None:
+            self.auth = None
+        elif type(auth) == tuple:
             self.auth = auth
         elif ':' in auth:
             self.auth = (auth.split(':', 1)[0], auth.split(':', 1)[-1])
@@ -87,6 +91,15 @@ class HTTP:
         if auth == None and self.auth != None:
             auth = self.auth
 
+        # add general cookies present in option
+        for key, value in self.cookies.items():
+            if type(cookies) == dict:
+                if not key in cookies:
+                    cookies[key] = value
+            elif type(cookies) == RequestsCookieJar:
+                if not key in cookies:
+                    cookies.set(key, value)
+
         try:
             if not '://' in path:
                 url = self.url(path)
@@ -103,6 +116,8 @@ class HTTP:
 
             headers['User-Agent'] = self.useragent
             headers['Connection'] = 'close' # no need to keep the connection opened once we got our answer
+            for key, value in self.headers.items():
+                headers[key] = value
 
             # TODO: if basic/digest not specified, make an initial request to get auth 
             r_auth = None
@@ -124,7 +139,7 @@ class HTTP:
                     r_auth = HTTPDigestAuth(auth[0], auth[1])
                 else:
                     raise Exception('Unknown auth method: %s' % res['auth_type'])
-            if len(auth) == 3:
+            elif len(auth) == 3:
                 if auth[0].lower() == 'basic':
                     r_auth = HTTPBasicAuth(auth[1], auth[2])
                 elif auth[0].lower() == 'digest':
