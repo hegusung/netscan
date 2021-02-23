@@ -21,6 +21,8 @@ import argparse
 from io import BytesIO
 import hashlib
 
+from utils.output import Output
+
 __version__ = '1.0'
 
 def md5(fname):
@@ -29,6 +31,8 @@ def md5(fname):
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
+
+PATH_OFFSET = "/server/files"
 
 class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
@@ -46,17 +50,18 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
     server_version = "SimpleHTTPWithUpload/" + __version__
 
+    def log_message(self, format, *args):
+        Output.write("[%s] %s" % (self.address_string(), format%args))
+
     def do_GET(self):
         """Serve a GET request."""
-        print(self.path)
         if self.path.startswith('/ressources/'):
             file_md5 = self.path.split('/')[-1]
-            print(file_md5)
 
             f = self.send_ressource_file(file_md5)
         else:
             # Move to file directory
-            self.path = "/files" + self.path
+            self.path = "/server/files" + self.path
 
             f = self.send_head()
         if f:
@@ -73,12 +78,12 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         """Serve a POST request."""
 
         if self.path.startswith('/ressources/'):
-            print(self.path)
             file_name = self.path.split('/')[-1]
             r, info = self.post_ressource_result(file_name)
         else:
+            self.path = "/server/files" + self.path
             r, info = self.deal_post_data()
-        print((r, info, "by: ", self.client_address))
+        Output.highlight("%s %s %s" % (info, "by: ", self.client_address[0]))
         f = BytesIO()
         f.write(b'<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">')
         f.write(b"<html>\n<title>Upload Result Page</title>\n")
@@ -355,7 +360,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         '.h': 'text/plain',
         })
 
-def run(bind_ip, bind_port):
+def run_http_server(bind_ip, bind_port):
     httpd = http.server.HTTPServer((bind_ip, bind_port), SimpleHTTPRequestHandler)
     httpd.serve_forever()
 

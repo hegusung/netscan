@@ -58,31 +58,43 @@ class Output:
 
     @classmethod
     def vuln(self, message):
+        if type(message) == str:
+            message = {'message': message}
         message['type'] = 'vuln'
         self.write(message)
 
     @classmethod
     def major(self, message):
+        if type(message) == str:
+            message = {'message': message}
         message['type'] = 'major'
         self.write(message)
 
     @classmethod
     def success(self, message):
+        if type(message) == str:
+            message = {'message': message}
         message['type'] = 'success'
         self.write(message)
 
     @classmethod
     def highlight(self, message):
+        if type(message) == str:
+            message = {'message': message}
         message['type'] = 'highlight'
         self.write(message)
 
     @classmethod
     def minor(self, message):
+        if type(message) == str:
+            message = {'message': message}
         message['type'] = 'minor'
         self.write(message)
 
     @classmethod
     def error(self, message):
+        if type(message) == str:
+            message = {'message': message}
         message['type'] = 'error'
         self.write(message)
 
