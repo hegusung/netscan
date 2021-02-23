@@ -1,7 +1,10 @@
+import sys
+sys.path.append("..")
 from ressources import get_ressource_md5, powershell_encode_base64
 
 class Payload:
     name = 'Mimikittenz'
+    args = ['Server_IP:Server_port']
 
     def generate_payload(self, url):
         # Mimikatz in memory in memory

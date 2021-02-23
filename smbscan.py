@@ -5,6 +5,7 @@ import sys
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
 from utils.output import Output
+from server.payload_manager import PayloadManager
 from lib.smbscan.smbscan import smbscan_worker, smb_modules
 
 from utils.db import DB
@@ -30,6 +31,8 @@ def main():
     # Execution-related
     parser.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
     parser.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
+    parser.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
+    parser.add_argument("--list-payloads", action='store_true', help='List payloads', dest='list_payloads')
     # Dump secrets
     parser.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
     parser.add_argument("--lsa", action='store_true', help='dump LSA secrets from target systems')
@@ -61,6 +64,12 @@ def main():
         print('Available modules:')
         for module in smb_modules.list_modules():
             print('- %s   %s' % (module['name'].ljust(15), module['description']))
+        sys.exit()
+
+    if args.list_payloads:
+        print('Available payloads:')
+        for payload_name, payload in PayloadManager.list_payloads().items():
+            print('- %s %s' % (payload.name, ' '.join(payload.args)))
         sys.exit()
 
     Config.load_config()
@@ -102,6 +111,9 @@ def main():
         actions['list_shares'] = {}
     if args.command:
         actions['command'] = {'command': args.command, 'method': args.exec_method}
+    if args.payload:
+        cmd = PayloadManager.generate_payload(args.payload[0], args.payload[1:])
+        actions['command'] = {'command': cmd, 'method': args.exec_method}
     if args.lsa:
         actions['lsa'] = {}
     if args.sam:
@@ -135,8 +147,6 @@ def main():
         module_args = {
         }
         actions['modules'] = {'modules': args.modules, 'args': module_args}
-
-
 
     Output.setup()
 
