@@ -22,6 +22,7 @@ from io import BytesIO
 import hashlib
 
 from utils.output import Output
+from server.payload_manager import PayloadManager
 
 __version__ = '1.0'
 
@@ -163,6 +164,13 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         f = open(path, 'wb')
         f.write(data)
         f.close()
+
+        # Check end if it belongs to a module
+        modules = PayloadManager.list_payloads()
+        for payload_name, module in modules.items():
+            if filename.endswith(module.filename):
+                module.process_output(path)
+                break
 
         return (True, "Upload success")
 
