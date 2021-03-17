@@ -101,7 +101,12 @@ class DNSScan:
         if self.is_ip(self.hostname):
             return
 
-        for ns_server in self.get_nameservers():
+        if self.dn_server != None:
+            ns_server_list = [self.dn_server]
+        else:
+            ns_server_list = self.get_nameservers()
+
+        for ns_server in ns_server_list:
             Output.highlight({"target": ns_server['target'], "message": "Checking AXFR against nameserver %s" % ns_server['resolved']})
 
             # resolve nameserver IP

@@ -4,9 +4,9 @@ import os.path
 from utils.db import Elasticsearch
 
 service_filters = {
-    'http': [{'service': 'http'}, {'port': 80}, {'port': 443}],
+    'http': [{'service': 'http'}, {'port': 80}, {'port': 443}, {'port': 8000}, {'port': 8080}],
     'smb': [{'service': 'smb', 'port': 445}],
-    'ldap': [{'service': 'ldap'}, {'port': 389}],
+    'ldap': [{'service': 'ldap'}, {'port': 389}, {'port': 636}, {'port': 3268}, {'port': 3269}],
     # Administration
     'ssh': [{'service': 'ssh'}, {'port': 22}],
     'telnet': [{'service': 'telnet'}, {'port': 23}],
@@ -96,18 +96,14 @@ def export_ip_ports(session, service, output_dir):
                 s_service = service_nmap_translate[s_service]
             source['service'] = s_service
 
-        if not s_service:
-            continue
-
         for service, filters in service_filters.items():
             for f in filters:
-                match = True
+                match = False
                 for key, value in f.items():
                     if not key in source:
-                        match = False
-                        break
-                    if not source[key] == value:
-                        match = False
+                        continue
+                    if source[key] == value:
+                        match = True
                         break
 
                 if match:
