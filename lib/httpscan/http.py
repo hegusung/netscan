@@ -42,13 +42,18 @@ class HTTP:
         else:
             self.auth = None
 
-    def url(self, path):
+    def url(self, path, params=None):
         if '://' in path:
             return path
         if self.method == 'http' and self.port == 80 or self.method == 'https' and self.port == 443:
-            return "%s://%s%s" % (self.method, self.hostname, path)
+            url = "%s://%s%s" % (self.method, self.hostname, path)
         else:
-            return "%s://%s:%d%s" % (self.method, self.hostname, self.port, path)
+            url =  "%s://%s:%d%s" % (self.method, self.hostname, self.port, path)
+
+        if params:
+            url = "%s?%s" % (url, '&'.join(['%s=%s' % (k, v) for k, v in params.items()]))
+
+        return url
 
     def get(self, path, params=None, data=None, ssl_version=ssl.PROTOCOL_TLSv1_2, auth=None, cookies={}, headers={}):
 
@@ -116,8 +121,9 @@ class HTTP:
 
             headers['User-Agent'] = self.useragent
             headers['Connection'] = 'close' # no need to keep the connection opened once we got our answer
-            for key, value in self.headers.items():
-                headers[key] = value
+            if self.headers != None:
+                for key, value in self.headers.items():
+                    headers[key] = value
 
             # TODO: if basic/digest not specified, make an initial request to get auth 
             r_auth = None
@@ -230,12 +236,15 @@ class HTTP:
 
         html = ""
         max_size = 1024*1000
-        for chunk in res.iter_content(chunk_size=1024, decode_unicode=True):
-            if type(chunk) == bytes:
-                chunk = chunk.decode(encoding, 'replace')
-            html += chunk
-            if len(html) >= max_size:
-                break
+        try:
+            for chunk in res.iter_content(chunk_size=1024, decode_unicode=True):
+                if type(chunk) == bytes:
+                    chunk = chunk.decode(encoding, 'replace')
+                html += chunk
+                if len(html) >= max_size:
+                    break
+        except requests.exceptions.ChunkedEncodingError:
+            pass
 
         auth_type = None
         if code == 401:

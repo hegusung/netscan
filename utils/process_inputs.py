@@ -192,6 +192,7 @@ def process_targets(targets_str):
             method = o.scheme
             netloc = o.netloc
             path = o.path
+            params = o.query
 
             # Check if IPv6
             n_column = netloc.count(':')
@@ -228,6 +229,12 @@ def process_targets(targets_str):
                 res['port'] = port
             if path:
                 res['path'] = path
+            if params:
+                res['params'] = {}
+                for param in params.split('&'):
+                    key = param.split('=', 1)[0]
+                    value = param.split('=', 1)[1]
+                    res['params'][key] = value
 
             yield res
         else:
