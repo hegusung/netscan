@@ -152,25 +152,29 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 preline = line
         return (False, "Unexpect Ends of data.")
 
-    def post_ressource_result(self, filename):
+    def post_ressource_result(self, file_hash):
         remainbytes = int(self.headers['content-length'])
         data = self.rfile.read(remainbytes)
 
         now = datetime.now()
         timestamp = now.strftime('%Y%m%d_%H%M%S')
 
-        path = os.path.join(os.path.dirname(__file__), 'uploads', '%s_%s_%s' % (timestamp, self.client_address[0], filename))
-
-        f = open(path, 'wb')
-        f.write(data)
-        f.close()
-
         # Check end if it belongs to a module
+        module = None
         modules = PayloadManager.list_payloads()
-        for payload_name, module in modules.items():
-            if filename.endswith(module.filename):
-                module.process_output(path)
+        for payload_name, mod in modules.items():
+            if file_hash == mod.md5:
+                module = mod
                 break
+
+        if module:
+            path = os.path.join(os.path.dirname(__file__), 'uploads', '%s_%s_%s' % (timestamp, self.client_address[0], module.name))
+
+            f = open(path, 'wb')
+            f.write(data)
+            f.close()
+
+            module.process_output(path)
 
         return (True, "Upload success")
 

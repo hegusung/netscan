@@ -7,3 +7,5 @@ screenshots/*.jpg
 screenshots/*.png
 server/uploads/*
 server/files/*
+server/payloads/*obfuscated*
+server/ressources/*obfuscated*
