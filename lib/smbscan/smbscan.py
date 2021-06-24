@@ -172,6 +172,9 @@ def smbscan_worker(target, actions, creds, timeout):
                         Output.highlight({'target': smbscan.url(), 'message': shares})
 
 
+                    except impacket.nmb.NetBIOSError:
+                        # Connection reset
+                        Output.error({'target': smbscan.url(), 'message': 'List shares: Access denied'})
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
                             Output.error({'target': smbscan.url(), 'message': 'List shares: Access denied'})

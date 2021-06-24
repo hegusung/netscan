@@ -17,10 +17,10 @@ def httpscan_worker(target, actions, useragent, header_dict, http_auth, cookie_d
     try:
         httpscan = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout, headers=header_dict, auth=http_auth, cookies=cookie_dict)
 
-        output = httpscan.get(target['path'])
+        output = httpscan.get(target['path'], params=target['params'] if 'params' in target else None)
         if output != None and not output['code'] in excluded_code:
             output['message_type'] = 'http'
-            output['target'] = httpscan.url(target['path'])
+            output['target'] = httpscan.url(target['path'], params=target['params'] if 'params' in target else None)
             Output.write(output)
             db_info = {
                 'hostname': target['hostname'],
@@ -29,6 +29,8 @@ def httpscan_worker(target, actions, useragent, header_dict, http_auth, cookie_d
                 'service': 'http',
                 'version': output['server'],
             }
+            if 'params' in target:
+                db_info['params'] = target['params']
             service_info = {}
 
             if httpscan.method == 'https':

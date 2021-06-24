@@ -90,8 +90,8 @@ class SMBScan:
         except impacket.smbconnection.SessionError as e:
             error, desc = e.getErrorString()
             if 'STATUS_ACCESS_DENIED' in str(error):
-                # Auth success but we have been denied access during check_admin_privs
-                success = True
+                # Can happen on both login() and check_if_admin() 
+                pass
             else:
                 raise AuthFailure(error)
         except Exception as e:
