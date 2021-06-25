@@ -25,7 +25,7 @@ def vncscan_worker(target, actions, creds, timeout):
         vnc.connect()
 
         version = vnc.version
-        Output.write({'target': vnc.url(), 'message': version})
+        Output.write({'target': vnc.url(), 'message': '%s\t[%s]' % (version, '; '.join(vnc.supported_security_types))})
         DB.insert_port({
             'hostname': target['hostname'],
             'port': target['port'],

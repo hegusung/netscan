@@ -24,7 +24,7 @@ class Module:
             vuln_info = {
                 'hostname': target['hostname'],
                 'port': target['port'],
-                'service': 'http',
+                'service': 'smb',
                 'url': 'smb://%s:%d' % (target['hostname'], target['port']),
                 'name': 'CVE-2020-0796 (SMBGhost)',
                 'description': 'Server smb://%s:%d is vulnerable to CVE-2020-0796 (SMBGhost)' % (target['hostname'], target['port']),

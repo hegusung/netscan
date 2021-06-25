@@ -96,7 +96,7 @@ def httpscan_worker(target, actions, useragent, header_dict, http_auth, cookie_d
                     if ignored_code != None:
                         excluded_code_arg.append(ignored_code)
 
-                    args = ({}, useragent, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg)
+                    args = ({}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg)
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
     except ConnectionRefusedError:
         pass

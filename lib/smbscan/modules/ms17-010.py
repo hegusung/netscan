@@ -24,7 +24,7 @@ class Module:
             vuln_info = {
                 'hostname': target['hostname'],
                 'port': target['port'],
-                'service': 'http',
+                'service': 'smb',
                 'url': 'smb://%s:%d' % (target['hostname'], target['port']),
                 'name': 'MS17-010 (EternalBlue)',
                 'description': 'Server smb://%s:%d is vulnerable to MS17-010 (EternalBlue)' % (target['hostname'], target['port']),

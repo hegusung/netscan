@@ -66,7 +66,12 @@ class SMBScan:
         try:
             if username == None or username == '':
                 self.conn.login('' , '')
-                self.is_admin = self.check_if_admin(domain, '', '', hash)
+                try:
+                    self.is_admin = self.check_if_admin(domain, '', '', hash)
+                except impacket.nmb.NetBIOSError:
+                    self.is_admin = False
+                except impacket.smbconnection.SessionError as e:
+                    self.is_admin = False
                 self.creds = {'username': '', 'password': '', 'domain': domain}
                 success = True
             else:
@@ -94,6 +99,11 @@ class SMBScan:
                 pass
             else:
                 raise AuthFailure(error)
+        except impacket.nmb.NetBIOSTimeout:
+            success = False
+        except TypeError:
+            # occurs when a SMB SessionError: STATUS_LOGON_FAILURE in another exception
+            success = False
         except Exception as e:
             Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             pass
@@ -137,7 +147,7 @@ class SMBScan:
             self.smbv1 = True
 
             return True
-        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError) as e:
+        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout) as e:
             try:
                 self.conn = SMBConnection(self.hostname, self.hostname, None, timeout=self.timeout, preferredDialect=SMB2_DIALECT_21)
                 self.smbv1 = False
