@@ -92,7 +92,6 @@ class WMIEXEC:
                 self.__smbconnection.getFile(self.__share, self.__output, output_callback)
                 break
             except Exception as e:
-                print(e)
                 if str(e).find('STATUS_SHARING_VIOLATION') >=0:
                     # Output not finished, let's wait
                     sleep(2)
