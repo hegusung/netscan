@@ -226,6 +226,19 @@ def smbscan_worker(target, actions, creds, timeout):
                         entries = smbscan.dump_sam()
                         for entry in entries:
                             output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
+
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'smb',
+                                'url': smbscan.url(),
+                                'type': 'hash',
+                                'format': 'ntlm',
+                                'username': entry['username'],
+                                'hash': entry['hash'],
+                            }
+                            DB.insert_credential(cred_info)
+
                         Output.highlight({'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
@@ -280,6 +293,36 @@ def smbscan_worker(target, actions, creds, timeout):
                             Output.error({'target': smbscan.url(), 'message': 'Enum admins: Access denied'})
                         else:
                             raise e
+                if 'apps' in actions:
+                    output = smbscan.exec("wmic product get name,version,installdate", exec_method=None, get_output=True)
+                    if output:
+                        msg = "Applications:\n"
+                        app_items = output.encode().decode('utf16').split('\n')[1:]
+                        for app in app_items:
+                            items = app.split()
+
+                            if len(items) == 0:
+                                continue
+
+                            installdate = items[0]
+                            version = items[-1]
+                            name = ' '.join(items[1:-1])
+
+                            msg += "- %s %s (%s)\n" % (name.ljust(30), version.ljust(15), installdate)
+
+                            db_info = {
+                                'hostname': target['hostname'],
+                                'port': 445,
+                                'url': smbscan.url(),
+                                'name': name,
+                                'version': version,
+                                'installdate': installdate,
+                            }
+                            DB.insert_application(db_info)
+
+                        Output.highlight({'target': smbscan.url(), 'message': msg})
+                    else:
+                        Output.error({'target': smbscan.url(), 'message': 'Failed to dump applications'})
                 if 'passpol' in actions:
                     try:
                         password_policy = smbscan.enum_password_policy()
@@ -355,19 +398,19 @@ def smbscan_worker(target, actions, creds, timeout):
                     args = (timeout,)
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
             if 'simple_bruteforce' in actions:
-                if 'username_file' in actions['bruteforce'] != None:
+                if 'username_file' in actions['simple_bruteforce'] != None:
                     Output.highlight({'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})
 
                     if 'domain' in creds:
                         domain = creds['domain']
                     else:
                         domain = 'WORKGROUP'
-                    username_file = actions['bruteforce']['username_file']
-                    bruteforce_workers = actions['bruteforce']['workers']
+                    username_file = actions['simple_bruteforce']['username_file']
+                    bruteforce_workers = actions['simple_bruteforce']['workers']
 
                     # The generator will provide a username:password_list couple
                     gen = bruteforce_generator(target, domain, username_file, None, simple_bruteforce=True)
-                    gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
+                    gen_size = bruteforce_generator_count(target, domain, username_file, None)
 
                     args = (timeout,)
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])

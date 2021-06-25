@@ -23,6 +23,7 @@ es_ids = {
     'script': 'script_{session}_{ip}_{protocol}_{port}_{name}',
     'http': 'http_{session}_{url}',
     'content': 'content_{session}_{url}_{share}_{path}',
+    'application': 'application_{session}_{url}_{name}_{version}',
     'database': 'database_{session}_{url}_{account}_{database}_{table}',
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
@@ -342,6 +343,40 @@ class DB:
                 append = {'tags': doc['tags']}
                 del doc['tags']
                 doc['append'] = append
+            self.send(doc)
+
+    @classmethod
+    def insert_application(self, application_doc):
+        application_doc['doc_type'] = 'application'
+        application_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        application_doc = check_entry(application_doc, ['url', 'name', 'version', 'installdate'], [])
+
+        to_insert = []
+        if check_ip(application_doc['hostname']):
+            # 'host' is an IP
+            application_doc['ip'] = application_doc['hostname']
+            del application_doc['hostname']
+
+            to_insert.append(application_doc)
+        else:
+            # 'host' is an IP
+            ip_list = resolve_hostname(application_doc['hostname'])
+
+            for ip in ip_list:
+                # insert hostname in DNS database
+                self.insert_dns({
+                    'source': application_doc['hostname'],
+                    'query_type': 'A',
+                    'target': ip,
+                })
+
+                application_doc_tmp = copy(application_doc)
+                application_doc_tmp['ip'] = ip
+                del application_doc_tmp['hostname']
+
+                to_insert.append(application_doc_tmp)
+
+        for doc in to_insert:
             self.send(doc)
 
     @classmethod
