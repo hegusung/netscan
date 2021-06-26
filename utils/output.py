@@ -1,7 +1,10 @@
 import sys
+import os
+import copy
 from datetime import datetime
 from multiprocessing import Queue, Manager
 from threading import Thread
+from utils.config import Config
 import tqdm
 from tqdm import tqdm
 
@@ -24,6 +27,7 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 time_format = "%Y/%m/%d %H:%M:%S"
+log_time_format = "%Y%m%d"
 simple_output_format =         "[{time}]     {color}{message}{reset}"
 target_output_format =         "[{time}]     {color}{target:50} {message}{reset}"
 http_output_format =           "[{time}]     {color}{target:50} {code}   {server:40} {title}{reset}"
@@ -49,8 +53,6 @@ class Output:
     def stop(self):
         self.output_queue.put(None)
         self.output_thread.join()
-        #self.output_queue.close()
-        #self.output_queue.cancel_join_thread()
 
     @classmethod
     def write(self, message):
@@ -99,6 +101,24 @@ class Output:
         self.write(message)
 
     @classmethod
+    def log(self, message, output_format):
+        if Config.config.get('Logging', 'enabled') in ['true', 'True']:
+            script_name = os.path.basename(sys.argv[0]).split('.')[0]
+            now = datetime.now()
+
+            log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), Config.config.get('Logging', 'folder'), "log_%s_%s.log" % (script_name, now.strftime(log_time_format)))
+
+            # remove all colors
+            message['color'] = ''
+            message['reset'] = ''
+
+            message = output_format.format(**message)
+
+            logfile = open(log_path, 'a')
+            logfile.write(message + '\n')
+            logfile.close()
+
+    @classmethod
     def color(self, message, message_type):
         if message_type in ['vuln', 'major']:
             message['color'] = RED
@@ -131,6 +151,8 @@ class Output:
                 now = datetime.now()
                 message['time'] = now.strftime(time_format)
 
+            # Select the correct formating
+
             if 'message_type' in message and message['message_type'] == 'http':
                 output_format = http_output_format
             elif 'message_type' in message and message['message_type'] == 'dns':
@@ -154,6 +176,9 @@ class Output:
                 message_type = message['type']
             else:
                 message_type = None
+
+            # Log to a file before coloring
+            self.log(message, output_format)
 
             self.color(message, message_type)
 
