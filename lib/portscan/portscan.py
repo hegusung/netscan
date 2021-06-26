@@ -25,7 +25,7 @@ def portscan_worker(target, service_scan, actions, timeout):
                     service_check = portscan.service_check()
                 for t, output in service_check:
                     if t == 'port':
-                        output["message_type"] = "port_service"
+                        output["message_type"] = "port"
                         output["target"] = "%s:%d" % (target['hostname'], target['port'])
                         Output.write(output)
                         data = {
