@@ -14,29 +14,21 @@ from utils.dispatch import pg_lock
 tqdm.set_lock(pg_lock)
 
 # Colors:
-GREY = "\033[90m"
-LIGHT_GREY = "\033[37m"
-RED = "\033[91m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-BLUE = "\033[94m"
-MAGENTA = "\033[95m"
-CYAN = "\033[96m"
-WHITE = "\033[97m"
-BOLD = "\033[1m"
+color_dict = {
+    'grey': "\033[90m",
+    'light_grey': "\033[37m",
+    'red': "\033[91m",
+    'green': "\033[92m",
+    'yellow': "\033[93m",
+    'blue': "\033[94m",
+    'magenta': "\033[95m",
+    'cyan': "\033[96m",
+    'white': "\033[97m",
+    'bold': "\033[1m",
+}
 RESET = "\033[0m"
 
-time_format = "%Y/%m/%d %H:%M:%S"
 log_time_format = "%Y%m%d"
-simple_output_format =         "[{time}]     {color}{message}{reset}"
-target_output_format =         "[{time}]     {color}{target:50} {message}{reset}"
-http_output_format =           "[{time}]     {color}{target:50} {code}   {server:40} {title}{reset}"
-dns_output_format =            "[{time}]     {color}{target:50} {query_type:5}   {resolved}{reset}"
-port_service_output_format =   "[{time}]     {color}{target:50} {service:30} {version}{reset}"
-smb_output_format =            "[{time}]     {color}{target:50} {domain:30} {hostname:30} {server_os}{reset}"
-mssql_output_format =          "[{time}]     {color}{target:50} {version}{reset}"
-mysql_output_format =          "[{time}]     {color}{target:50} {version}{reset}"
-postgresql_output_format =     "[{time}]     {color}{target:50} {version}{reset}"
 
 class Output:
 
@@ -120,19 +112,22 @@ class Output:
 
     @classmethod
     def color(self, message, message_type):
-        if message_type in ['vuln', 'major']:
-            message['color'] = RED
-        elif message_type in ['success']:
-            message['color'] = GREEN
-        elif message_type in ['highlight']:
-            message['color'] = YELLOW
-        elif message_type in ['minor']:
-            message['color'] = BLUE
-        elif message_type in ['error']:
-            message['color'] = BOLD + RED
-        else:
-            message['color'] = WHITE
+        try:
+            color = Config.config.get('Color', message_type)
+        except KeyError:
+            color = 'normal'
 
+        color_pattern = ''
+        for c in color.split():
+            try:
+                color_pattern += color_dict[c]
+            except:
+                pass
+
+        if len(color_pattern) == 0:
+            color_pattern = color_dict['white']
+
+        message['color'] = color_pattern
         message['reset'] = RESET
 
         return message
@@ -149,33 +144,21 @@ class Output:
 
             if not 'time' in message:
                 now = datetime.now()
-                message['time'] = now.strftime(time_format)
+                message['time'] = now.strftime(Config.config.get('Format', 'time'))
 
             # Select the correct formating
-
-            if 'message_type' in message and message['message_type'] == 'http':
-                output_format = http_output_format
-            elif 'message_type' in message and message['message_type'] == 'dns':
-                output_format = dns_output_format
-            elif 'message_type' in message and message['message_type'] == 'port_service':
-                output_format = port_service_output_format
-            elif 'message_type' in message and message['message_type'] == 'smb':
-                output_format = smb_output_format
-            elif 'message_type' in message and message['message_type'] == 'mssql':
-                output_format = mssql_output_format
-            elif 'message_type' in message and message['message_type'] == 'mysql':
-                output_format = mysql_output_format
-            elif 'message_type' in message and message['message_type'] == 'postgresql':
-                output_format = postgresql_output_format
-            elif 'target' in message:
-                output_format = target_output_format
-            else:
-                output_format = simple_output_format
-
+            try:
+                output_format = Config.config.get('Format', message['message_type'])
+            except KeyError:
+                if 'target' in message:
+                    output_format = Config.config.get('Format', 'target')
+                else:
+                    output_format = Config.config.get('Format', 'default')
+ 
             if 'type' in message:
                 message_type = message['type']
             else:
-                message_type = None
+                message_type = 'normal'
 
             # Log to a file before coloring
             self.log(message, output_format)

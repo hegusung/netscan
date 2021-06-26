@@ -6,7 +6,7 @@ class Config:
 
     @classmethod
     def load_config(self):
-        self.config = configparser.ConfigParser()
+        self.config = configparser.ConfigParser(interpolation=None)
 
         if os.path.isfile(os.path.join(os.path.dirname(sys.argv[0]), 'config.cfg')):
             self.config.read(os.path.join(os.path.dirname(sys.argv[0]), 'config.cfg'))
