@@ -292,14 +292,18 @@ class SMBScan:
                     if not filepath.endswith('\\'):
                         filepath = "%s\\" % filepath
 
-                    yield {'type': 'folder', 'name': filepath}
+                    #yield {'type': 'folder', 'name': filepath}
 
                     if recurse <= 0:
-                        #yield {'type': 'folder', 'name': filepath}
+                        yield {'type': 'folder', 'name': filepath}
                         pass
                     else:
+                        c = False
                         for data in self.list_content(path=filepath, share=share, recurse=recurse-1):
+                            c = True
                             yield data
+                        if not c:
+                            yield {'type': 'folder', 'name': filepath}
 
             #if not has_content and path != '\\':
             #    yield {'type': 'folder', 'name': path}
