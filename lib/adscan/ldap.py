@@ -1,4 +1,7 @@
 import ldap3
+import binascii
+from utils.structure import Structure
+from Cryptodome.Hash import MD4
 
 class LDAPScan:
 
@@ -215,3 +218,72 @@ class LDAPScan:
                 dns_entry = ".".join([item.split("=", 1)[-1] for item in dn.split(',') if item.split("=",1)[0].lower() == "dc"])
                 if not '.in-addr.arpa' in dns_entry:
                     yield dns_entry
+
+    def list_gMSA(self):
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                                  search_filter='(&(ObjectClass=msDS-GroupManagedServiceAccount))',
+                                  search_scope=ldap3.SUBTREE,
+                                  attributes=['distinguishedName', 'sAMAccountName','msDS-ManagedPassword'],
+                                  get_operational_attributes=True,
+                                  paged_size = 100,
+                                  generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
+
+                domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
+                username = attr['sAMAccountName']
+                data = attr['msDS-ManagedPassword'].raw_values[0]
+                blob = MSDS_MANAGEDPASSWORD_BLOB()
+                blob.fromString(data)
+                hash = MD4.new ()
+                hash.update (blob['CurrentPassword'][:-2])
+                passwd = binascii.hexlify(hash.digest()).decode("utf-8")
+
+                yield {
+                    'domain': domain,
+                    'username': username,
+                    'password': passwd,
+                }
+
+
+# Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
+
+class MSDS_MANAGEDPASSWORD_BLOB(Structure):
+    structure = (
+        ('Version','<H'),
+        ('Reserved','<H'),
+        ('Length','<L'),
+        ('CurrentPasswordOffset','<H'),
+        ('PreviousPasswordOffset','<H'),
+        ('QueryPasswordIntervalOffset','<H'),
+        ('UnchangedPasswordIntervalOffset','<H'),
+        ('CurrentPassword',':'),
+        ('PreviousPassword',':'),
+        #('AlignmentPadding',':'),
+        ('QueryPasswordInterval',':'),
+        ('UnchangedPasswordInterval',':'),
+    )
+
+    def __init__(self, data = None):
+        Structure.__init__(self, data = data)
+
+    def fromString(self, data):
+        Structure.fromString(self,data)
+
+        if self['PreviousPasswordOffset'] == 0:
+            endData = self['QueryPasswordIntervalOffset']
+        else:
+            endData = self['PreviousPasswordOffset']
+
+        self['CurrentPassword'] = self.rawData[self['CurrentPasswordOffset']:][:endData - self['CurrentPasswordOffset']]
+        if self['PreviousPasswordOffset'] != 0:
+            self['PreviousPassword'] = self.rawData[self['PreviousPasswordOffset']:][:self['QueryPasswordIntervalOffset']-self['PreviousPasswordOffset']]
+
+        self['QueryPasswordInterval'] = self.rawData[self['QueryPasswordIntervalOffset']:][:self['UnchangedPasswordIntervalOffset']-self['QueryPasswordIntervalOffset']]
+        self['UnchangedPasswordInterval'] = self.rawData[self['UnchangedPasswordIntervalOffset']:]
