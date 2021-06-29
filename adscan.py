@@ -33,7 +33,8 @@ def main():
     # Bruteforce
     parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', const='nofile', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
     # Dump
-    parser.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
+    parser.add_argument("--gmsa", action='store_true', help="[Admin required] Dump gMSA passwords")
+    parser.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="[Admin required] dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
     parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules', default=None, dest='modules')
@@ -99,6 +100,8 @@ def main():
         actions['passpol'] = {}
     if args.users_brute:
         actions['users_brute'] = {'username_file': args.users_brute}
+    if args.gmsa:
+        actions['dump_gmsa'] = {}
     if args.ntds:
         actions['dump_ntds'] = {'method': args.ntds}
     if args.modules:
