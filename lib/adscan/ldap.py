@@ -219,6 +219,7 @@ class LDAPScan:
                 if not '.in-addr.arpa' in dns_entry:
                     yield dns_entry
 
+    # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
     def dump_gMSA(self):
         entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
                                   search_filter='(&(ObjectClass=msDS-GroupManagedServiceAccount))',
@@ -234,8 +235,6 @@ class LDAPScan:
                 except KeyError:
                     continue
 
-                # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
-
                 domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
                 username = attr['sAMAccountName']
                 data = attr['msDS-ManagedPassword'].raw_values[0]
@@ -250,6 +249,34 @@ class LDAPScan:
                     'username': username,
                     'password': passwd,
                 }
+
+    # Taken from https://github.com/n00py/LAPSDumper/blob/main/laps.py
+    def dump_LAPS(self):
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                                  search_filter='(&(objectCategory=computer)(ms-MCS-AdmPwd=*))',
+                                  search_scope=ldap3.SUBTREE,
+                                  attributes=['distinguishedName', 'ms-MCS-AdmPwd', 'SAMAccountname'],
+                                  get_operational_attributes=True,
+                                  paged_size = 100,
+                                  generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
+                username = attr['sAMAccountName']
+                passwd = attr['ms-Mcs-AdmPwd']
+
+                yield {
+                    'domain': domain,
+                    'username': username,
+                    'password': passwd,
+                }
+
+
 
 
 # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py

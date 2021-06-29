@@ -34,6 +34,7 @@ def main():
     parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', const='nofile', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
     # Dump
     parser.add_argument("--gmsa", action='store_true', help="[Admin required] Dump gMSA passwords")
+    parser.add_argument("--laps", action='store_true', help="[Admin required] Dump LAPS passwords")
     parser.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="[Admin required] dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
@@ -102,6 +103,8 @@ def main():
         actions['users_brute'] = {'username_file': args.users_brute}
     if args.gmsa:
         actions['dump_gmsa'] = {}
+    if args.laps:
+        actions['dump_laps'] = {}
     if args.ntds:
         actions['dump_ntds'] = {'method': args.ntds}
     if args.modules:
