@@ -219,7 +219,7 @@ class LDAPScan:
                 if not '.in-addr.arpa' in dns_entry:
                     yield dns_entry
 
-    def list_gMSA(self):
+    def dump_gMSA(self):
         entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
                                   search_filter='(&(ObjectClass=msDS-GroupManagedServiceAccount))',
                                   search_scope=ldap3.SUBTREE,
