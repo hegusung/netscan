@@ -361,7 +361,20 @@ def adscan_worker(target, actions, creds, timeout):
                             'hash': entry['hash'],
                         })
                         """
+            if 'dump_laps' in actions:
+                if ldap_authenticated:
+                    for entry in ldapscan.dump_LAPS():
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['password'])})
 
+                        # TODO: insert in database
+                        """
+                        DB.insert_domain_user({
+                            'domain': entry['domain'],
+                            'username': entry['username'],
+                            'hash': entry['hash'],
+                        })
+                        """
             if 'dump_ntds' in actions:
                 if smb_authenticated:
                     try:
