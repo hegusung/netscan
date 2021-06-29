@@ -103,6 +103,9 @@ class LDAPScan:
             else:
                 continue
 
+            if 'admincount' in attr and attr['admincount'] > 0:
+                tags.append('admincount>0')
+
             yield {
                 'domain': domain,
                 'username': username,
@@ -146,6 +149,9 @@ class LDAPScan:
                 members = attr['member']
             else:
                 members = []
+
+            if 'admincount' in attr and attr['admincount'] > 0:
+                tags.append('admincount>0')
 
             yield {
                 'domain': domain,
