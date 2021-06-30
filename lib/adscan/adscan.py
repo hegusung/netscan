@@ -330,6 +330,12 @@ def adscan_worker(target, actions, creds, timeout):
                 else:
                     raise NotImplementedError('Dumping hosts through SMB')
 
+            if 'gpos' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Vulnerable GPOs:'})
+                if smb_authenticated and ldap_authenticated:
+                    for entry in ldapscan.list_writable_GPOs(smbscan):
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(40), entry['path'])})
+
             if 'users_brute' in actions:
                 # Technically only needs kerberos but well....
                 if smb_available:

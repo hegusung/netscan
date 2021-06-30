@@ -1,7 +1,10 @@
 import ldap3
+import re
 import binascii
 from utils.structure import Structure
 from Cryptodome.Hash import MD4
+import impacket
+from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
 
 class LDAPScan:
 
@@ -327,6 +330,46 @@ class LDAPScan:
                         yield {
                             'algo': "Unknown cert encoding: %s" % cert_dict['encoding'],
                             'common_names': [],
+                        }
+
+    def list_writable_GPOs(self, smbscan):
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                          search_filter="(objectCategory=groupPolicyContainer)",
+                          search_scope=ldap3.SUBTREE,
+                          attributes=ldap3.ALL_ATTRIBUTES,
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        share_pattern = re.compile("\\\\\\\\([^\\\\]+)\\\\([^\\\\]+)(\\\\.*)")
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                gpo_path = attr["gPCFileSysPath"]
+                m = share_pattern.match(gpo_path)
+
+                if m:
+                    tid = None
+                    fid = None
+                    try:
+                        tid = smbscan.conn.connectTree(m.group(2))
+                        fid = smbscan.conn.openFile(tid, m.group(3) + "\\GPT.INI", desiredAccess=FILE_READ_DATA | FILE_WRITE_DATA)
+                        smbscan.conn.closeFile(tid, fid)
+
+                        writable = True
+                    except impacket.smb.SessionError:
+                        writable = False
+                    except impacket.smbconnection.SessionError:
+                        writable = False
+
+                    if writable:
+                        yield {
+                            'name': attr['displayName'],
+                            'path': attr['gPCFileSysPath'],
                         }
 
     # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
