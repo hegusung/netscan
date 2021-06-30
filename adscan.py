@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
     parser.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
     parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
+    parser.add_argument("--trusts", action='store_true', help='dump trusts from Active Directory')
+    parser.add_argument("--cacerts", action='store_true', help='List CA certificates from Active Directory')
     # Bruteforce
     parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', const='nofile', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
     # Dump
@@ -99,6 +101,10 @@ def main():
         actions['spns'] ={}
     if args.passpol:
         actions['passpol'] = {}
+    if args.trusts:
+        actions['trusts'] = {}
+    if args.cacerts:
+        actions['cacerts'] = {}
     if args.users_brute:
         actions['users_brute'] = {'username_file': args.users_brute}
     if args.gmsa:

@@ -150,6 +150,7 @@ class LDAPScan:
             else:
                 members = []
 
+            tags = []
             if 'admincount' in attr and attr['admincount'] > 0:
                 tags.append('admincount>0')
 
@@ -161,6 +162,7 @@ class LDAPScan:
                 'rid': rid,
                 'dn': dn,
                 'members': members,
+                'tags': tags,
             }
 
     def list_hosts(self):
@@ -225,11 +227,114 @@ class LDAPScan:
                 if not '.in-addr.arpa' in dns_entry:
                     yield dns_entry
 
+    def list_trusts(self):
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                          search_filter="(objectClass=trustedDomain)",
+                          search_scope=ldap3.SUBTREE,
+                          attributes=ldap3.ALL_ATTRIBUTES,
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                domain = attr['name']
+
+                if attr['trustDirection'] == 0:
+                    direction = 'Disabled'
+                elif attr['trustDirection'] == 1:
+                    direction = 'Incoming'
+                elif attr['trustDirection'] == 2:
+                    direction = 'Outgoing'
+                elif attr['trustDirection'] == 3:
+                    direction = 'Bidirectional'
+                else:
+                    direction = 'Unknown'
+
+                if attr['trustType'] == 1:
+                    trust_type = 'Windows NT'
+                elif attr['trustType'] == 2:
+                    trust_type = 'Active Directory'
+                elif attr['trustType'] == 3:
+                    trust_type = 'MIT/KRB realm trust'
+                else:
+                    trust_type = 'Unknown'
+
+                tags = []
+                if attr['trustAttributes'] & 1 != 0:
+                    tags.append('Non-Transitive')
+                if attr['trustAttributes'] & 2 != 0:
+                    tags.append('Uplevel clients only (Windows 2000 or newer)')
+                if attr['trustAttributes'] & 4 != 0:
+                    tags.append('Quarantined Domain (External)')
+                if attr['trustAttributes'] & 8 != 0:
+                    tags.append('Forest Trust')
+                if attr['trustAttributes'] & 16 != 0:
+                    tags.append('Cross-Organizational Trust (Selective Authentication)')
+                if attr['trustAttributes'] & 32 != 0:
+                    tags.append('Intra-Forest Trust (trust within the forest)')
+                if attr['trustAttributes'] & 64 != 0:
+                    tags.append('Inter-Forest Trust (trust with another forest)')
+
+                yield {
+                    'domain': domain,
+                    'direction': direction,
+                    'type': trust_type,
+                    'tags': tags,
+                }
+
+    def list_cacerts(self):
+        entry_generator = self.conn.extend.standard.paged_search(search_base='CN=NTAuthCertificates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext,
+                          search_filter="(cn=*)",
+                          search_scope=ldap3.SUBTREE,
+                          attributes=ldap3.ALL_ATTRIBUTES,
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                for cert_dict in attr['cACertificate']:
+                    if cert_dict['encoding'] == 'base64':
+                        b64_cert = "-----BEGIN CERTIFICATE-----\n%s\n-----END CERTIFICATE-----" % cert_dict['encoded']
+                        cert = x509.load_pem_x509_certificate(b64_cert.encode(), default_backend())
+
+                        common_names = [cn.value for cn in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
+
+                        public_key = cert.public_key()
+                        if type(public_key) in [RSAPublicKey, _RSAPublicKey]:
+                            cert_algo = "RSA %d" % public_key.key_size
+                        elif type(public_key) in [DSAPublicKey, _DSAPublicKey]:
+                            cert_algo = "DSA %d" % public_key.key_size
+                        elif type(public_key) in [EllipticCurvePublicKey, _EllipticCurvePublicKey]:
+                            cert_algo = "EC %d" % public_key.key_size
+                        else:
+                            cert_algo = "Unknown: %s" % type(public_key)
+
+                        yield {
+                            'algo': cert_algo,
+                            'common_names': common_names,
+                        }
+                    else:
+                        yield {
+                            'algo': "Unknown cert encoding: %s" % cert_dict['encoding'],
+                            'common_names': [],
+                        }
+
     # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
     def dump_gMSA(self):
         entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
                                   search_filter='(&(ObjectClass=msDS-GroupManagedServiceAccount))',
                                   search_scope=ldap3.SUBTREE,
+                                  #attributes=ldap3.ALL_ATTRIBUTES,
                                   attributes=['distinguishedName', 'sAMAccountName','msDS-ManagedPassword'],
                                   get_operational_attributes=True,
                                   paged_size = 100,
@@ -240,15 +345,24 @@ class LDAPScan:
                     attr = obj_info['attributes']
                 except KeyError:
                     continue
+                try:
+                    raw_attr = obj_info['raw_attributes']
+                except KeyError:
+                    continue
 
                 domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
                 username = attr['sAMAccountName']
-                data = attr['msDS-ManagedPassword'].raw_values[0]
-                blob = MSDS_MANAGEDPASSWORD_BLOB()
-                blob.fromString(data)
-                hash = MD4.new ()
-                hash.update (blob['CurrentPassword'][:-2])
-                passwd = binascii.hexlify(hash.digest()).decode("utf-8")
+                try:
+                    data = obj_info['raw_attributes']['msDS-ManagedPassword'][0]
+                    blob = MSDS_MANAGEDPASSWORD_BLOB()
+                    blob.fromString(data)
+                    hash = MD4.new ()
+                    hash.update (blob['CurrentPassword'][:-2])
+                    passwd = binascii.hexlify(hash.digest()).decode("utf-8")
+                except KeyError:
+                    passwd = 'Error: No msDS-ManagedPassword entry in LDAP'
+                except IndexError:
+                    passwd = 'Error: No msDS-ManagedPassword entry in LDAP'
 
                 yield {
                     'domain': domain,
@@ -261,7 +375,8 @@ class LDAPScan:
         entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
                                   search_filter='(&(objectCategory=computer)(ms-MCS-AdmPwd=*))',
                                   search_scope=ldap3.SUBTREE,
-                                  attributes=['distinguishedName', 'ms-MCS-AdmPwd', 'SAMAccountname'],
+                                  attributes=ldap3.ALL_ATTRIBUTES,
+                                  #attributes=['distinguishedName', 'ms-MCS-AdmPwd', 'SAMAccountname'],
                                   get_operational_attributes=True,
                                   paged_size = 100,
                                   generator=True)
@@ -273,6 +388,7 @@ class LDAPScan:
                     continue
 
                 domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
+                dns = attr['dNSHostName']
                 username = attr['sAMAccountName']
                 passwd = attr['ms-Mcs-AdmPwd']
 
@@ -280,10 +396,8 @@ class LDAPScan:
                     'domain': domain,
                     'username': username,
                     'password': passwd,
+                    'dns': dns,
                 }
-
-
-
 
 # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
 
