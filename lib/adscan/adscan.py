@@ -6,6 +6,7 @@ import struct
 import copy
 
 import dns.resolver
+from ldap3.core.exceptions import LDAPSocketSendError
 
 from lib.smbscan.smb import SMBScan
 from .ldap import LDAPScan
@@ -107,12 +108,17 @@ def adscan_worker(target, actions, creds, timeout):
         # == LDAP check ==
         try:
 
-            # TODO: switch to ssl
-            ldapscan = LDAPScan(target['hostname'], 389, timeout)
             domain = creds['domain'] if 'domain' in creds else None
             username = creds['username'] if 'username' in creds else None
             password = creds['password'] if 'password' in creds else None
-            success, ldap_info = ldapscan.connect(domain, username, password)
+            try:
+                ldapscan = LDAPScan(target['hostname'], 636, timeout, ssl=True)
+                success, ldap_info = ldapscan.connect(domain, username, password)
+            except LDAPSocketSendError:
+                Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
+                ldapscan = LDAPScan(target['hostname'], 389, timeout)
+                success, ldap_info = ldapscan.connect(domain, username, password)
+
             if success:
                 ldap_available = True
                 ldap_authenticated = True
@@ -179,10 +185,11 @@ def adscan_worker(target, actions, creds, timeout):
                             'rid': entry['rid'],
                             'dn': entry['dn'],
                             'members': entry['members'],
+                            'tags': entry['tags'],
                         })
 
                         group = '%s\\%s' % (entry['domain'], entry['groupname'])
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s' % (group.ljust(40), len(entry['members']), entry['comment'])})
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s  [%s]' % (group.ljust(40), len(entry['members']), entry['comment'].ljust(30), ",".join(entry['tags']))})
                 else:
                     raise NotImplementedError('Dumping groups through SMB')
             if 'hosts' in actions:
@@ -307,6 +314,22 @@ def adscan_worker(target, actions, creds, timeout):
                             Output.write({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
                         else:
                             raise e
+            if 'trusts' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Trusts:'})
+                if ldap_authenticated:
+                    for entry in ldapscan.list_trusts():
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s   [%s]' % (entry['domain'].ljust(30), entry['direction'].ljust(20), entry['type'].ljust(20), ','.join(entry['tags']))})
+                else:
+                    raise NotImplementedError('Dumping hosts through SMB')
+
+            if 'cacerts' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'CA certs:'})
+                if ldap_authenticated:
+                    for entry in ldapscan.list_cacerts():
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['algo'].ljust(30), ','.join(entry['common_names']))})
+                else:
+                    raise NotImplementedError('Dumping hosts through SMB')
+
             if 'users_brute' in actions:
                 # Technically only needs kerberos but well....
                 if smb_available:
@@ -349,23 +372,28 @@ def adscan_worker(target, actions, creds, timeout):
                         raise e
             if 'dump_gmsa' in actions:
                 if ldap_authenticated:
-                    for entry in ldapscan.dump_gMSA():
-                        user = '%s\\%s' % (entry['domain'], entry['username'])
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['password'])})
+                    if ldapscan.ssl:
+                        Output.highlight({'target': smbscan.url(), 'message': 'gMSA entries:'})
+                        for entry in ldapscan.dump_gMSA():
+                            user = '%s\\%s' % (entry['domain'], entry['username'])
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['password'])})
 
-                        # TODO: insert in database
-                        """
-                        DB.insert_domain_user({
-                            'domain': entry['domain'],
-                            'username': entry['username'],
-                            'hash': entry['hash'],
-                        })
-                        """
+                            # TODO: insert in database
+                            """
+                            DB.insert_domain_user({
+                                'domain': entry['domain'],
+                                'username': entry['username'],
+                                'hash': entry['hash'],
+                            })
+                            """
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': '--gmsa requires to connect to LDAP using SSL, it is probably not available here :('})
             if 'dump_laps' in actions:
                 if ldap_authenticated:
+                    Output.highlight({'target': smbscan.url(), 'message': 'LAPS entries:'})
                     for entry in ldapscan.dump_LAPS():
                         user = '%s\\%s' % (entry['domain'], entry['username'])
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['password'])})
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (user.ljust(40), entry['dns'].ljust(40), entry['password'])})
 
                         # TODO: insert in database
                         """
