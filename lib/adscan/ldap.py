@@ -5,6 +5,12 @@ from utils.structure import Structure
 from Cryptodome.Hash import MD4
 import impacket
 from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
+from pyasn1.type.namedtype import NamedTypes, NamedType
+from pyasn1.type.univ import Sequence, OctetString, Integer
+from ldap3.protocol.controls import build_control
+from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
+
+from lib.adscan.accesscontrol import parse_accesscontrol
 
 class LDAPScan:
 
@@ -16,6 +22,8 @@ class LDAPScan:
 
         self.server = ldap3.Server(self.hostname, port=self.port, get_info=ldap3.ALL, connect_timeout=self.timeout, use_ssl=self.ssl)
         self.conn = None
+
+        self.username = None
 
     def url(self):
         method = "ldaps" if self.ssl else "ldap"
@@ -42,6 +50,7 @@ class LDAPScan:
                 if type(dnsHostName) == list:
                     dnsHostName = "; ".join(dnsHostName)
                 self.current_domain = ".".join([item.split("=", 1)[-1] for item in self.defaultdomainnamingcontext.split(',') if item.split("=",1)[0].lower() == "dc"])
+                self.username = username
 
                 return True, {'dns_hostname': dnsHostName, 'default_domain_naming_context': self.defaultdomainnamingcontext}
             else:
@@ -100,7 +109,7 @@ class LDAPScan:
                 if attr['userAccountControl'] & 0x10000 != 0:
                     tags.append('Password never expire')
                 if attr['userAccountControl'] & 0x400000 != 0:
-                    tags.append('Don\'t require pre-auth')
+                    tags.append('Do not require pre-auth')
                 if attr['userAccountControl'] & 0x80000 != 0:
                     tags.append('Trusted to auth for delegation')
             else:
@@ -371,6 +380,127 @@ class LDAPScan:
                             'name': attr['displayName'],
                             'path': attr['gPCFileSysPath'],
                         }
+
+    def list_acls(self):
+        class SdFlags(Sequence):
+             # SDFlagsRequestValue ::= SEQUENCE {
+             #     Flags    INTEGER
+             # }
+            componentType = NamedTypes(NamedType('Flags', Integer())
+        )
+
+        def get_sd_controls(sdflags=0x04):
+            sdcontrol = SdFlags()
+            sdcontrol.setComponentByName('Flags', sdflags)
+            controls = [build_control('1.2.840.113556.1.4.801', True, sdcontrol)]
+            return controls
+
+        # First, get all related groups
+        sid_groups = self._get_groups_recursive(self.username)
+
+        # Search all user entries
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                          search_filter="(objectClass=user)",
+                          controls=get_sd_controls(),
+                          search_scope=ldap3.SUBTREE,
+                          attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor'],
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                try:
+                    sd = obj_info['raw_attributes']['nTSecurityDescriptor'][0]
+                except IndexError:
+                    continue
+
+                domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+                name = str(attr['sAMAccountName'])
+
+                for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
+                    if ace['sid'] in sid_groups:
+                        ace['target'] = '%s\\%s' % (domain, name)
+                        yield ace
+
+        # Search all group entries
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                          search_filter="(objectClass=group)",
+                          controls=get_sd_controls(),
+                          search_scope=ldap3.SUBTREE,
+                          attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor'],
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                try:
+                    sd = obj_info['raw_attributes']['nTSecurityDescriptor'][0]
+                except IndexError:
+                    continue
+
+                domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+                name = str(attr['sAMAccountName'])
+
+                for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
+                    if ace['sid'] in sid_groups:
+                        ace['target'] = '%s\\%s' % (domain, name)
+                        yield ace
+
+    def _get_groups_recursive(self, name, groups=[], processed=[]):
+        if name.startswith('S-'):
+            search_filter="(objectsid=%s)" % name
+        elif name.startswith('CN='):
+            search_filter="(distinguishedName=%s)" % name
+        else:
+            search_filter="(&(objectClass=user)(sAMAccountName=%s))" % name
+
+        # First, get all related groups
+        new_groups = []
+
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                          search_filter=search_filter,
+                          search_scope=ldap3.SUBTREE,
+                          attributes=ldap3.ALL_ATTRIBUTES,
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                # Processed, add it to list
+                if not attr['objectSid'] in groups:
+                    groups.append(attr['objectSid'])
+
+                if 'primaryGroupID' in attr:
+                    obj_sid = attr['objectSid'].split('-')
+                    obj_sid[-1] = str(attr['primaryGroupID'])
+                    new_groups.append('-'.join(obj_sid))
+
+                if 'memberOf' in attr:
+                    for memberOf in attr['memberOf']:
+                        new_groups.append(memberOf)
+
+        for g in new_groups:
+            if not g in processed:
+                processed.append(g)
+
+                self._get_groups_recursive(g, groups=groups, processed=processed)
+
+        return groups
 
     # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
     def dump_gMSA(self):

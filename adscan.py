@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--trusts", action='store_true', help='dump trusts from Active Directory')
     parser.add_argument("--cacerts", action='store_true', help='List CA certificates from Active Directory')
     parser.add_argument("--gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory')
+    parser.add_argument("--acl", action='store_true', help='Extract ACEs/ACLs of the current user from Active Directory')
     # Bruteforce
     parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', const='nofile', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
     # Dump
@@ -108,6 +109,8 @@ def main():
         actions['cacerts'] = {}
     if args.gpos:
         actions['gpos'] = {}
+    if args.acl:
+        actions['acl'] = {}
     if args.users_brute:
         actions['users_brute'] = {'username_file': args.users_brute}
     if args.gmsa:
