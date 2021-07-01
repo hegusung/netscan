@@ -1,10 +1,13 @@
 import os.path
 import copy
+from utils.utils import detect_encoding
 
 def dir_file_count(dir_file):
     count = 0
 
-    f = open(dir_file)
+    encoding = detect_encoding(dir_file)
+
+    f = open(dir_file, encoding=encoding)
     for dir_item in f:
         dir_item = dir_item.split('#')[0].strip()
         if len(dir_item) == 0:
@@ -17,7 +20,9 @@ def dir_file_count(dir_file):
     return count
 
 def dir_bruteforce_generator(target, dir_file, extension_list):
-    f = open(dir_file)
+    encoding = detect_encoding(dir_file)
+
+    f = open(dir_file, encoding=encoding)
     for dir_item in f:
         dir_item = dir_item.split('#')[0].strip()
         if len(dir_item) == 0:

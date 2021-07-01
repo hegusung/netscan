@@ -89,12 +89,10 @@ class FTPScan:
                     if not content.endswith('/'):
                         content += '/'
 
+                    data = {'type': file_type, 'name': content}
+                    yield data
                     if recurse <= 0:
-                        data = {'type': file_type, 'name': content}
-                        if file_size != None:
-                            data['size'] = file_size
-
-                        yield data
+                        pass
                     else:
                         for data in self.list_content(path=content, recurse=recurse-1):
                             yield data
@@ -110,8 +108,8 @@ class FTPScan:
 
                     yield data
 
-            if not has_content and path != '/':
-                yield {'type': 'folder', 'name': path}
+            #if not has_content and path != '/':
+            #    yield {'type': 'folder', 'name': path}
         except ftplib.error_perm:
             return
         except ftplib.error_temp:

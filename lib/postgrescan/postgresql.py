@@ -29,25 +29,23 @@ class PostgreSQL:
     def auth(self, username, password):
         success = False
 
-        try:
-            self.conn = psycopg2.connect(host=self.hostname, port=self.port, user=username, password=password, connect_timeout=self.timeout, dbname='')
+        # A username and password must be set: if not the current user will be sent, which is not what we want....
+        if username == None:
+            username = 'postgres'
+        if password == None:
+            password = 'postgres'
 
-            self.username = username
-            self.password = password
+        self.conn = psycopg2.connect(host=self.hostname, port=self.port, user=username, password=password, connect_timeout=self.timeout, dbname='')
 
-            cur = self.conn.cursor()
-            cur.execute('SELECT version();')
+        self.username = username
+        self.password = password
 
-            version = cur.fetchall()[0][0]
+        cur = self.conn.cursor()
+        cur.execute('SELECT version();')
 
-            return True, version
-        except psycopg2.OperationalError as e:
-            if "timeout expired" in str(e) or "Connection refused" in str(e) or "server closed the connection unexpectedly" in str(e) or "Network is unreachable" in str(e):
-                raise e
-            elif "FATAL: " in str(e):
-                return False, 'Unknown'
-            else:
-                return False, str(e)
+        version = cur.fetchall()[0][0]
+
+        return True, version
 
     def list_databases(self):
         databases = []

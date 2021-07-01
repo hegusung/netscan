@@ -76,8 +76,12 @@ class MSSQLScan:
             version = "MSSQL Server 2014"
         elif version_tuple[0] == 13:
             version = "MSSQL Server 2016"
+        elif version_tuple[0] == 14:
+            version = "MSSQL Server 2017"
+        elif version_tuple[0] == 15:
+            version = "MSSQL Server 2019"
         else:
-            version = "Unknown MSSQL Version"
+            version = "Unknown MSSQL Version: %s" % version_number
 
         return {'version': version, 'version_number': version_number}
 
@@ -91,6 +95,13 @@ class MSSQLScan:
             local_auth = False
         else:
             local_auth = True
+
+        if ntlm_hash != None:
+            if not ':' in ntlm_hash:
+                ntlm_hash = 'aad3b435b51404eeaad3b435b51404ee:%s' % ntlm_hash.lower()
+
+        if password == None:
+            password = ''
 
         success = self.mssql.login(None, username, password, domain, ntlm_hash, not local_auth)
 
@@ -129,7 +140,8 @@ class MSSQLScan:
             traceback.print_exc()
 
     def list_databases(self):
-        query = "SELECT name FROM master.dbo.sysdatabases WHERE dbid > 4"
+        #query = "SELECT name FROM master.dbo.sysdatabases WHERE dbid > 4"
+        query = "SELECT name FROM master.dbo.sysdatabases"
         output = self.mssql.sql_query(query)
 
         databases = []
@@ -137,7 +149,7 @@ class MSSQLScan:
         for db in output:
             db_info = {'name': db['name']}
             tables_query = "USE %s; SELECT name FROM sys.Tables" % db["name"]
-            tables_output = mssql.sql_query(tables_query)
+            tables_output = self.mssql.sql_query(tables_query)
             tables = []
             for table in tables_output:
                 tables.append(table['name'])

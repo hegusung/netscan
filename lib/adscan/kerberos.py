@@ -19,12 +19,24 @@ class Kerberos:
         self.domain = domain
         self.__kdcHost = hostname
 
-    def check_users_dump_asreq(self, username_file):
+    def check_users_dump_asreq(self, ldap, username_file='nofile'):
+        def file_gen(username_file):
+            f = open(username_file)
+            for username in f:
+                username = username.strip()
+                yield username
+            f.close()
 
-        f = open(username_file)
-        for username in f:
-            username = username.strip()
+        def ldap_gen(ldap):
+            for entry in ldap.list_users():
+                yield entry['username']
 
+        if username_file != 'nofile':
+            gen = file_gen(username_file)
+        else:
+            gen = ldap_gen(ldap)
+
+        for username in gen:
             if ':' in username:
                 username = username.split(':')[0]
 
@@ -42,6 +54,15 @@ class Kerberos:
                 if 'KDC_ERR_C_PRINCIPAL_UNKNOWN' in str(e):
                     # No user with that name
                     continue
+                elif 'KDC_ERR_CLIENT_REVOKED':
+                    # Existing user !
+                    if '\\' in username:
+                        d = username.split('\\')[0]
+                        u = username.split('\\')[1]
+                    else:
+                        d = self.domain
+                        u = username
+                    yield {'username': u, 'domain': d}
                 elif 'UF_DONT_REQUIRE_PREAUTH' in str(e):
                     # Existing user !
                     if '\\' in username:

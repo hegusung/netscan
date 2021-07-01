@@ -1,5 +1,7 @@
 import re
+import sys
 import copy
+import csv
 from urllib.parse import urlparse
 from netaddr import *
 
@@ -38,35 +40,123 @@ def str_ports(input_str):
 """
 Creates a generator with inputs
 """
-def process_inputs(targets_str, static_inputs):
+def process_inputs(targets, static_inputs):
+    if not 'targets' in targets and not 'target_file' in targets:
+        print('Please specify a target')
+        sys.exit()
+
     static_keys = static_inputs.keys()
 
-    for target in process_targets(targets_str):
-        for key in static_keys:
-            if not key in target:
-                target[key] = static_inputs[key]
+    if 'targets' in targets:
+        for target in process_targets(targets['targets']):
+            for key in static_keys:
+                if not key in target:
+                    target[key] = static_inputs[key]
 
-        # Now yield for each item in each list
-        for t in iter_target_rec(target, list(target.keys()), 0):
-            yield t
+            # Now yield for each item in each list
+            for t in iter_target_rec(target, list(target.keys()), 0):
+                yield t
 
-def count_process_inputs(targets_str, static_inputs):
+    if 'target_file' in targets:
+        if targets['target_file'].endswith('.csv'):
+            with open(targets['target_file']) as csvfile:
+                reader = csv.reader(csvfile)
+                # skip the header
+                next(reader)
+                for row in reader:
+                    if len(row) != 0:
+                        for target in process_targets(row[0]):
+                            for key in static_keys:
+                                if not key in target:
+                                    target[key] = static_inputs[key]
+
+                            # Now yield for each item in each list
+                            for t in iter_target_rec(target, list(target.keys()), 0):
+                                yield t
+
+        else:
+            f = open(targets['target_file'])
+            for line in f:
+                line = line.strip()
+
+                if len(line) == 0:
+                    continue
+
+                for target in process_targets(line):
+                    for key in static_keys:
+                        if not key in target:
+                            target[key] = static_inputs[key]
+
+                    # Now yield for each item in each list
+                    for t in iter_target_rec(target, list(target.keys()), 0):
+                        yield t
+
+            f.close()
+
+def count_process_inputs(targets, static_inputs):
     count = 0
     static_keys = static_inputs.keys()
 
-    for target in process_targets(targets_str):
-        for key in static_keys:
-            if not key in target:
-                target[key] = static_inputs[key]
+    if 'targets' in targets:
+        for target in process_targets(targets['targets']):
+            for key in static_keys:
+                if not key in target:
+                    target[key] = static_inputs[key]
 
-        target_count = 1
-        for key in target:
-            if type(target[key]) == list:
-                target_count = target_count*len(target[key])
-            elif type(target[key]) == IPNetwork:
-                target_count = target_count*target[key].size
+            target_count = 1
+            for key in target:
+                if type(target[key]) == list:
+                    target_count = target_count*len(target[key])
+                elif type(target[key]) == IPNetwork:
+                    target_count = target_count*target[key].size
 
-        count += target_count
+            count += target_count
+
+    if 'target_file' in targets:
+        if targets['target_file'].endswith('.csv'):
+            with open(targets['target_file']) as csvfile:
+                reader = csv.reader(csvfile)
+                # skip the header
+                next(reader)
+                for row in reader:
+                    if len(row) != 0:
+                        for target in process_targets(row[0]):
+                            for key in static_keys:
+                                if not key in target:
+                                    target[key] = static_inputs[key]
+
+                            target_count = 1
+                            for key in target:
+                                if type(target[key]) == list:
+                                    target_count = target_count*len(target[key])
+                                elif type(target[key]) == IPNetwork:
+                                    target_count = target_count*target[key].size
+
+                            count += target_count
+
+        else:
+            f = open(targets['target_file'])
+            for line in f:
+                line = line.strip()
+
+                if len(line) == 0:
+                    continue
+
+                for target in process_targets(line):
+                    for key in static_keys:
+                        if not key in target:
+                            target[key] = static_inputs[key]
+
+                    target_count = 1
+                    for key in target:
+                        if type(target[key]) == list:
+                            target_count = target_count*len(target[key])
+                        elif type(target[key]) == IPNetwork:
+                            target_count = target_count*target[key].size
+
+                    count += target_count
+
+            f.close()
 
     return count
 
@@ -102,6 +192,7 @@ def process_targets(targets_str):
             method = o.scheme
             netloc = o.netloc
             path = o.path
+            params = o.query
 
             # Check if IPv6
             n_column = netloc.count(':')
@@ -138,6 +229,12 @@ def process_targets(targets_str):
                 res['port'] = port
             if path:
                 res['path'] = path
+            if params:
+                res['params'] = {}
+                for param in params.split('&'):
+                    key = param.split('=', 1)[0]
+                    value = param.split('=', 1)[1]
+                    res['params'][key] = value
 
             yield res
         else:

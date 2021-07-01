@@ -11,6 +11,7 @@ from .mssql_bruteforce import *
 from utils.utils import AuthFailure
 from utils.output import Output
 from utils.dispatch import dispatch
+from utils.db import DB
 
 def mssqlscan_worker(target, actions, creds, timeout):
     try:
@@ -24,6 +25,16 @@ def mssqlscan_worker(target, actions, creds, timeout):
             mssql_info['target'] = mssqlscan.url()
             mssql_info['message_type'] = 'mssql'
             Output.write(mssql_info)
+            DB.insert_port({
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'protocol': 'tcp',
+                'service': 'mssql',
+                'version': mssql_info['version'],
+                'service_info': {
+                    'version_number': mssql_info['version_number'],
+                }
+            })
 
             mssqlscan.disconnect()
 
@@ -50,17 +61,62 @@ def mssqlscan_worker(target, actions, creds, timeout):
                 try:
                     success, is_admin = mssqlscan.auth(domain, username, password, ntlm_hash)
                     if password:
-                        Output.write({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
+                        Output.success({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
                     else:
-                        Output.write({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and hash %s' % (user, ntlm_hash)})
+                        Output.success({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and hash %s' % (user, ntlm_hash)})
+
+                    if domain in [None, 'WORKGROUP']:
+                        # local account
+                        if password:
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'mssql',
+                                'url': mssqlscan.url(),
+                                'type': 'password',
+                                'username': username,
+                                'password': password,
+                            }
+                            DB.insert_credential(cred_info)
+
+                        else:
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'mssql',
+                                'url': mssqlscan.url(),
+                                'type': 'hash',
+                                'username': username,
+                                'format': 'ntlm',
+                                'hash': ntlm_hash,
+                            }
+                            DB.insert_credential(cred_info)
+
+                    else:
+                        # domain account 
+                        if password:
+                            cred_info = {
+                                'domain': creds['domain'],
+                                'username': creds['username'],
+                                'password': creds['password'],
+                            }
+                            DB.insert_domain_user(cred_info)
+                        else:
+                            cred_info = {
+                                'domain': creds['domain'],
+                                'username': creds['username'],
+                                'hash': creds['hash'],
+                            }
+                            DB.insert_domain_user(cred_info)
+
                 except AuthFailure as e:
                     if password:
-                        Output.write({'target': mssqlscan.url(), 'message': 'Authentication failure with credentials %s and password %s: %s' % (user, password, str(e))})
+                        Output.minor({'target': mssqlscan.url(), 'message': 'Authentication failure with credentials %s and password %s: %s' % (user, password, str(e))})
                     else:
-                        Output.write({'target': mssqlscan.url(), 'message': 'Authentication failure with credentials %s and hash %s: %s' % (user, ntlm_hash, str(e))})
+                        Output.minor({'target': mssqlscan.url(), 'message': 'Authentication failure with credentials %s and hash %s: %s' % (user, ntlm_hash, str(e))})
 
                 if is_admin:
-                    Output.write({'target': mssqlscan.url(), 'message': 'Administrative privileges with account %s' % user})
+                    Output.major({'target': mssqlscan.url(), 'message': 'Administrative privileges with account %s' % user})
 
                 if success:
                     if 'list_dbs' in actions:
@@ -70,36 +126,48 @@ def mssqlscan_worker(target, actions, creds, timeout):
                             output += " "*60+"- %s:\n" % db['name']
                             for table in db['tables']:
                                 output += " "*60+"\t- %s\n" % table
-                        Output.write({'target': mssqlscan.url(), 'message': output})
+
+                                db_info = {
+                                    'hostname': target['hostname'],
+                                    'port': target['port'],
+                                    'url': mssqlscan.url(),
+                                    'service': 'mssql',
+                                    'database': db['name'],
+                                    'table': table,
+                                }
+                                db_info['account'] = user
+                                DB.insert_database(db_info)
+
+                        Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'list_admins' in actions:
                         admins = mssqlscan.list_admins()
                         output = "Admins:\n"
                         for admin in admins:
                             output += " "*60+"- %s\n" % admin
-                        Output.write({'target': mssqlscan.url(), 'message': output})
+                        Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'list_hashes' in actions:
                         hashes = mssqlscan.list_hashes()
                         output = "Hashes:\n"
                         for account in hashes:
                             output += " "*60+"- %s   %s\n" % (account['name'].ljust(30), account['password_hash'].decode())
-                        Output.write({'target': mssqlscan.url(), 'message': output})
+                        Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'sql' in actions:
                         output = "Query result:\n"
                         result = mssqlscan.execute_sql(actions['sql']['query'])
                         for item in result:
                             output += "- %s\n" % (item,)
 
-                        Output.write({'target': mssqlscan.url(), 'message': output})
+                        Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'cmd' in actions:
                         output = "Command output:\n"
                         result = mssqlscan.execute_cmd(actions['cmd']['command'])
                         output += result
-                        Output.write({'target': mssqlscan.url(), 'message': output})
+                        Output.highlight({'target': mssqlscan.url(), 'message': output})
 
 
             if 'bruteforce' in actions:
                 if 'username_file' in actions['bruteforce'] != None:
-                    Output.write({'target': mssqlscan.url(), 'message': 'Starting bruteforce:'})
+                    Output.highlight({'target': mssqlscan.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:
                         domain = creds['domain']

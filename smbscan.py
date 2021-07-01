@@ -1,14 +1,20 @@
 #!/usr/bin/python3
 import argparse
+import sys
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
 from utils.output import Output
-from lib.smbscan.smbscan import smbscan_worker
+from server.payload_manager import PayloadManager
+from lib.smbscan.smbscan import smbscan_worker, smb_modules
+
+from utils.db import DB
+from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='SMBScan')
-    parser.add_argument('targets', type=str)
+    parser.add_argument('targets', type=str, nargs='?')
+    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='445', dest='port')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Authentication
@@ -25,6 +31,8 @@ def main():
     # Execution-related
     parser.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
     parser.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
+    parser.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
+    parser.add_argument("--list-payloads", action='store_true', help='List payloads', dest='list_payloads')
     # Dump secrets
     parser.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
     parser.add_argument("--lsa", action='store_true', help='dump LSA secrets from target systems')
@@ -32,6 +40,7 @@ def main():
     parser.add_argument("--users", action='store_true', help='dump users from target systems')
     parser.add_argument("--groups", action='store_true', help='dump groups from target systems')
     parser.add_argument("--admins", action='store_true', help='dump admins from target systems')
+    parser.add_argument("--apps", action='store_true', help='dump applications list from target systems')
     parser.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
     parser.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
     parser.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
@@ -42,11 +51,36 @@ def main():
     parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
     parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
-
-
+    # Modules
+    parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
+    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules', default=None, dest='modules')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # DB arguments
+    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+
     args = parser.parse_args()
+
+    if args.list_modules:
+        print('Available modules:')
+        for module in smb_modules.list_modules():
+            print('- %s   %s' % (module['name'].ljust(15), module['description']))
+        sys.exit()
+
+    if args.list_payloads:
+        print('Available payloads:')
+        for payload_name, payload in PayloadManager.list_payloads().items():
+            print('- %s %s' % (payload.name, ' '.join(payload.args)))
+        sys.exit()
+
+    Config.load_config()
+    DB.start_worker(args.nodb)
+
+    targets = {}
+    if args.targets:
+        targets['targets'] = args.targets
+    if args.target_file:
+        targets['target_file'] = args.target_file
 
     static_inputs = {}
     if args.port:
@@ -78,6 +112,9 @@ def main():
         actions['list_shares'] = {}
     if args.command:
         actions['command'] = {'command': args.command, 'method': args.exec_method}
+    if args.payload:
+        cmd = PayloadManager.generate_payload(args.payload[0], args.payload[1:])
+        actions['command'] = {'command': cmd, 'method': args.exec_method}
     if args.lsa:
         actions['lsa'] = {}
     if args.sam:
@@ -88,6 +125,8 @@ def main():
         actions['groups'] ={}
     if args.admins:
         actions['admins'] ={}
+    if args.apps:
+        actions['apps'] ={}
     if args.passpol:
         actions['passpol'] = {}
     if args.loggedin:
@@ -107,11 +146,17 @@ def main():
         actions['bruteforce'] ={'username_file': args.username_file, 'password_file': args.password_file, 'workers': args.bruteforce_workers}
     if args.simple_bruteforce:
         actions['simple_bruteforce'] ={'username_file': args.username_file, 'workers': args.bruteforce_workers}
+    if args.modules:
+        module_args = {
+        }
+        actions['modules'] = {'modules': args.modules, 'args': module_args}
 
     Output.setup()
 
-    smbscan(args.targets, static_inputs, args.workers, actions, creds, args.timeout)
+    smbscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
 
+
+    DB.stop_worker()
     Output.stop()
 
 def smbscan(input_targets, static_inputs, workers, actions, creds, timeout):

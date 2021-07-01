@@ -2,6 +2,7 @@ import copy
 from .mssql import MSSQLScan
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     for password in target['b_password_list']:
@@ -25,10 +26,27 @@ def bruteforce_worker(target, timeout):
         stop = False
         try:
             success, is_admin = mssqlscan.auth(target['b_domain'], target['b_username'], password, None)
-            Output.write({'target': mssqlscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (user, password)})
+            Output.success({'target': mssqlscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (user, password)})
+
+            if domain in [None, 'WORKGROUP']:
+                # local account
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'mssql',
+                    'url': mssqlscan.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
+
+            else:
+                # domain account 
+                pass
 
             if is_admin:
-                Output.write({'target': mssqlscan.url(), 'message': 'Administrative privileges with account %s' % (user,)})
+                Output.major({'target': mssqlscan.url(), 'message': 'Administrative privileges with account %s' % (user,)})
             stop = True
 
         except AuthFailure as e:

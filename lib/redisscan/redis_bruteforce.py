@@ -2,6 +2,7 @@ import copy
 from .redis import Redis
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
 def bruteforce_worker(target, timeout):
     password = target['b_password']
@@ -12,7 +13,17 @@ def bruteforce_worker(target, timeout):
     stop = False
     success, _ = redis.auth(password)
     if success:
-        Output.write({'target': redis.url(), 'message': 'Authentication success with password %s' % (password,)})
+        Output.success({'target': redis.url(), 'message': 'Authentication success with password %s' % (password,)})
+        cred_info = {
+            'hostname': target['hostname'],
+            'port': target['port'],
+            'service': 'redis',
+            'url': redis.url(),
+            'type': 'password',
+            'username': 'N/A',
+            'password': password,
+        }
+        DB.insert_credential(cred_info)
 
     try:
         redis.disconnect()

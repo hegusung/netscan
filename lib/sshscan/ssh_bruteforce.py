@@ -2,11 +2,15 @@ import copy
 import socket
 import traceback
 import paramiko
+from time import sleep
 from .ssh import SSH
 from utils.output import Output
 from utils.utils import AuthFailure
+from utils.db import DB
 
-def bruteforce_worker(target, timeout):
+def bruteforce_worker(target, timeout, bruteforce_delay):
+    sleep(bruteforce_delay)
+
     ssh = SSH(target['hostname'], target['port'], timeout)
 
     for password in target['b_password_list']:
@@ -18,7 +22,18 @@ def bruteforce_worker(target, timeout):
 
             success = ssh.auth(username, password)
             if success:
-                Output.write({'target': ssh.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                Output.success({'target': ssh.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'ssh',
+                    'url': ssh.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
+
                 stop = True
 
         except paramiko.AuthenticationException as e:
@@ -26,6 +41,7 @@ def bruteforce_worker(target, timeout):
         except ValueError as e:
             stop = True
         except paramiko.SSHException as e:
+            #print(e)
             Output.write({'target': ssh.url(), 'message': 'Server overloaded, try reducing amount of workers'})
             stop = True
         except socket.error:

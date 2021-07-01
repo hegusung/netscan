@@ -1,6 +1,12 @@
 # Byte-compiled / optimized / DLL files
+config.cfg
 __pycache__/
 **.py[cod]
 *$py.class
+logs/**
 screenshots/*.jpg
 screenshots/*.png
+server/uploads/*
+server/files/*
+server/payloads/*obfuscated*
+server/ressources/*obfuscated*

@@ -66,8 +66,14 @@ class SMBScan:
         try:
             if username == None or username == '':
                 self.conn.login('' , '')
-                self.is_admin = self.check_if_admin(domain, '', '', hash)
+                try:
+                    self.is_admin = self.check_if_admin(domain, '', '', hash)
+                except impacket.nmb.NetBIOSError:
+                    self.is_admin = False
+                except impacket.smbconnection.SessionError as e:
+                    self.is_admin = False
                 self.creds = {'username': '', 'password': '', 'domain': domain}
+                success = True
             else:
                 if password != None:
                     self.conn.login(username, password, domain)
@@ -82,18 +88,22 @@ class SMBScan:
 
                     self.conn.login(username, '', domain, lm_hash, nt_hash)
                     self.creds = {'username': username, 'hash': hash, 'domain': domain}
+                success = True
 
                 self.is_admin = self.check_if_admin(domain, username, password, hash)
-
-            success = True
 
         except impacket.smbconnection.SessionError as e:
             error, desc = e.getErrorString()
             if 'STATUS_ACCESS_DENIED' in str(error):
-                # Auth success but we have been denied access during check_admin_privs
-                success = True
+                # Can happen on both login() and check_if_admin() 
+                pass
             else:
                 raise AuthFailure(error)
+        except impacket.nmb.NetBIOSTimeout:
+            success = False
+        except TypeError:
+            # occurs when a SMB SessionError: STATUS_LOGON_FAILURE in another exception
+            success = False
         except Exception as e:
             Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             pass
@@ -123,14 +133,10 @@ class SMBScan:
             self.domain = hostname
 
         smb_info = {}
-        if self.domain:
-            smb_info['domain'] = self.domain
-        if hostname:
-            smb_info['hostname'] = hostname
-        if server_os:
-            smb_info['server_os'] = server_os
-        if signing:
-            smb_info['signing'] = signing
+        smb_info['domain'] = self.domain.strip()
+        smb_info['hostname'] = hostname.strip()
+        smb_info['server_os'] = server_os.strip()
+        smb_info['signing'] = signing
 
         return smb_info
 
@@ -141,7 +147,7 @@ class SMBScan:
             self.smbv1 = True
 
             return True
-        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError) as e:
+        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout) as e:
             try:
                 self.conn = SMBConnection(self.hostname, self.hostname, None, timeout=self.timeout, preferredDialect=SMB2_DIALECT_21)
                 self.smbv1 = False
@@ -185,17 +191,23 @@ class SMBScan:
 
         lmhash = ''
         nthash = ''
-        if hash:
-            lmhash, nthash = hash.split(':')
+        if hash != None:
+            if not ':' in hash:
+                nthash = hash
+                lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+            else:
+                nthash = hash.split(':')[1]
+                lmhash = hash.split(':')[0]
+
         if hasattr(rpctransport, 'set_credentials'):
             # This method exists only for selected protocol sequences.
             rpctransport.set_credentials(username, password if password is not None else '', domain, lmhash, nthash)
-        dce = rpctransport.get_dce_rpc()
-        dce.connect()
-        dce.bind(scmr.MSRPC_UUID_SCMR)
-
-        lpMachineName = '{}\x00'.format(self.hostname)
         try:
+            dce = rpctransport.get_dce_rpc()
+            dce.connect()
+            dce.bind(scmr.MSRPC_UUID_SCMR)
+
+            lpMachineName = '{}\x00'.format(self.hostname)
 
             # 0xF003F - SC_MANAGER_ALL_ACCESS
             # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
@@ -252,6 +264,12 @@ class SMBScan:
                 else:
                     Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: Access denied".format(share, path)})
                 return
+            except impacket.nmb.NetBIOSError as e:
+                Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                return
+            except BrokenPipeError as e:
+                Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                return
 
             for content in contents:
                 has_content = True
@@ -274,14 +292,21 @@ class SMBScan:
                     if not filepath.endswith('\\'):
                         filepath = "%s\\" % filepath
 
+                    #yield {'type': 'folder', 'name': filepath}
+
                     if recurse <= 0:
                         yield {'type': 'folder', 'name': filepath}
+                        pass
                     else:
+                        c = False
                         for data in self.list_content(path=filepath, share=share, recurse=recurse-1):
+                            c = True
                             yield data
+                        if not c:
+                            yield {'type': 'folder', 'name': filepath}
 
-            if not has_content and path != '\\':
-                yield {'type': 'folder', 'name': path}
+            #if not has_content and path != '\\':
+            #    yield {'type': 'folder', 'name': path}
 
         except Exception as e:
             raise e
