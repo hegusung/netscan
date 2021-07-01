@@ -110,7 +110,15 @@ def adscan_worker(target, actions, creds, timeout):
 
             domain = creds['domain'] if 'domain' in creds else None
             username = creds['username'] if 'username' in creds else None
-            password = creds['password'] if 'password' in creds else None
+            if 'password' in creds:
+                password = creds['password']
+            elif 'hash' in creds:
+                if not ':' in creds['hash']:
+                    password = 'aad3b435b51404eeaad3b435b51404ee:%s' % creds['hash']
+                else:
+                    password = creds['hash']
+            else:
+                password = None
             try:
                 ldapscan = LDAPScan(target['hostname'], 636, timeout, ssl=True)
                 success, ldap_info = ldapscan.connect(domain, username, password)
@@ -138,17 +146,29 @@ def adscan_worker(target, actions, creds, timeout):
                 if username == None:
                     Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null bind'})
                 elif domain != None:
-                    Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and password %s' % (domain, username, password)})
+                    if 'password' in creds:
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and password %s' % (domain, username, password)})
+                    elif 'hash' in creds:
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and hash %s' % (domain, username, password)})
                 else:
-                    Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s and password %s' % (username, password)})
+                    if 'password' in creds:
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s and password %s' % (username, password)})
+                    elif 'hash' in creds:
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s and hash %s' % (username, password)})
 
             else:
                 if username == None:
                     Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null bind'})
                 elif domain != None:
-                    Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s\\%s and password %s' % (domain, username, password)})
+                    if 'password' in creds:
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s\\%s and password %s' % (domain, username, password)})
+                    elif 'hash' in creds:
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s\\%s and hash %s' % (domain, username, password)})
                 else:
-                    Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s and password %s' % (username, password)})
+                    if 'password' in creds:
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s and password %s' % (username, password)})
+                    elif 'hash' in creds:
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s and hash %s' % (username, password)})
         except Exception as e:
             print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
 
@@ -335,6 +355,13 @@ def adscan_worker(target, actions, creds, timeout):
                 if smb_authenticated and ldap_authenticated:
                     for entry in ldapscan.list_writable_GPOs(smbscan):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(40), entry['path'])})
+
+            if 'acl' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'ACLs of the current user:'})
+                if ldap_authenticated:
+                    for entry in ldapscan.list_acls():
+                        if len(entry['rights']) > 0:
+                            Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s]' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']))})
 
             if 'users_brute' in actions:
                 # Technically only needs kerberos but well....

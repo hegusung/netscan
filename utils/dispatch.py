@@ -137,6 +137,8 @@ def progressbar_worker(target_size, pg_queue, pg_name):
         if count >= target_size:
             break
 
+    time.sleep(1)
+
     pg.close()
 
 def feedqueue_worker(target_gen, feed_queue, nb_workers):
