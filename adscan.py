@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
     # Enum
     parser.add_argument("--users", action='store_true', help='dump users from Active Directory')
+    parser.add_argument("--admins", action='store_true', help='dump users with administrative privileges from Active Directory')
     parser.add_argument("--groups", action='store_true', help='dump groups from Active Directory')
     parser.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory')
     parser.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
@@ -91,6 +92,8 @@ def main():
     actions = {}
     if args.users:
         actions['users'] = {}
+    if args.admins:
+        actions['admins'] = {}
     if args.groups:
         actions['groups'] ={}
     if args.hosts:

@@ -129,6 +129,75 @@ class LDAPScan:
                 'tags': tags,
             }
 
+    def list_admins(self):
+
+        admin_groups = [
+            'S-1-5-32-548', # Account Operators
+            'S-1-5-32-544', # Administrators
+            'S-1-5-32-551', # Backup Operators
+            'S-1-5-32-549', # Server Operators
+            'DnsAdmins', # DnsAdmins 
+            'Domain Admins', # Domain Admins
+            'Enterprise Admins', # Enterprise Admins
+            'Group Policy Creator Owners', # Group Policy Creator Owners
+        ]
+
+        users_dict = {}
+
+        for admin_group in admin_groups:
+            users, groupname = self._get_members_recursive(admin_group)
+
+            for user in users:
+                if not user in users_dict:
+                    users_dict[user] = []
+
+                users_dict[user].append(groupname)
+
+        for user, groups in users_dict.items():
+            yield {'user': user, 'groups': groups}
+
+    def _get_members_recursive(self, name, users=[]):
+        if name.startswith('S-'):
+            search_filter="(objectsid=%s)" % name
+        elif name.startswith('CN='):
+            search_filter="(distinguishedName=%s)" % name
+        else:
+            search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
+
+        # First, get all related groups
+        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                          search_filter=search_filter,
+                          search_scope=ldap3.SUBTREE,
+                          attributes=ldap3.ALL_ATTRIBUTES,
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        group = None
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
+                name = attr['sAMAccountName']
+
+                if 'user' in attr['objectClass']:
+                    username = "%s\\%s" % (domain, name)
+
+                    if not username in users:
+                        users.append(username)
+                elif 'group' in attr['objectClass']:
+
+                    if 'member' in attr:
+                        for member in attr['member']:
+                            self._get_members_recursive(member, users=users)
+
+        return users, "%s\\%s" % (domain, name)
+
+
     def list_groups(self):
         entry_generator = self.conn.extend.standard.paged_search(search_base='%s' % self.defaultdomainnamingcontext,
                           search_filter="(objectCategory=group)",
