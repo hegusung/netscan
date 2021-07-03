@@ -193,6 +193,15 @@ def adscan_worker(target, actions, creds, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
                 else:
                     raise NotImplementedError('Dumping users through SMB')
+
+            if 'admins' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Admins:'})
+                if ldap_authenticated:
+                    for entry in ldapscan.list_admins():
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['user'].ljust(30), '; '.join(entry['groups']))})
+                else:
+                    raise NotImplementedError('Dumping users through SMB')
+
             if 'groups' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Groups:'})
                 if ldap_authenticated:
