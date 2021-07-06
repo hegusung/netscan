@@ -139,6 +139,12 @@ def mssqlscan_worker(target, actions, creds, timeout):
                                 DB.insert_database(db_info)
 
                         Output.highlight({'target': mssqlscan.url(), 'message': output})
+                    if 'list_links' in actions:
+                        links = mssqlscan.list_links()
+                        output = "Links:\n"
+                        for link in links:
+                            output += " "*60+"- %s\n" % link
+                        Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'list_admins' in actions:
                         admins = mssqlscan.list_admins()
                         output = "Admins:\n"
