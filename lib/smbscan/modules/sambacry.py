@@ -20,7 +20,7 @@ class Module:
     name = 'SambaCry'
     description = 'Check for SambaCry (CVE-2017-7494)'
 
-    def run(self, target, args, timeout):
+    def run(self, target, args, creds, timeout):
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:

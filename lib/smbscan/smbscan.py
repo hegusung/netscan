@@ -389,7 +389,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             raise e
 
             if 'modules' in actions:
-                smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], timeout))
+                smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
             if 'bruteforce' in actions:
                 if 'username_file' in actions['bruteforce'] != None:
                     Output.highlight({'target': smbscan.url(), 'message': 'Starting bruteforce:'})

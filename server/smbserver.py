@@ -2464,7 +2464,7 @@ class SMBCommands:
                                                             authenticateMessage['lanman'], authenticateMessage['ntlm'])
                         smbServer.log(ntlm_hash_data['hash_string'])
                         from server.smb_server import ntlm_challenge
-                        ntlm_challenge(ntlm_hash_data['hash_string'])
+                        ntlm_challenge(connData['ClientIP'], ntlm_hash_data['hash_string'])
                         if jtr_dump_path != '':
                             writeJohnOutputToFile(ntlm_hash_data['hash_string'], ntlm_hash_data['hash_version'], jtr_dump_path)
                     except:
