@@ -15,7 +15,7 @@ class Module:
     name = 'MS17-010'
     description = 'Check for MS17-010 (EternalBlue)'
 
-    def run(self, target, args, timeout):
+    def run(self, target, args, creds, timeout):
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:

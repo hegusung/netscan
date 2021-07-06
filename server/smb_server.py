@@ -15,8 +15,8 @@ def run_smb_server(ip, port):
 
     server.start()
 
-def ntlm_challenge(ntlm_chall):
-    Output.major("NTLM challenge> %s" % ntlm_chall)
+def ntlm_challenge(client_ip, ntlm_chall):
+    Output.major("NTLM challenge from %s> %s" % (client_ip, ntlm_chall))
     parts = ntlm_chall.split(':')
     DB.insert_domain_user({
         'domain': parts[2],

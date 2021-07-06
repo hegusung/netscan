@@ -15,7 +15,7 @@ class Module:
     name = 'SMBGhost'
     description = 'Check for SMBGhost (CVE-2020-0796)'
 
-    def run(self, target, args, timeout):
+    def run(self, target, args, creds, timeout):
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:

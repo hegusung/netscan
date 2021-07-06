@@ -54,7 +54,7 @@ def main():
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules', default=None, dest='modules')
+    parser.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules', default=None, dest='modules')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # DB arguments
@@ -150,9 +150,7 @@ def main():
     if args.simple_bruteforce:
         actions['simple_bruteforce'] ={'username_file': args.username_file, 'workers': args.bruteforce_workers}
     if args.modules:
-        module_args = {
-        }
-        actions['modules'] = {'modules': args.modules, 'args': module_args}
+        actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
     Output.setup()
 
