@@ -202,6 +202,16 @@ def adscan_worker(target, actions, creds, timeout):
                 else:
                     raise NotImplementedError('Dumping users through SMB')
 
+            if 'rdp' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Users with RDP access:'})
+                if ldap_authenticated:
+                    for entry in ldapscan.list_rdp_users():
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+                else:
+                    raise NotImplementedError('Dumping users through SMB')
+
+
             if 'groups' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Groups:'})
                 if ldap_authenticated:
