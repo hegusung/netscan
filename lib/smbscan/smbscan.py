@@ -323,6 +323,17 @@ def smbscan_worker(target, actions, creds, timeout):
                         Output.highlight({'target': smbscan.url(), 'message': msg})
                     else:
                         Output.error({'target': smbscan.url(), 'message': 'Failed to dump applications'})
+                if 'processes' in actions:
+                    Output.highlight({'target': smbscan.url(), 'message': 'Processes:'})
+                    try:
+                        entries = smbscan.enum_processes()
+                        for entry in entries:
+                            if entry['pid'] != None:
+                                proc = '[%d] %s' % (entry['pid'], entry['name'])
+                                user = '%s\\%s' % (entry['domain'], entry['user'])
+                                Output.highlight({'target': smbscan.url(), 'message': '%s   %s' % (proc.ljust(30), user)})
+                    except Exception as e:
+                        raise e
                 if 'passpol' in actions:
                     try:
                         password_policy = smbscan.enum_password_policy()
