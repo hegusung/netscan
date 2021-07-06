@@ -25,6 +25,7 @@ def main():
     # Enum
     parser.add_argument("--users", action='store_true', help='dump users from Active Directory')
     parser.add_argument("--admins", action='store_true', help='dump users with administrative privileges from Active Directory')
+    parser.add_argument("--rdp", action='store_true', help='dump users with rdp rights from Active Directory')
     parser.add_argument("--groups", action='store_true', help='dump groups from Active Directory')
     parser.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory')
     parser.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
@@ -94,6 +95,8 @@ def main():
         actions['users'] = {}
     if args.admins:
         actions['admins'] = {}
+    if args.rdp:
+        actions['rdp'] = {}
     if args.groups:
         actions['groups'] ={}
     if args.hosts:
@@ -130,7 +133,6 @@ def main():
     Output.setup()
 
     adscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
-
 
     DB.stop_worker()
     Output.stop()

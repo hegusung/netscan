@@ -156,6 +156,71 @@ class LDAPScan:
         for user, groups in users_dict.items():
             yield {'user': user, 'groups': groups}
 
+    def list_rdp_users(self):
+        entry_generator = self.conn.extend.standard.paged_search(search_base='CN=Remote Desktop Users,CN=Builtin,%s' % self.defaultdomainnamingcontext,
+                          search_filter="(objectCategory=user)",
+                          search_scope=ldap3.SUBTREE,
+                          attributes=ldap3.ALL_ATTRIBUTES,
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        for obj_info in entry_generator:
+            try:
+                attr = obj_info['attributes']
+            except KeyError:
+                continue
+
+            if not 'sAMAccountName' in attr:
+                continue
+
+            domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
+            username = attr['sAMAccountName']
+            fullname = attr['displayName'] if 'displayName' in attr else ""
+            comment = ",".join(attr['description']) if 'description' in attr else ""
+            sid = attr['objectSid'] if 'objectSid' in attr else None
+            if sid:
+                rid = int(sid.split('-')[-1])
+            else:
+                rid = None
+            dn = attr['distinguishedName']
+
+            primaryGID = attr["primaryGroupID"]
+
+            tags = []
+            if 'userAccountControl' in attr:
+                if attr['userAccountControl'] & 0x0200 == 0:
+                    # not a user account
+                    continue
+
+                if attr['userAccountControl'] & 2 != 0:
+                    tags.append('Account disabled')
+                if attr['userAccountControl'] & 0x0020 != 0:
+                    tags.append('Password not required')
+                if attr['userAccountControl'] & 0x10000 != 0:
+                    tags.append('Password never expire')
+                if attr['userAccountControl'] & 0x400000 != 0:
+                    tags.append('Do not require pre-auth')
+                if attr['userAccountControl'] & 0x80000 != 0:
+                    tags.append('Trusted to auth for delegation')
+            else:
+                continue
+
+            if 'admincount' in attr and attr['admincount'] > 0:
+                tags.append('admincount>0')
+
+            yield {
+                'domain': domain,
+                'username': username,
+                'fullname': fullname,
+                'comment': comment,
+                'sid': sid,
+                'rid': rid,
+                'dn': dn,
+                'tags': tags,
+            }
+
+
     def _get_members_recursive(self, name, users=[]):
         if name.startswith('S-'):
             search_filter="(objectsid=%s)" % name
