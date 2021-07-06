@@ -25,6 +25,7 @@ from .exec.wmiexec import WMIEXEC
 from .exec.mmcexec import MMCEXEC
 from .enum import Enum
 from .spns import GetUserSPNs
+from .wmi import WMI
 from utils.output import Output
 from utils.utils import AuthFailure, sizeof_fmt, gen_random_string
 
@@ -442,6 +443,7 @@ class SMBScan:
         if self.creds == None:
             return
 
+
         username = self.creds['username'] if 'username' in self.creds else ''
         domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
         password = self.creds['password'] if 'password' in self.creds else ''
@@ -483,6 +485,23 @@ class SMBScan:
 
         for user in enum.enumAdmins():
             yield user
+
+    def enum_processes(self):
+        if self.conn == None:
+            return
+        if self.creds == None:
+            return
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+
+        wmi = WMI(self.hostname, username, password, domain, hashes=hash)
+
+        for process in wmi.enumProcesses():
+            yield process
+
 
     def enum_password_policy(self):
         if self.conn == None:
