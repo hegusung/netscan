@@ -159,6 +159,10 @@ class MSSQLScan:
 
         return databases
 
+    def list_links(self):
+        query = "SELECT name,provider,data_source FROM sys.servers WHERE is_linked=1"
+        return self.mssql.sql_query(query)
+
     def list_hashes(self):
         query = "SELECT name,password_hash FROM sys.sql_logins"
         return self.mssql.sql_query(query)

@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Actions
     parser.add_argument("--dbs", action='store_true', help='List databases')
+    parser.add_argument("--links", action='store_true', help='List links with other databases')
     parser.add_argument("--admins", action='store_true', help='List database administrators')
     parser.add_argument("--hashes", action='store_true', help='Dump database hashes')
     parser.add_argument('--sql', metavar='query', type=str, nargs='?', help='Perform a SQL query', default=None, dest='sql')
@@ -63,6 +64,8 @@ def main():
     actions = {}
     if args.dbs:
         actions['list_dbs'] = {}
+    if args.links:
+        actions['list_links'] = {}
     if args.admins:
         actions['list_admins'] = {}
     if args.hashes:
