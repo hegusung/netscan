@@ -37,6 +37,7 @@ secrets = [
             ('code', 200),
             ('title', '^N/A$'),
             ('!html.lower', '<!doctype html>'),
+            ('!html.lower', '.*The requested URL was not found on the web server\..*'),
             ('!content-type', '^text/html$'),
             ('!content-type', '^application/json$'),
         ],
@@ -50,6 +51,7 @@ secrets = [
             ('!html.lower', '<!doctype html>'),
             ('!html.lower', '<html>'),
             ('!html.lower', '<body>'),
+            ('!html.lower', '.*The requested URL was not found on the web server\..*'),
             ('!html.len', 0),
             ('!content-type', '^text/html$'),
             ('!content-type', '^application/json$'),
@@ -86,6 +88,7 @@ secrets = [
             ('!html.lower', '<html>'),
             ('!content-type', '^text/html$'),
             ('!content-type', '^application/json$'),
+            ('!html.lower', '.*The requested URL was not found on the web server\..*'),
         ],
     },
 
