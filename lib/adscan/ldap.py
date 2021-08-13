@@ -449,29 +449,35 @@ class LDAPScan:
                     continue
 
                 for cert_dict in attr['cACertificate']:
-                    if cert_dict['encoding'] == 'base64':
-                        b64_cert = "-----BEGIN CERTIFICATE-----\n%s\n-----END CERTIFICATE-----" % cert_dict['encoded']
-                        cert = x509.load_pem_x509_certificate(b64_cert.encode(), default_backend())
+                    if type(cert_dict) == dict:
+                        if cert_dict['encoding'] == 'base64':
+                            b64_cert = "-----BEGIN CERTIFICATE-----\n%s\n-----END CERTIFICATE-----" % cert_dict['encoded']
+                            cert = x509.load_pem_x509_certificate(b64_cert.encode(), default_backend())
 
-                        common_names = [cn.value for cn in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
+                            common_names = [cn.value for cn in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)]
 
-                        public_key = cert.public_key()
-                        if type(public_key) in [RSAPublicKey, _RSAPublicKey]:
-                            cert_algo = "RSA %d" % public_key.key_size
-                        elif type(public_key) in [DSAPublicKey, _DSAPublicKey]:
-                            cert_algo = "DSA %d" % public_key.key_size
-                        elif type(public_key) in [EllipticCurvePublicKey, _EllipticCurvePublicKey]:
-                            cert_algo = "EC %d" % public_key.key_size
+                            public_key = cert.public_key()
+                            if type(public_key) in [RSAPublicKey, _RSAPublicKey]:
+                                cert_algo = "RSA %d" % public_key.key_size
+                            elif type(public_key) in [DSAPublicKey, _DSAPublicKey]:
+                                cert_algo = "DSA %d" % public_key.key_size
+                            elif type(public_key) in [EllipticCurvePublicKey, _EllipticCurvePublicKey]:
+                                cert_algo = "EC %d" % public_key.key_size
+                            else:
+                                cert_algo = "Unknown: %s" % type(public_key)
+
+                            yield {
+                                'algo': cert_algo,
+                                'common_names': common_names,
+                            }
                         else:
-                            cert_algo = "Unknown: %s" % type(public_key)
-
-                        yield {
-                            'algo': cert_algo,
-                            'common_names': common_names,
-                        }
+                            yield {
+                                'algo': "Unknown cert encoding: %s" % cert_dict['encoding'],
+                                'common_names': [],
+                            }
                     else:
                         yield {
-                            'algo': "Unknown cert encoding: %s" % cert_dict['encoding'],
+                            'algo': "Unknown cert, bytes received...",
                             'common_names': [],
                         }
 
