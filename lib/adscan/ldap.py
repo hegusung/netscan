@@ -344,13 +344,13 @@ class LDAPScan:
 
             yield {
                 'domain': domain,
-                'hostname': hostname,
+                'hostname': str(hostname),
                 'dns': dns,
-                'os': os,
+                'os': str(os),
                 'sid': sid,
                 'rid': rid,
                 'tags': tags,
-                'comment': comment,
+                'comment': str(comment),
             }
 
     def list_dns(self):
