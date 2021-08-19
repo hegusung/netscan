@@ -615,24 +615,27 @@ class LDAPScan:
                           paged_size = 100,
                           generator=True)
 
-        for obj_info in entry_generator:
-                try:
-                    attr = obj_info['attributes']
-                except KeyError:
-                    continue
+        try:
+            for obj_info in entry_generator:
+                    try:
+                        attr = obj_info['attributes']
+                    except KeyError:
+                        continue
 
-                # Processed, add it to list
-                if not attr['objectSid'] in groups:
-                    groups.append(attr['objectSid'])
+                    # Processed, add it to list
+                    if not attr['objectSid'] in groups:
+                        groups.append(attr['objectSid'])
 
-                if 'primaryGroupID' in attr:
-                    obj_sid = attr['objectSid'].split('-')
-                    obj_sid[-1] = str(attr['primaryGroupID'])
-                    new_groups.append('-'.join(obj_sid))
+                    if 'primaryGroupID' in attr:
+                        obj_sid = attr['objectSid'].split('-')
+                        obj_sid[-1] = str(attr['primaryGroupID'])
+                        new_groups.append('-'.join(obj_sid))
 
-                if 'memberOf' in attr:
-                    for memberOf in attr['memberOf']:
-                        new_groups.append(memberOf)
+                    if 'memberOf' in attr:
+                        for memberOf in attr['memberOf']:
+                            new_groups.append(memberOf)
+        except TypeError: # Bug in ldap library ? 
+            pass
 
         for g in new_groups:
             if not g in processed:
