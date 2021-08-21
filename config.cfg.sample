@@ -23,6 +23,7 @@ default    = [{time}]     {color}{message}{reset}
 target     = [{time}]     {color}{target:50} {message}{reset}
 http       = [{time}]     {color}{target:50} {code}   {server:40} {title}{reset}
 dns        = [{time}]     {color}{target:50} {query_type:5}   {resolved}{reset}
+dns_dc     = [{time}]     {color}Domain Controler:  {hostname:50} {domain:30} {ips}{reset}
 port       = [{time}]     {color}{target:50} {service:30} {version}{reset}
 smb        = [{time}]     {color}{target:50} {domain:30} {hostname:30} {server_os}{reset}
 mssql      = [{time}]     {color}{target:50} {version}{reset}

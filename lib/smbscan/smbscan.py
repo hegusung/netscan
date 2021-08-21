@@ -91,9 +91,10 @@ def smbscan_worker(target, actions, creds, timeout):
                             cred_info = {
                                 'domain': creds['domain'],
                                 'username': creds['username'],
+                                'type': 'password',
                                 'password': creds['password'],
                             }
-                            DB.insert_domain_user(cred_info)
+                            DB.insert_domain_credential(cred_info)
 
                             pass
                     except AuthFailure as e:
@@ -121,9 +122,11 @@ def smbscan_worker(target, actions, creds, timeout):
                             cred_info = {
                                 'domain': creds['domain'],
                                 'username': creds['username'],
+                                'type': 'hash',
+                                'format': 'ntlm',
                                 'hash': creds['hash'],
                             }
-                            DB.insert_domain_user(cred_info)
+                            DB.insert_domain_credential(cred_info)
 
                     except AuthFailure as e:
                         Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})

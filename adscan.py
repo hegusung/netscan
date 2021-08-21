@@ -23,11 +23,11 @@ def main():
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
     # Enum
-    parser.add_argument("--users", action='store_true', help='dump users from Active Directory')
+    parser.add_argument("--users", action='store_true', help='dump users from Active Directory, display if the account has one of the following enabled: AdminCount, Account disabled, Password not required, Password never expire, Do not require pre-auth, Trusted to auth for delegation')
     parser.add_argument("--admins", action='store_true', help='dump users with administrative privileges from Active Directory')
     parser.add_argument("--rdp", action='store_true', help='dump users with rdp rights from Active Directory')
     parser.add_argument("--groups", action='store_true', help='dump groups from Active Directory')
-    parser.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory')
+    parser.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory, list if it has trusted for delegation enabled')
     parser.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
     parser.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
     parser.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
@@ -37,7 +37,7 @@ def main():
     parser.add_argument("--gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory')
     parser.add_argument("--acl", action='store_true', help='Extract ACEs/ACLs of the current user from Active Directory')
     # Bruteforce
-    parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', const='nofile', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable', default=None, dest='users_brute')
+    parser.add_argument('--users-brute', metavar='username file', type=str, nargs='?', const='nofile', help='Check the existence of users via TGT request and prits KRB5ASREP hash is Pre-Auth is disable (argument is optional if authenticated to the DC with -u)', default=None, dest='users_brute')
     # Dump
     parser.add_argument("--gmsa", action='store_true', help="[Admin required] Dump gMSA passwords")
     parser.add_argument("--laps", action='store_true', help="[Admin required] Dump LAPS passwords")

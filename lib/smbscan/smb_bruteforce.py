@@ -37,8 +37,13 @@ def bruteforce_worker(target, timeout):
 
             else:
                 # domain account 
-                pass
-
+                cred_info = {
+                    'domain': creds['domain'],
+                    'username': creds['username'],
+                    'type': 'password',
+                    'password': creds['password'],
+                }
+                DB.insert_domain_credential(cred_info)
 
             if is_admin:
                 Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials %s\\%s' % (domain, username)})

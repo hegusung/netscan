@@ -76,7 +76,7 @@ def adscan_worker(target, actions, creds, timeout):
                     creds_smb['username'] = ''
 
                 if not 'domain' in creds_smb:
-                    creds_smb['domain'] = 'WORKGROUP'
+                    raise Exception("Please specify the account domain with -d")
 
                 if 'password' in creds_smb:
                     try:
@@ -99,6 +99,25 @@ def adscan_worker(target, actions, creds, timeout):
 
                 if success:
                     smb_authenticated = True
+
+                    if 'password' in creds_smb:
+                        cred_info = {
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'type': 'password',
+                            'password': creds['password'],
+                        }
+                        DB.insert_domain_credential(cred_info)
+
+                    elif 'hash' in creds_smb:
+                        cred_info = {
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'type': 'hash',
+                            'format': 'ntlm',
+                            'hash': creds['hash'],
+                        }
+                        DB.insert_domain_credential(cred_info)
 
                     if is_admin:
                         Output.major({'target': smbscan.url(), 'message': 'SMB: Administrative privileges with credentials {domain}\\{username}'.format(**creds_smb)})
@@ -148,8 +167,26 @@ def adscan_worker(target, actions, creds, timeout):
                 elif domain != None:
                     if 'password' in creds:
                         Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and password %s' % (domain, username, password)})
+
+                        cred_info = {
+                            'domain': domain,
+                            'username': username,
+                            'type': 'password',
+                            'password': password,
+                        }
+                        DB.insert_domain_credential(cred_info)
+
                     elif 'hash' in creds:
                         Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and hash %s' % (domain, username, password)})
+
+                        cred_info = {
+                            'domain': domain,
+                            'username': username,
+                            'type': 'hash',
+                            'format': 'ntlm',
+                            'hash': password,
+                        }
+                        DB.insert_domain_credential(cred_info)
                 else:
                     if 'password' in creds:
                         Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s and password %s' % (username, password)})
@@ -294,11 +331,13 @@ def adscan_worker(target, actions, creds, timeout):
                             'description': 'Password in GPP: User => %s, Password => %s' % (entry['username'], entry['password']),
                         })
 
-                        DB.insert_domain_user({
+                        cred_info = {
                             'domain': entry['domain'],
                             'username': entry['username'],
+                            'type': 'password',
                             'password': entry['password'],
-                        })
+                        }
+                        DB.insert_domain_credential(cred_info)
 
                         Output.write({'target': smbscan.url(), 'message': '- %s   %s' % (entry['username'].ljust(40), entry['password'].ljust(20))})
 
@@ -319,11 +358,20 @@ def adscan_worker(target, actions, creds, timeout):
 
 
                         if 'tgs' in entry['tgs']:
-                            DB.insert_domain_user({
+                            spn_hash = str(entry['tgs']['tgs'])
+                            hash_parts = spn_hash.split('$')
+                            hash_format = "%s_%s" % (hash_parts[1], hash_parts[2])
+
+                            cred_info = {
                                 'domain': entry['domain'],
                                 'username': entry['username'],
-                                'hash': entry['tgs']['tgs'],
-                            })
+                                'type': 'hash',
+                                'format': hash_format,
+                                'hash': spn_hash,
+                            }
+                            DB.insert_domain_credential(cred_info)
+
+
 
             if 'passpol' in actions:
                 if smb_authenticated:
@@ -406,11 +454,16 @@ def adscan_worker(target, actions, creds, timeout):
                                         'description': 'Kerberos pre-auth is disabled for user %s\%s' % (valid_user['domain'], valid_user['username']),
                                     })
 
-                                    DB.insert_domain_user({
+                                    cred_info = {
                                         'domain': valid_user['domain'],
                                         'username': valid_user['username'],
+                                        'type': 'hash',
+                                        'format': 'krb5asrep',
                                         'hash': valid_user['asreq'],
-                                    })
+                                    }
+                                    DB.insert_domain_credential(cred_info)
+
+
                                 else:
                                     Output.write({'target': smbscan.url(), 'message': '- %s' % user})
 
@@ -430,14 +483,13 @@ def adscan_worker(target, actions, creds, timeout):
                             user = '%s\\%s' % (entry['domain'], entry['username'])
                             Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['password'])})
 
-                            # TODO: insert in database
-                            """
-                            DB.insert_domain_user({
+                            cred_info = {
                                 'domain': entry['domain'],
                                 'username': entry['username'],
-                                'hash': entry['hash'],
-                            })
-                            """
+                                'type': 'password',
+                                'password': entry['password'],
+                            }
+                            DB.insert_domain_credential(cred_info)
                     else:
                         Output.error({'target': ldapscan.url(), 'message': '--gmsa requires to connect to LDAP using SSL, it is probably not available here :('})
             if 'dump_laps' in actions:
@@ -447,14 +499,13 @@ def adscan_worker(target, actions, creds, timeout):
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (user.ljust(40), entry['dns'].ljust(40), entry['password'])})
 
-                        # TODO: insert in database
-                        """
-                        DB.insert_domain_user({
+                        cred_info = {
                             'domain': entry['domain'],
                             'username': entry['username'],
-                            'hash': entry['hash'],
-                        })
-                        """
+                            'type': 'password',
+                            'password': entry['password'],
+                        }
+                        DB.insert_domain_credential(cred_info)
             if 'dump_ntds' in actions:
                 if smb_authenticated:
                     try:
@@ -463,11 +514,14 @@ def adscan_worker(target, actions, creds, timeout):
                             user = '%s\\%s' % (entry['domain'], entry['username'])
                             Output.write({'target': smbscan.url(), 'message': '- %s   %s   (%s)' % (user.ljust(40), entry['hash'].ljust(70), entry['hash_type'])})
 
-                            DB.insert_domain_user({
+                            cred_info = {
                                 'domain': entry['domain'],
                                 'username': entry['username'],
+                                'type': 'hash',
+                                'format': entry['hash_type'],
                                 'hash': entry['hash'],
-                            })
+                            }
+                            DB.insert_domain_credential(cred_info)
 
                         dumped = smbscan.dump_ntds(actions['dump_ntds']['method'], callback_func=ntds_hash)
                         Output.write({'target': smbscan.url(), 'message': 'Dumped %d hashes' % dumped})
