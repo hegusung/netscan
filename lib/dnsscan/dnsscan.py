@@ -24,6 +24,18 @@ def dnsscan_worker(target, dn_server, actions, timeout):
             })
             Output.write({"message_type": "dns", "target": target['hostname'], "query_type": resolved["query_type"], "resolved": r})
 
+            for action in actions:
+                if action[0] == 'dc':
+                    for ad_server in dnsscan.lookup_dc():
+                        for ip in ad_server['ips']:
+                            DB.insert_dns({
+                                'source': ad_server['hostname'],
+                                'query_type': "A",
+                                'target': ip,
+                            })
+
+                        Output.highlight({"message_type": "dns_dc", "domain": ad_server['domain'], "hostname": ad_server["hostname"], "ips": ad_server['ips']})
+
     for action in actions:
         if action[0] == 'bruteforce':
             Output.highlight({"target": target['hostname'], "message": "Starting subdomain bruteforce"})
@@ -73,6 +85,35 @@ class DNSScan:
             return True
         else:
             return False
+
+    def lookup_dc(self):
+        prepend_fqdn = ["_ldap._tcp.", "_kerberos._tcp.", "_kerberos._udp."]
+
+        if not self.is_ip(self.hostname):
+
+            dc_fqdn_list = []
+
+            for prepend in prepend_fqdn:
+                try:
+                    for r in self.resolver.query(prepend + self.hostname, "SRV"):
+                        dc_fqdn_list.append(str(r).split()[-1])
+                except dns.resolver.NXDOMAIN:
+                    resolved = None
+                except dns.resolver.NoAnswer:
+                    resolved = None
+
+            dc_fqdn_list = list(set(dc_fqdn_list))
+
+            for dc_fqdn in dc_fqdn_list:
+                try:
+                    answer = self.resolver.query(dc_fqdn, "A")
+                    ip_list = [str(r) for r in answer]
+                except dns.resolver.NXDOMAIN:
+                    ip_list = None
+                except dns.resolver.NoAnswer:
+                    ip_list = None
+
+                yield {"domain": self.hostname, "hostname": dc_fqdn, "ips": ip_list}
 
     def subdomain_bruteforce(self, subdomain_file):
         if self.is_ip(self.hostname):

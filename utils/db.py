@@ -32,6 +32,8 @@ es_ids = {
     'domain_user': 'domain_user_{session}_{domain}_{username}',
     'domain_group': 'domain_group_{session}_{domain}_{groupname}',
     'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
+    'domain_password': 'domain_password_{session}_{domain}_{username}_{password}',
+    'domain_hash': 'domain_hash_{session}_{domain}_{username}_{format}_{hash}',
 }
 
 es_mapping = {
@@ -42,6 +44,24 @@ es_mapping = {
             },
             "geoip_loc": {
                 "type": "geo_point"
+            },
+            "hash": {
+                "type": "text",
+                "fields": {
+                    "keyword":{
+                        "type": "keyword",
+                        "ignore_above": 2000
+                    }
+                }
+            },
+            "path": {
+                "type": "text",
+                "fields": {
+                    "keyword":{
+                        "type": "keyword",
+                        "ignore_above": 2000
+                    }
+                }
             },
         }
     }
@@ -87,6 +107,11 @@ class DB:
     @classmethod
     def send(self, doc):
         if doc != None:
+
+            # Add generic data
+            if 'ip' in doc and 'port' in doc:
+                doc['ip_port'] = "%s:%d" % (doc['ip'], doc['port'])
+
             data = json.dumps(doc)
         else:
             data = None
@@ -555,6 +580,14 @@ class DB:
                 del host_doc['admin_of']
                 host_doc['append'] = append
 
+        if 'tags' in host_doc:
+            if not 'append' in host_doc:
+                append = {'tags': host_doc['tags']}
+                host_doc['append'] = append
+            else:
+                host_doc['append']['tags'] = [host_doc['tags']]
+            del host_doc['tags']
+
         self.send(host_doc)
 
     @classmethod
@@ -569,6 +602,7 @@ class DB:
         if len(user_doc['domain']) == 0 or user_doc['domain'] == 'workgroup':
             return
 
+        # deprecated...
         if 'password' in user_doc:
             if not 'append' in user_doc:
                 append = {'password': [user_doc['password']] }
@@ -577,6 +611,7 @@ class DB:
                 user_doc['append']['password'] = [user_doc['password']]
             del user_doc['password']
 
+        # deprecated...
         if 'hash' in user_doc:
             if not 'append' in user_doc:
                 append = {'hash': [user_doc['hash']] }
@@ -585,8 +620,31 @@ class DB:
                 user_doc['append']['hash'] = [user_doc['hash']]
             del user_doc['hash']
 
+        if 'tags' in user_doc:
+            if not 'append' in user_doc:
+                append = {'tags': user_doc['tags']}
+                user_doc['append'] = append
+            else:
+                user_doc['append']['tags'] = [user_doc['tags']]
+            del user_doc['tags']
 
         self.send(user_doc)
+
+    @classmethod
+    def insert_domain_credential(self, credential_doc):
+        if 'password' in credential_doc:
+            credential_doc['doc_type'] = 'domain_password'
+        elif 'hash' in credential_doc:
+            credential_doc['doc_type'] = 'domain_hash'
+        else:
+            return
+        credential_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        credential_doc = check_entry(credential_doc, ['domain', 'username'], ['password', 'format', 'hash'])
+
+        credential_doc['domain'] = credential_doc['domain'].lower()
+        credential_doc['username'] = credential_doc['username'].lower()
+
+        self.send(credential_doc)
 
     @classmethod
     def insert_domain_group(self, group_doc):
