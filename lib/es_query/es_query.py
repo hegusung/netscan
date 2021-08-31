@@ -52,6 +52,40 @@ def export(session, service, output_dir):
 
 def export_ip_ports(session, service, output_dir):
 
+    # Create output files in dir if non existant
+    ip_filename = os.path.join(output_dir, '%s_ips.txt' % session)
+    ip_file = open(ip_filename, 'a')
+    ip_port_filename = os.path.join(output_dir, '%s_ip_ports.txt' % session)
+    ip_port_file = open(ip_port_filename, 'a')
+
+    output_files = {}
+    for service in service_filters:
+        filename = os.path.join(output_dir, '%s_%s.txt' % (session, service))
+        output_files[service] = {'filename': filename, 'file': open(filename, 'a'), 'count': 0}
+
+    # Get IPs up
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "ip"        }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        s_service = None
+
+        ip_file.write('%s\n' % source['ip'])
+
+    # get ports
     query = {
       "query": {
         "bool": {
@@ -66,18 +100,6 @@ def export_ip_ports(session, service, output_dir):
     }
     if service:
         query['query']['bool']['must'].append({'match': {'service': service}})
-
-    ip_filename = os.path.join(output_dir, '%s_ips.txt' % session)
-    ip_file = open(ip_filename, 'a')
-    ip_port_filename = os.path.join(output_dir, '%s_ip_ports.txt' % session)
-    ip_port_file = open(ip_port_filename, 'a')
-
-    output_files = {}
-    for service in service_filters:
-        filename = os.path.join(output_dir, '%s_%s.txt' % (session, service))
-        output_files[service] = {'filename': filename, 'file': open(filename, 'a'), 'count': 0}
-
-    # Create output files in dir if non existant
 
     res = Elasticsearch.search(query)
     c = 0
@@ -107,20 +129,27 @@ def export_ip_ports(session, service, output_dir):
                         break
 
                 if match:
-                    print("%s => %s:%d" % (service, source['ip'], source['port']))
+                    #print("%s => %s:%d" % (service, source['ip'], source['port']))
                     output_files[service]['file'].write('%s:%d\n' % (source['ip'], source['port']))
                     output_files[service]['count'] += 1
                     break
         c += 1
-    print(c)
 
     ip_file.close()
     # Make files unique
     os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_filename))
+    count = 0
+    for _ in open(ip_filename):
+        count += 1
+    print("%s: %s   %d ips written" % ("ip".ljust(12), ip_filename.ljust(40), count))
 
     ip_port_file.close()
     # Make files unique
     os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_port_filename))
+    count = 0
+    for _ in open(ip_port_filename):
+        count += 1
+    print("%s: %s   %d ports written" % ("ip:port".ljust(12), ip_port_filename.ljust(40), count))
 
     for service, f in output_files.items():
         f['file'].close()
@@ -159,9 +188,12 @@ def export_http_urls(session, output_dir):
 
         url_file.write('%s\n' % source['url'])
         c += 1
-    print(c)
 
     url_file.close()
     # Make files unique
     os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(url_filename))
+    count = 0
+    for _ in open(url_filename):
+        count += 1
+    print("%s: %s   %d urls written" % ("urls".ljust(12), url_filename.ljust(40), count))
 

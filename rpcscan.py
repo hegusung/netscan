@@ -16,8 +16,8 @@ def main():
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Actions
     parser.add_argument('--rpc', action='store_true', help='List RPC entries', dest='rpc')
-    parser.add_argument('--mounts', action='store_true', help='List RPC entries', dest='mounts')
-    parser.add_argument('--list', action='store_true', help='List RPC entries', dest='list')
+    parser.add_argument('--mounts', action='store_true', help='List NFS mount points', dest='mounts')
+    parser.add_argument('--list', action='store_true', help='List content of NFS directories', dest='list')
     parser.add_argument('--uid', metavar='uid', nargs='?', type=int, help='Connect uid (for NFS)', default=0, dest='uid')
     parser.add_argument('--gid', metavar='gid', nargs='?', type=int, help='Connect gid (for NFS)', default=0, dest='gid')
     parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=1, dest='recurse')
