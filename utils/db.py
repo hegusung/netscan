@@ -18,6 +18,7 @@ from utils.output import Output
 MAX_BULK = 100
 
 es_ids = {
+    'ip': 'ip_{session}_{ip}',
     'dns': 'dns_{session}_{source}_{query_type}_{target}',
     'port': 'port_{session}_{ip}_{protocol}_{port}',
     'script': 'script_{session}_{ip}_{protocol}_{port}_{name}',
@@ -156,6 +157,40 @@ class DB:
                 break
             except Exception as e:
                 print('%s: %s' % (type(e), e))
+
+    @classmethod
+    def insert_ip(self, host_doc):
+        host_doc['doc_type'] = 'ip'
+        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        host_doc = check_entry(host_doc, ['hostname'], ['rtt'])
+
+        to_insert = []
+        if check_ip(host_doc['hostname']):
+            # 'host' is an IP
+            host_doc['ip'] = host_doc['hostname']
+            del host_doc['hostname']
+
+            to_insert.append(host_doc)
+        else:
+            # 'host' is an IP
+            ip_list = resolve_hostname(host_doc['hostname'])
+
+            for ip in ip_list:
+                # insert hostname in DNS database
+                self.insert_dns({
+                    'source': host_doc['hostname'],
+                    'query_type': 'A',
+                    'target': ip,
+                })
+
+                host_doc_tmp = copy(host_doc)
+                host_doc_tmp['ip'] = ip
+                del host_doc_tmp['hostname']
+
+                to_insert.append(host_doc_tmp)
+
+        for doc in to_insert:
+            self.send(doc)
 
     @classmethod
     def insert_dns(self, dns_doc):
