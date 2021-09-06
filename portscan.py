@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import os
+import sys
 import argparse
+import shutil
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
@@ -27,6 +29,11 @@ def main():
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+
+    if args.service_scan:
+        if not shutil.which("nmap"):
+            print("Unable to find nmap binary on system, is it installed ?")
+            sys.exit()
 
     Config.load_config()
     DB.start_worker(args.nodb)
