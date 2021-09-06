@@ -45,6 +45,9 @@ es_mapping = {
             "geoip_loc": {
                 "type": "geo_point"
             },
+            "ip": {
+                "type": "ip"
+            },
             "hash": {
                 "type": "text",
                 "fields": {
