@@ -32,7 +32,7 @@ class PingScan:
 
     def check_up(self):
 
-        process = subprocess.Popen("ping -c 3 -i 0.1 %s -w %d" % (self.hostname, self.timeout), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen("ping -c 3 -i 0.2 %s -w %d" % (self.hostname, self.timeout), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         process_output, _ = process.communicate()
         process.wait()
         process_returncode = process.returncode
