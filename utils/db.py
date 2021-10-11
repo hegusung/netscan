@@ -54,7 +54,7 @@ es_mapping = {
                 "fields": {
                     "keyword":{
                         "type": "keyword",
-                        "ignore_above": 2000
+                        "ignore_above": 15000
                     }
                 }
             },

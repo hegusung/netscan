@@ -139,16 +139,22 @@ def progressbar_worker(target_size, pg_queue, pg_name):
         pg = tqdm(total=target_size, mininterval=1, desc=pg_name, leave=False)
     count = 0
 
+    c = 0
+    update = False
     while True:
         try:
-            c = pg_queue.get(True, 0.1)
+            c += pg_queue.get(True, 0.1)
         except queue.Empty:
-            c = 0
+            update = True
         except Exception as e:
+            pass
+
+        if update or c >= 10:
+            count += c
+            pg.update(c)
             c = 0
-        count += c
-        pg.update(c)
-        pg.refresh()
+            update = False
+            #pg.refresh()
 
         if count >= target_size:
             break
