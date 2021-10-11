@@ -59,9 +59,34 @@ def export_ip_ports(session, service, output_dir):
     ip_port_file = open(ip_port_filename, 'a')
 
     output_files = {}
-    for service in service_filters:
-        filename = os.path.join(output_dir, '%s_%s.txt' % (session, service))
-        output_files[service] = {'filename': filename, 'file': open(filename, 'a'), 'count': 0}
+    for service_name in service_filters:
+        filename = os.path.join(output_dir, '%s_%s.txt' % (session, service_name))
+        output_files[service_name] = {'filename': filename, 'file': open(filename, 'a'), 'count': 0}
+
+    # Get Hostnames
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "dns"        }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        s_service = None
+
+        if source['query_type'] == 'A':
+            ip_file.write('%s\n' % source['target'])
+        elif source['query_type'] == 'PTR':
+            ip_file.write('%s\n' % source['source'])
 
     # Get IPs up
     query = {

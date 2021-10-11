@@ -67,7 +67,7 @@ class DNSScan:
         try:
             if self.is_ip(self.hostname):
                 # self.hostname is an IP, performing reverse dns
-                answer = self.resolver.query(self.hostname, "PTR")
+                answer = self.resolver.query(dns.reversename.from_address(self.hostname), "PTR")
                 resolved = {"query_type": "PTR", "resolved": [str(r) for r in answer]}
             else:
                 # self.hostname is a hostname, performing A dns query
@@ -76,6 +76,8 @@ class DNSScan:
         except dns.resolver.NXDOMAIN:
             resolved = None
         except dns.resolver.NoAnswer:
+            resolved = None
+        except dns.exception.Timeout:
             resolved = None
 
         return resolved
