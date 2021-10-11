@@ -11,7 +11,6 @@ from utils.db import DB
 ip_regex = re.compile("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
 
 def dnsscan_worker(target, dn_server, actions, timeout):
-    print(target)
     dnsscan = DNSScan(target['hostname'], dn_server, timeout)
 
     resolved = dnsscan.resolve()
