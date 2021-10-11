@@ -14,14 +14,14 @@ manager = Manager()
 pg_lock = manager.RLock()
 tqdm.set_lock(pg_lock)
 
-def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10, process=True, pg_name=None):
+def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10, process=True, pg_name=None, resume=0):
     # Parse inputs
     target_gen = process_inputs(targets, static_inputs)
     target_size = count_process_inputs(targets, static_inputs)
 
-    dispatch(target_gen, target_size, worker_func, func_args, workers=workers, process=process, pg_name=pg_name)
+    dispatch(target_gen, target_size, worker_func, func_args, workers=workers, process=process, pg_name=pg_name, resume=resume)
 
-def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None):
+def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None, resume=0):
     try:
         worker_list = []
 
@@ -36,6 +36,16 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
         pg_thread = Thread(target=progressbar_worker, args=(gen_size, pg_queue, pg_name))
         pg_thread.daemon = True
         pg_thread.start()
+
+        # Progress bar started, now resuming
+        if resume > 0:
+            tqdm.write("Resuming to value: %d" % resume)
+            for _ in range(resume):
+                try:
+                    next(gen)
+                    pg_queue.put(1)
+                except StopIteration:
+                    break
 
         if process:
             n_all = n_threads*n_process

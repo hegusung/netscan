@@ -1,0 +1,12 @@
+- Apache 2.4.49/2.4.50 RCE
+- Apache Tomcat RCE CVE-2020-9484 / CVE-2020-1938
+- F5 BigIP RCE CVE-2021-22986, CVE-2020-5902
+- Java RMI
+- Windows DNS Server RCE CVE-2020-1350
+- Windows TCP-IP CVE-2020-16898
+- Exchange CVE-2020-0688
+- Cisco ASA CVE-2020-3452
+- Windows cryptoAPI CVE-2020-0601
+- Weblogic CVE-2021-2109
+- PetitPotam https://github.com/topotam/PetitPotam
+- Bluekeep
