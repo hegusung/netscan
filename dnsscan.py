@@ -22,6 +22,8 @@ def main():
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # DB arguments
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+    # Resume
+    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
 
     args = parser.parse_args()
 
@@ -46,17 +48,16 @@ def main():
     if args.dc:
         actions.append(('dc',))
 
-    dnsscan(targets, static_inputs, args.workers, args.dns, actions, args.timeout)
-
+    dnsscan(targets, static_inputs, args.workers, args.dns, actions, args.timeout, args.resume)
 
     DB.stop_worker()
     Output.stop()
 
-def dnsscan(input_targets, static_inputs, workers, dns, actions, timeout):
+def dnsscan(input_targets, static_inputs, workers, dns, actions, timeout, resume):
 
     args = (dns, actions, timeout)
 
-    dispatch_targets(input_targets, static_inputs, dnsscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, dnsscan_worker, args, workers=workers, resume=resume)
 
 if __name__ == '__main__':
     main()
