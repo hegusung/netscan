@@ -77,8 +77,6 @@ class DNSScan:
             resolved = None
         except dns.resolver.NoAnswer:
             resolved = None
-        except dns.exception.Timeout:
-            resolved = None
 
         return resolved
 

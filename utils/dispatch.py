@@ -152,9 +152,9 @@ def progressbar_worker(target_size, pg_queue, pg_name):
         if update or c >= 10:
             count += c
             pg.update(c)
+            pg.refresh()
             c = 0
             update = False
-            #pg.refresh()
 
         if count >= target_size:
             break
