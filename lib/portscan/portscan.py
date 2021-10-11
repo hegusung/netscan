@@ -283,7 +283,12 @@ def top_ports(top_n, protocols=['tcp']):
         if top_n == None:
             return None
 
-        top_n = int(top_n)
+        if '-' in top_n:
+            top_start = int(top_n.split('-')[0])
+            top_end = int(top_n.split('-')[-1])
+        else:
+            top_start = 0
+            top_end = int(top_n)
 
         ports = []
 
@@ -306,4 +311,4 @@ def top_ports(top_n, protocols=['tcp']):
     except Exception as e:
         print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
 
-    return [p['port'] for p in sorted(ports, key=itemgetter('freq'), reverse=True)[:top_n]]
+    return [p['port'] for p in sorted(ports, key=itemgetter('freq'), reverse=True)[top_start:top_end]]
