@@ -40,12 +40,18 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
         # Progress bar started, now resuming
         if resume > 0:
             tqdm.write("Resuming to value: %d" % resume)
+            c = 0
             for _ in range(resume):
                 try:
                     next(gen)
-                    pg_queue.put(1)
+                    c += 1
                 except StopIteration:
                     break
+                if c == 50000:
+                    pg_queue.put(c)
+                    c = 0
+
+            pg_queue.put(c)
 
         if process:
             n_all = n_threads*n_process
