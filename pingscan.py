@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # Resume
+    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
     # DB arguments
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
@@ -36,16 +38,16 @@ def main():
 
     Output.setup()
 
-    pingscan(targets, static_inputs, args.workers, args.timeout)
+    pingscan(targets, static_inputs, args.workers, args.timeout, args.resume)
 
     DB.stop_worker()
     Output.stop()
 
-def pingscan(input_targets, static_inputs, workers, timeout):
+def pingscan(input_targets, static_inputs, workers, timeout, resume):
 
     args = (timeout,)
 
-    dispatch_targets(input_targets, static_inputs, pingscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, pingscan_worker, args, workers=workers, resume=resume)
 
 if __name__ == '__main__':
     main()

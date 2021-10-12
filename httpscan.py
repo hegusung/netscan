@@ -34,6 +34,8 @@ def main():
     parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Enable bruteforce, file name is optional', default=None, const='default', dest='bruteforce')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # Resume
+    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
     # DB arguments
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
@@ -98,16 +100,16 @@ def main():
             header_dict[key] = value
 
     Output.setup()
-    httpscan(targets, static_inputs, args.workers, actions, args.useragent, header_dict, args.http_auth, cookie_dict, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout)
+    httpscan(targets, static_inputs, args.workers, actions, args.useragent, header_dict, args.http_auth, cookie_dict, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout, args.resume)
 
     DB.stop_worker()
     Output.stop()
 
-def httpscan(input_targets, static_inputs, workers, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout):
+def httpscan(input_targets, static_inputs, workers, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, resume):
 
     args = (actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout)
 
-    dispatch_targets(input_targets, static_inputs, httpscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, httpscan_worker, args, workers=workers, resume=resume)
 
 if __name__ == '__main__':
     main()
