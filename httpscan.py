@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules', default=None, dest='modules')
+    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules ("-m all" to execute all modules)', default=None, dest='modules')
     # Module arguments
     parser.add_argument('--exec', metavar='command', nargs='?', type=str, help='Execute command if RCE from a module', default=None, dest='exec')
     parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Enable bruteforce, file name is optional', default=None, const='default', dest='bruteforce')
