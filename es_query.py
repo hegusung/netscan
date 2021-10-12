@@ -18,7 +18,12 @@ def main():
 
     Config.load_config()
 
-    export(args.session, args.service, args.directory)
+    if args.session == None:
+        session = Config.config.get('Global', 'session')
+    else:
+        session = args.session
+
+    export(session, args.service, args.directory)
 
 if __name__ == '__main__':
     main()

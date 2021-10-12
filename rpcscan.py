@@ -23,6 +23,8 @@ def main():
     parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=1, dest='recurse')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # Resume
+    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
     # DB arguments
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
@@ -49,17 +51,17 @@ def main():
 
     Output.setup()
 
-    rpcscan(targets, static_inputs, args.workers, actions, args.timeout)
+    rpcscan(targets, static_inputs, args.workers, actions, args.timeout, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def rpcscan(input_targets, static_inputs, workers, actions, timeout):
+def rpcscan(input_targets, static_inputs, workers, actions, timeout, resume):
 
     args = (actions, timeout)
 
-    dispatch_targets(input_targets, static_inputs, rpcscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, rpcscan_worker, args, workers=workers, resume=resume)
 
 if __name__ == '__main__':
     main()

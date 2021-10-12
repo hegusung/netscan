@@ -27,6 +27,8 @@ def main():
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    # Resume
+    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
     # DB arguments
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
@@ -60,17 +62,17 @@ def main():
 
     Output.setup()
 
-    mongoscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
+    mongoscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def mongoscan(input_targets, static_inputs, workers, actions, creds, timeout):
+def mongoscan(input_targets, static_inputs, workers, actions, creds, timeout, resume):
 
     args = (actions, creds, timeout)
 
-    dispatch_targets(input_targets, static_inputs, mongoscan_worker, args, workers=workers)
+    dispatch_targets(input_targets, static_inputs, mongoscan_worker, args, workers=workers, resume=resume)
 
 if __name__ == '__main__':
     main()

@@ -20,10 +20,10 @@ def main():
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
-    # DB arguments
-    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
     # Resume
     parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
+    # DB arguments
+    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
 
