@@ -44,7 +44,7 @@ def main():
     parser.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="[Admin required] dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules', default=None, dest='modules')
+    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')

@@ -77,9 +77,9 @@ class MySQLScan:
                 pass
             return
             """
-        except mysql.connector.errors.OperationalError:
+        except mysql.connector.errors.OperationalError as e:
             raise e
-        except mysql.connector.errors.InterfaceError:
+        except mysql.connector.errors.InterfaceError as e:
             raise e
 
     def list_databases(self):
