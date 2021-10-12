@@ -1,7 +1,11 @@
 from utils.process_inputs import process_inputs, count_process_inputs
+from utils.config import Config
+import sys
 from multiprocessing import Process, Queue, Manager
 import queue
 import time
+import os
+
 import traceback
 from threading import Thread
 from tqdm import tqdm
@@ -126,6 +130,13 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue):
                 worker_func(target, *func_args)
             except Exception as e:
                 print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+                # Store the exception for debugging purposes
+
+                log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), Config.config.get('Logging', 'folder'), "stack_traces.log")
+                logfile = open(log_path, "a")
+                logfile.write("%s: %s\n%s: %s\n%s\n\n" % (str(worker_func), str(target), type(e), e, traceback.format_exc()))
+                logfile.close()
+                
             finally:
                 pg_queue.put(1)
     except KeyboardInterrupt:
