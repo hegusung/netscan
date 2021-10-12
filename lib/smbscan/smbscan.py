@@ -163,7 +163,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             db_info = {
                                 'hostname': target['hostname'],
                                 'port': 445,
-                                'url': smbscan.url(),
+                                'url': smbscan.url("/%s" % share_info['name']),
                                 'share': share_info['name'],
                                 'service': 'smb',
                                 'path': '/',
@@ -185,12 +185,15 @@ def smbscan_worker(target, actions, creds, timeout):
                             raise e
                 if 'list' in actions:
                     try:
-                        if not 'share' in actions['list']:
+                        if 'path' in target:
+                            share_name = target['path'].split('/')[1]
+                            share_list = [share_name]
+                        elif 'share' in actions['list']:
+                            share_list = [actions['list']['share']]
+                        else:
                             if len(share_list) == 0:
                                 for share_info in smbscan.list_shares():
                                     share_list.append(share_info['name'])
-                        else:
-                            share_list = [actions['list']['share']]
 
                         for share in share_list:
                             contents = "Content of share %s:\n" % share
@@ -203,7 +206,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                 db_info = {
                                     'hostname': target['hostname'],
                                     'port': 445,
-                                    'url': smbscan.url(),
+                                    'url': smbscan.url("/%s" % share),
                                     'share': share,
                                     'service': 'smb',
                                     'path': content['name'].replace('\\', '/'),
