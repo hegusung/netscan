@@ -108,8 +108,7 @@ def postgrescan_worker(target, actions, creds, timeout):
                 })
 
             else:
-                print(str(e))
-                Output.write({'target': postgresql.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+                raise e
 
         if postgresql_server == True:
             if 'bruteforce' in actions:
@@ -132,8 +131,7 @@ def postgrescan_worker(target, actions, creds, timeout):
     except ConnectionRefusedError:
         pass
     except Exception as e:
-        #Output.write({'target': postgresql.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
-        pass
+        raise e
     finally:
         try:
             postgresql.disconnect()

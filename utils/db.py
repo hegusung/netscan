@@ -9,6 +9,7 @@ import traceback
 from datetime import datetime
 from multiprocessing import Queue, Manager
 from threading import Thread
+import dns
 from dns import resolver
 from copy import copy
 from utils.utils import check_ip
@@ -74,7 +75,7 @@ es_mapping = {
 class DB:
 
     @classmethod
-    def start_worker(self, nodb):
+    def start_worker(self, nodb, session=None, queue_size=10000):
         self.nodb = nodb
         db_enabled = False if Config.config.get('Elasticsearch', 'enabled') in ['false', 'False'] else True
         if self.nodb == False and db_enabled == False:
@@ -89,14 +90,20 @@ class DB:
             Elasticsearch.check_index()
 
         manager = Manager()
-        #self.db_queue = manager.Queue(256)
-        self.db_queue = manager.Queue()
+
+        if queue_size:
+            self.db_queue = manager.Queue(queue_size)
+        else:
+            self.db_queue = manager.Queue()
 
         self.db_thread = Thread(target=self.db_worker, args=(self.db_queue,))
         self.db_thread.daemon = True
         self.db_thread.start()
 
-        self.session = Config.config.get('Global', 'session')
+        if session:
+            self.session = session
+        else:
+            self.session = Config.config.get('Global', 'session')
 
     @classmethod
     def stop_worker(self):
@@ -601,9 +608,12 @@ class DB:
             # lets try to resolve from hostname + domain
             if '.' in host_doc['domain'] and len(host_doc['hostname']) != 0:
                 hostname = '%s.%s' % (host_doc['hostname'], host_doc['domain'])
+                # too slow...
+                """
                 ip_list = resolve_hostname(hostname)
                 if len(ip_list) != 0:
                     host_doc['ip'] = [ip_list]
+                """
 
         if 'admin_of' in host_doc:
             if check_ip(host_doc['admin_of']):
@@ -779,6 +789,17 @@ class Elasticsearch(object):
             )
 
     @classmethod
+    def count(self, doc):
+        try:
+            es = self.get_es_instance()
+
+            res = es[0].count(index=es[1], body=doc)
+
+            return res['count']
+        except elasticsearch.exceptions.ConnectionError:
+            print("Elasticsearch: Unable to connect to elasticsearch instance")
+
+    @classmethod
     def search(self, doc):
         try:
             es = self.get_es_instance()
@@ -910,7 +931,7 @@ class Elasticsearch(object):
         except elasticsearch.exceptions.ConnectionError:
             print("Elasticsearch: Unable to connect to elasticsearch instance")
 
-def resolve_hostname(hostname):
+def resolve_hostname(hostname, timeout=5):
 
     ip_results = []
 
@@ -922,7 +943,7 @@ def resolve_hostname(hostname):
         pass
     except resolver.NoNameservers:
         pass
-    except Timeout:
+    except dns.exception.Timeout:
         pass
 
     for ip in ip_results:

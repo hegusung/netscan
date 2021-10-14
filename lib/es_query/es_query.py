@@ -1,7 +1,11 @@
 import os
+import json
 import os.path
+from tqdm import tqdm
 
+from utils.db import DB
 from utils.db import Elasticsearch
+from utils.output import Output
 
 service_filters = {
     'http': [{'service': 'http'}, {'port': 80}, {'port': 443}, {'port': 8000}, {'port': 8080}],
@@ -23,6 +27,8 @@ service_filters = {
     'mongo': [{'service': 'mongo'}, {'port': 27017}],
     'postgresql': [{'service': 'postgresql'}, {'port': 5432}],
     'redis': [{'service': 'redis'}, {'port': 6379}],
+    'rmi': [{'service': 'rmi'}],
+    'winrm': [{'port': 5985}, {'port': 5986}],
 }
 
 service_nmap_translate = {
@@ -32,6 +38,7 @@ service_nmap_translate = {
     'domain': 'dns',
     'mongodb': 'mongo',
     'rpcbind': 'rpc',
+    'java-rmi': 'rmi',
 }
 
 def export(session, service, output_dir):
@@ -222,3 +229,83 @@ def export_http_urls(session, output_dir):
         count += 1
     print("%s: %s   %d urls written" % ("urls".ljust(12), url_filename.ljust(40), count))
 
+def dump(session, output_file):
+    if not session:
+        print('A session must be defined')
+        return
+
+    Output.write("Dumping session %s content to file %s" % (session, output_file))
+
+    f = open(output_file, "w")
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    # Create output files in dir if non existant
+    nb_documents = Elasticsearch.count(query)
+
+    pg = tqdm(total=nb_documents, mininterval=1, leave=False)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        f.write('%s\n' % json.dumps(source))
+        c += 1
+
+        pg.update(1)
+
+    f.close()
+
+    pg.close()
+
+    Output.write("%d documents dumped to %s" % (c, output_file))
+
+def restore(session, input_file):
+    if not session:
+        print('A session must be defined')
+        return
+
+    if not os.path.exists(input_file):
+        print('The input file must exist')
+        return
+    
+    Output.write("Counting the number of documents....")
+
+    f = open(input_file)
+    c = 0
+    for line in f:
+        c += 1
+    f.close()
+
+    Output.write("%d documents to insert in elasticsearch session %s" % (c, session))
+
+    pg = tqdm(total=c, mininterval=1, leave=False)
+
+    f = open(input_file)
+
+    for line in f:
+        line = line.strip()
+
+        document = json.loads(line)
+
+        document['session'] = session
+
+        DB.send(document)
+
+        pg.update(1)
+
+    pg.close()
+    f.close()
+
+    Output.write("%d documents inserted in elasticsearch" % (c,))
