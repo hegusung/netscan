@@ -8,6 +8,7 @@ from utils.config import Config
 from utils.output import Output
 from server.http_server import run_http_server
 from server.smb_server import run_smb_server
+from server.vulnerability_callback import VulnCallback
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='HTTP Server')
@@ -19,6 +20,8 @@ if __name__ == '__main__':
     DB.start_worker(args.nodb)
 
     Output.setup()
+
+    VulnCallback.init()
 
     bind_ip = Config.config.get('Server', 'bind_ip')
     http_port = int(Config.config.get('Server', 'http_port'))

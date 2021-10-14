@@ -23,6 +23,7 @@ import hashlib
 
 from utils.output import Output
 from server.payload_manager import PayloadManager
+from server.vulnerability_callback import VulnCallback
 
 __version__ = '1.0'
 
@@ -77,10 +78,27 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Serve a POST request."""
+        print(self.path)
 
         if self.path.startswith('/ressources/'):
             file_name = self.path.split('/')[-1]
             r, info = self.post_ressource_result(file_name)
+        elif self.path.startswith('/register_callback/'):
+            print("Got it !")
+            vuln_id= self.deal_register_vuln_callback()
+            print(vuln_id)
+
+            f = BytesIO()
+            f.write(vuln_id.encode())
+            f.seek(0)
+            self.send_response(200)
+            self.send_header("Content-type", "text/txt")
+            self.send_header("Content-Length", len(vuln_id))
+            self.end_headers()
+            if f:
+                self.copyfile(f, self.wfile)
+                f.close()
+            return
         else:
             self.path = "/server/files" + self.path
             r, info = self.deal_post_data()
@@ -108,6 +126,15 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         if f:
             self.copyfile(f, self.wfile)
             f.close()
+
+    def deal_register_vuln_callback(self):
+        remainbytes = int(self.headers['content-length'])
+        vuln_info = self.rfile.read(remainbytes)
+        print(vuln_info)
+
+        vuln_uuid = VulnCallback.register(vuln_info)
+
+        return vuln_uuid
 
     def deal_post_data(self):
         content_type = self.headers['content-type']

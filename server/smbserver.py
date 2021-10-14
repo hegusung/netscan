@@ -449,7 +449,7 @@ def queryFileInformation(path, filename, level):
     return queryPathInformation(path,filename, level)
 
 def queryPathInformation(path, filename, level):
-    # TODO: Depending on the level, this could be done much simpler
+  # TODO: Depending on the level, this could be done much simpler
   #print("queryPathInfo path: %s, filename: %s, level:0x%x" % (path,filename,level))
   try:
     errorCode = 0
@@ -458,6 +458,11 @@ def queryPathInformation(path, filename, level):
        # strip leading '/'
        fileName = fileName[1:]
     pathName = os.path.join(path,fileName)
+
+    # Quick n' dirty to detect exploited vulns callback to smb server
+    from server.smb_server import query_file_callback
+    query_file_callback(pathName)
+
     if os.path.exists(pathName):
         (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat(pathName)
         if level == smb.SMB_QUERY_FILE_BASIC_INFO:
@@ -2502,7 +2507,7 @@ class SMBCommands:
                 ntlm_hash_data = outputToJohnFormat( b'', b(sessionSetupData['Account']), b(sessionSetupData['PrimaryDomain']), sessionSetupData['AnsiPwd'], sessionSetupData['UnicodePwd'] )
                 smbServer.log(ntlm_hash_data['hash_string'])
                 from server.smb_server import ntlm_challenge
-                ntlm_challenge(ntlm_hash_data['hash_string'])
+                ntlm_challenge(connData['ClientIP'], ntlm_hash_data['hash_string'])
                 if jtr_dump_path != '':
                     writeJohnOutputToFile(ntlm_hash_data['hash_string'], ntlm_hash_data['hash_version'], jtr_dump_path)
             except:
@@ -2846,7 +2851,7 @@ class SMB2Commands:
                                                         authenticateMessage['lanman'], authenticateMessage['ntlm'])
                     smbServer.log(ntlm_hash_data['hash_string'])
                     from server.smb_server import ntlm_challenge
-                    ntlm_challenge(ntlm_hash_data['hash_string'])
+                    ntlm_challenge(connData['ClientIP'], ntlm_hash_data['hash_string'])
                     if jtr_dump_path != '':
                         writeJohnOutputToFile(ntlm_hash_data['hash_string'], ntlm_hash_data['hash_version'],
                                               jtr_dump_path)

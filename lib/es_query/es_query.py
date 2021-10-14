@@ -29,6 +29,8 @@ service_filters = {
     'redis': [{'service': 'redis'}, {'port': 6379}],
     'rmi': [{'service': 'rmi'}],
     'winrm': [{'port': 5985}, {'port': 5986}],
+    'x11': [{'port': 6000}],
+    'docker': [{'port': 2375}, {'port': 2376}],
 }
 
 service_nmap_translate = {

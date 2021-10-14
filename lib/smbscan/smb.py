@@ -98,6 +98,9 @@ class SMBScan:
             if 'STATUS_ACCESS_DENIED' in str(error):
                 # Can happen on both login() and check_if_admin() 
                 pass
+            elif 'STATUS_NO_SUCH_FILE' in str(error):
+                # Can happen with check_if_admin
+                pass
             else:
                 raise AuthFailure(error)
         except impacket.nmb.NetBIOSTimeout as e:
@@ -234,20 +237,29 @@ class SMBScan:
                 read = False
                 write = False
 
-                try:
-                    self.conn.listPath(share_name, '*')
-                    read = True
-                    share_info['access'].append('READ')
-                except SessionError:
-                    pass
+                if share_name != 'IPC$':
+                    try:
+                        self.conn.listPath(share_name, '\\*')
+                        read = True
+                        share_info['access'].append('READ')
+                    except SessionError:
+                        pass
+                    except impacket.nmb.NetBIOSError:
+                        pass
+                    except BrokenPipeError:
+                        pass
 
-                try:
-                    self.conn.createDirectory(share_name, temp_dir)
-                    self.conn.deleteDirectory(share_name, temp_dir)
-                    write = True
-                    share_info['access'].append('WRITE')
-                except SessionError:
-                    pass
+                    try:
+                        self.conn.createDirectory(share_name, temp_dir)
+                        self.conn.deleteDirectory(share_name, temp_dir)
+                        write = True
+                        share_info['access'].append('WRITE')
+                    except SessionError:
+                        pass
+                    except BrokenPipeError:
+                        pass
+                    except impacket.nmb.NetBIOSError:
+                        pass
 
                 yield share_info
 
@@ -261,7 +273,11 @@ class SMBScan:
             has_content = False
 
             try:
-                contents = self.conn.listPath(share, path+"\\*")
+                if path[-1] == '\\':
+                    request_path = path + "*"
+                else:
+                    request_path = path + "\\*"
+                contents = self.conn.listPath(share, request_path)
             except SessionError as e:
                 if 'STATUS_ACCESS_DENIED' not in str(e):
                     Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
