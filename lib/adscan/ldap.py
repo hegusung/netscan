@@ -45,14 +45,36 @@ class LDAPScan:
                 info = vars(self.server.info)
                 self.defaultdomainnamingcontext = info["other"]["defaultNamingContext"]
                 if type(self.defaultdomainnamingcontext) == list:
-                    self.defaultdomainnamingcontext = "; ".join(self.defaultdomainnamingcontext)
+                    self.defaultdomainnamingcontext = self.defaultdomainnamingcontext[0]
+                self.configurationNamingContext = info["other"]["configurationNamingContext"]
+                if type(self.configurationNamingContext) == list:
+                    self.configurationNamingContext = self.configurationNamingContext[0]
                 dnsHostName = info["other"]["dnsHostName"]
                 if type(dnsHostName) == list:
                     dnsHostName = "; ".join(dnsHostName)
                 self.current_domain = ".".join([item.split("=", 1)[-1] for item in self.defaultdomainnamingcontext.split(',') if item.split("=",1)[0].lower() == "dc"])
                 self.username = username
 
-                return True, {'dns_hostname': dnsHostName, 'default_domain_naming_context': self.defaultdomainnamingcontext}
+                # Get object SID
+                self.domain_sid = None
+                search_filter="(distinguishedName=%s)" % self.defaultdomainnamingcontext
+                entry_generator = self.conn.extend.standard.paged_search(search_base='%s' % self.defaultdomainnamingcontext,
+                                  search_filter=search_filter,
+                                  search_scope=ldap3.SUBTREE,
+                                  attributes=ldap3.ALL_ATTRIBUTES,
+                                  get_operational_attributes=True,
+                                  paged_size = 100,
+                                  generator=True)
+
+                for obj_info in entry_generator:
+                    try:
+                        attr = obj_info['attributes']
+                    except KeyError:
+                        continue
+                    
+                    self.domain_sid = attr['objectSid']
+
+                return True, {'dns_hostname': dnsHostName, 'default_domain_naming_context': self.defaultdomainnamingcontext, 'domain_sid': self.domain_sid}
             else:
                 return False, None
         except ldap3.core.exceptions.LDAPSocketOpenError:
@@ -136,16 +158,16 @@ class LDAPScan:
             'S-1-5-32-544', # Administrators
             'S-1-5-32-551', # Backup Operators
             'S-1-5-32-549', # Server Operators
-            'DnsAdmins', # DnsAdmins 
-            'Domain Admins', # Domain Admins
-            'Enterprise Admins', # Enterprise Admins
-            'Group Policy Creator Owners', # Group Policy Creator Owners
+            '%s-1105' % self.domain_sid, # DnsAdmins 
+            '%s-512' % self.domain_sid, # Domain Admins 
+            '%s-519' % self.domain_sid, # Enterprise Admins
+            '%s-520' % self.domain_sid, # Group Policy Creator Owners
         ]
 
         users_dict = {}
 
         for admin_group in admin_groups:
-            users, groupname = self._get_members_recursive(admin_group)
+            users, groupname = self._get_members_recursive(admin_group, users=[])
 
             for user in users:
                 if not user in users_dict:
@@ -220,7 +242,6 @@ class LDAPScan:
                 'tags': tags,
             }
 
-
     def _get_members_recursive(self, name, users=[]):
         if name.startswith('S-'):
             search_filter="(objectsid=%s)" % name
@@ -229,36 +250,40 @@ class LDAPScan:
         else:
             search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
 
-        # First, get all related groups
-        entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
-                          search_filter=search_filter,
-                          search_scope=ldap3.SUBTREE,
-                          attributes=ldap3.ALL_ATTRIBUTES,
-                          get_operational_attributes=True,
-                          paged_size = 100,
-                          generator=True)
+        try:
+            # First, get all related groups
+            entry_generator = self.conn.extend.standard.paged_search(search_base=self.defaultdomainnamingcontext,
+                              search_filter=search_filter,
+                              search_scope=ldap3.SUBTREE,
+                              attributes=ldap3.ALL_ATTRIBUTES,
+                              get_operational_attributes=True,
+                              paged_size = 100,
+                              generator=True)
 
-        group = None
+            group = None
+            domain = self.defaultdomainnamingcontext
 
-        for obj_info in entry_generator:
-                try:
-                    attr = obj_info['attributes']
-                except KeyError:
-                    continue
+            for obj_info in entry_generator:
+                    try:
+                        attr = obj_info['attributes']
+                    except KeyError:
+                        continue
 
-                domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
-                name = attr['sAMAccountName']
+                    domain = ".".join([item.split("=", 1)[-1] for item in attr['distinguishedName'].split(',') if item.split("=",1)[0].lower() == "dc"])
+                    name = attr['sAMAccountName']
+                    
+                    if 'user' in attr['objectClass']:
+                        username = "%s\\%s" % (domain, name)
 
-                if 'user' in attr['objectClass']:
-                    username = "%s\\%s" % (domain, name)
+                        if not username in users:
+                            users.append(username)
+                    elif 'group' in attr['objectClass']:
 
-                    if not username in users:
-                        users.append(username)
-                elif 'group' in attr['objectClass']:
-
-                    if 'member' in attr:
-                        for member in attr['member']:
-                            self._get_members_recursive(member, users=users)
+                        if 'member' in attr:
+                            for member in attr['member']:
+                                users, _ = self._get_members_recursive(member, users=users)
+        except ldap3.core.exceptions.LDAPInvalidFilterError:
+            pass
 
         return users, "%s\\%s" % (domain, name)
 
@@ -433,8 +458,25 @@ class LDAPScan:
                     'tags': tags,
                 }
 
+    def list_casrv(self):
+        entry_generator = self.conn.extend.standard.paged_search(search_base="CN=Enrollment Services,CN=Public Key Services,CN=Services,%s" % self.configurationNamingContext,
+                          search_filter="(objectClass=pKIEnrollmentService)",
+                          search_scope=ldap3.SUBTREE,
+                          attributes=ldap3.ALL_ATTRIBUTES,
+                          get_operational_attributes=True,
+                          paged_size = 100,
+                          generator=True)
+
+        for obj_info in entry_generator:
+                try:
+                    attr = obj_info['attributes']
+                except KeyError:
+                    continue
+
+                yield {"name": attr["name"], "hostname": attr['dNSHostName']}
+
     def list_cacerts(self):
-        entry_generator = self.conn.extend.standard.paged_search(search_base='CN=NTAuthCertificates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext,
+        entry_generator = self.conn.extend.standard.paged_search(search_base='CN=NTAuthCertificates,CN=Public Key Services,CN=Services,%s' % self.configurationNamingContext,
                           search_filter="(cn=*)",
                           search_scope=ldap3.SUBTREE,
                           attributes=ldap3.ALL_ATTRIBUTES,

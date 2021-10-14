@@ -407,7 +407,15 @@ def adscan_worker(target, actions, creds, timeout):
                     for entry in ldapscan.list_trusts():
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s   [%s]' % (entry['domain'].ljust(30), entry['direction'].ljust(20), entry['type'].ljust(20), ','.join(entry['tags']))})
                 else:
-                    raise NotImplementedError('Dumping hosts through SMB')
+                    raise NotImplementedError('Dumping hosts through LDAP')
+
+            if 'casrv' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'CA server:'})
+                if ldap_authenticated:
+                    for entry in ldapscan.list_casrv():
+                        Output.write({'target': ldapscan.url(), 'message': '- %s %s' % (entry['name'].ljust(30), entry['hostname'])})
+                else:
+                    raise NotImplementedError('Dumping hosts through LDAP')
 
             if 'cacerts' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'CA certs:'})
@@ -415,7 +423,7 @@ def adscan_worker(target, actions, creds, timeout):
                     for entry in ldapscan.list_cacerts():
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['algo'].ljust(30), ','.join(entry['common_names']))})
                 else:
-                    raise NotImplementedError('Dumping hosts through SMB')
+                    raise NotImplementedError('Dumping hosts through LDAP')
 
             if 'gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Vulnerable GPOs:'})

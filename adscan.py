@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
     parser.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
     parser.add_argument("--trusts", action='store_true', help='dump trusts from Active Directory')
+    parser.add_argument("--casrv", action='store_true', help='Discover the domain root Certificate Authority')
     parser.add_argument("--cacerts", action='store_true', help='List CA certificates from Active Directory')
     parser.add_argument("--gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory')
     parser.add_argument("--acl", action='store_true', help='Extract ACEs/ACLs of the current user from Active Directory')
@@ -111,6 +112,8 @@ def main():
         actions['passpol'] = {}
     if args.trusts:
         actions['trusts'] = {}
+    if args.casrv:
+        actions['casrv'] = {}
     if args.cacerts:
         actions['cacerts'] = {}
     if args.gpos:

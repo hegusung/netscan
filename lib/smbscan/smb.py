@@ -100,14 +100,17 @@ class SMBScan:
                 pass
             else:
                 raise AuthFailure(error)
-        except impacket.nmb.NetBIOSTimeout:
+        except impacket.nmb.NetBIOSTimeout as e:
             success = False
-        except TypeError:
+            raise AuthFailure("%s" % type(e))
+        except TypeError as e:
             # occurs when a SMB SessionError: STATUS_LOGON_FAILURE in another exception
             success = False
+            raise AuthFailure("%s" % type(e))
         except Exception as e:
+            success = False
             Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
-            pass
+            raise AuthFailure("%s: %s" % (type(e), e))
 
         self.authenticated = success
 

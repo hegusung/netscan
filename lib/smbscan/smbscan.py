@@ -72,6 +72,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 if 'password' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
+
                         Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
