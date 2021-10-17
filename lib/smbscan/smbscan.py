@@ -42,6 +42,7 @@ def smbscan_worker(target, actions, creds, timeout):
                     'domain': smb_info['domain'],
                     'hostname': smb_info['hostname'],
                     'signing': smb_info['signing'],
+                    'smbv1': smb_info['smbv1'],
                 }
             })
             DB.insert_domain_host({

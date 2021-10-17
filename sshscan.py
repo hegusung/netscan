@@ -74,7 +74,7 @@ def main():
     DB.stop_worker()
     Output.stop()
 
-def sshscan(input_targets, static_inputs, workers, actions, creds, timeout, args.resume):
+def sshscan(input_targets, static_inputs, workers, actions, creds, timeout, resume):
 
     args = (actions, creds, timeout)
 
