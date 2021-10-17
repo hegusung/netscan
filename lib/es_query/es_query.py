@@ -31,6 +31,7 @@ service_filters = {
     'winrm': [{'port': 5985}, {'port': 5986}],
     'x11': [{'port': 6000}],
     'docker': [{'port': 2375}, {'port': 2376}],
+    'rlogin': [{'port': 513}],
 }
 
 service_nmap_translate = {
@@ -43,7 +44,7 @@ service_nmap_translate = {
     'java-rmi': 'rmi',
 }
 
-def export(session, service, output_dir):
+def export_ports(session, service, output_dir):
     if not session:
         print('A session must be defined')
         return
@@ -58,6 +59,22 @@ def export(session, service, output_dir):
 
     export_ip_ports(session, service, output_dir)
     export_http_urls(session, output_dir)
+
+def export_hashes(session, service, output_dir):
+    if not session:
+        print('A session must be defined')
+        return
+
+    if not os.path.exists(output_dir):
+        print('The destination folder must exist')
+        return
+
+    if not os.path.isdir(output_dir):
+        print('The destination must be a folder')
+        return
+
+    export_local_hashes(session, output_dir)
+    export_domain_hashes(session, output_dir)
 
 def export_ip_ports(session, service, output_dir):
 
@@ -230,6 +247,130 @@ def export_http_urls(session, output_dir):
     for _ in open(url_filename):
         count += 1
     print("%s: %s   %d urls written" % ("urls".ljust(12), url_filename.ljust(40), count))
+
+def export_domain_hashes(session, output_dir):
+
+    enabled_users = []
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "domain_user"        }},
+            { "match": { "session": session }}
+          ],
+          "must_not": [
+            { "match": { "tags":   "Account disabled"  }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    res = Elasticsearch.search(query)
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        enabled_users.append(username)
+        
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "domain_hash"        }},
+            { "match": { "format": "ntlm" }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    hashfile_filename = os.path.join(output_dir, '%s_domain_username_ntlm_hash_enabled.txt' % session)
+    hashfile_file = open(hashfile_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        if ':' in source['hash']:
+            ntlm = source['hash'].split(':')[-1]
+        else:
+            ntlm = source['hash']
+
+        if username in enabled_users:
+            hashfile_file.write('%s\\%s:%s\n' % (source['domain'], source['username'], ntlm))
+
+    hashfile_file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(hashfile_filename))
+    count = 0
+    for _ in open(hashfile_filename):
+        count += 1
+    print("%s: %s   %d hashes written" % ("Domain hashes".ljust(12), hashfile_filename.ljust(40), count))
+
+def export_local_hashes(session, output_dir):
+       
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "cred_hash"        }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    # Create output files in dir if non existant
+
+    hash_dict = {}
+
+    res = Elasticsearch.search(query)
+    for item in res:
+        source = item['_source']
+
+        username = "%s_%s" % (source['url'], source['username'])
+        username = username.replace(":", "_")
+
+        if source['format'] == 'ntlm':
+            if ':' in source['hash']:
+                hash = source['hash'].split(':')[-1]
+            else:
+                hash = source['hash']
+        else:
+            hash = source['hash']
+
+        if not source['format'] in hash_dict:
+            hash_dict[source['format']] = []
+
+        hash_dict[source['format']].append("%s:%s" % (username, hash))
+
+    for format, hash_list in hash_dict.items():
+        hashfile_filename = os.path.join(output_dir, '%s_%s_hashes.txt' % (session, format))
+        hashfile_file = open(hashfile_filename, 'a')
+
+        for h in hash_list:
+            hashfile_file.write('%s\n' % h)
+
+        hashfile_file.close()
+
+        # Make files unique
+        os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(hashfile_filename))
+        count = 0
+        for _ in open(hashfile_filename):
+            count += 1
+        print("%s: %s   %d hashes written" % (format.ljust(12), hashfile_filename.ljust(40), count))
 
 def dump(session, output_file):
     if not session:

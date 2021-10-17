@@ -144,6 +144,7 @@ class SMBScan:
         smb_info['hostname'] = hostname.strip()
         smb_info['server_os'] = server_os.strip()
         smb_info['signing'] = signing
+        smb_info['smbv1'] = self.smbv1
 
         return smb_info
 
