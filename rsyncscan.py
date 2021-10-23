@@ -16,6 +16,7 @@ def main():
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='873', dest='port')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # Resume
@@ -39,17 +40,17 @@ def main():
 
     Output.setup()
 
-    rsyncscan(targets, static_inputs, args.workers, args.timeout, args.resume)
+    rsyncscan(targets, static_inputs, args.workers, args.timeout, args.delay, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def rsyncscan(input_targets, static_inputs, workers, timeout, resume):
+def rsyncscan(input_targets, static_inputs, workers, timeout, delay, resume):
 
     args = (timeout,)
 
-    dispatch_targets(input_targets, static_inputs, rsyncscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, rsyncscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()

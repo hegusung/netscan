@@ -17,6 +17,7 @@ def main():
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Actions
     parser.add_argument("--dbs", action='store_true', help='List databases')
     parser.add_argument('--cmd', metavar='command', type=str, nargs='?', help='Execute a command via PostgreSQL RCE techniques', default=None, dest='cmd')
@@ -63,17 +64,17 @@ def main():
 
     Output.setup()
 
-    postgrescan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.resume)
+    postgrescan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def postgrescan(input_targets, static_inputs, workers, actions, creds, timeout, resume):
+def postgrescan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
 
     args = (actions, creds, timeout)
 
-    dispatch_targets(input_targets, static_inputs, postgrescan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, postgrescan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()

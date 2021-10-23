@@ -18,6 +18,7 @@ def main():
     parser.add_argument('-d', metavar='database', type=str, nargs='?', help='Database', default='', dest='database')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Actions
     parser.add_argument("--dbs", action='store_true', help='List databases')
     # Bruteforce
@@ -62,17 +63,17 @@ def main():
 
     Output.setup()
 
-    mongoscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.resume)
+    mongoscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def mongoscan(input_targets, static_inputs, workers, actions, creds, timeout, resume):
+def mongoscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
 
     args = (actions, creds, timeout)
 
-    dispatch_targets(input_targets, static_inputs, mongoscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, mongoscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()

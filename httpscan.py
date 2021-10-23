@@ -26,6 +26,7 @@ def main():
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the directory bruteforce', default=5, dest='dir_bruteforce_workers')
     parser.add_argument('--proxy', metavar='http://ip:port', nargs='?', type=str, help='Proxy', default=None, dest='proxy')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
     parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules ("-m all" to execute all modules)', default=None, dest='modules')
@@ -100,16 +101,16 @@ def main():
             header_dict[key] = value
 
     Output.setup()
-    httpscan(targets, static_inputs, args.workers, actions, args.useragent, header_dict, args.http_auth, cookie_dict, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout, args.resume)
+    httpscan(targets, static_inputs, args.workers, actions, args.useragent, header_dict, args.http_auth, cookie_dict, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout, args.delay, args.resume)
 
     DB.stop_worker()
     Output.stop()
 
-def httpscan(input_targets, static_inputs, workers, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, resume):
+def httpscan(input_targets, static_inputs, workers, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, delay, resume):
 
     args = (actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout)
 
-    dispatch_targets(input_targets, static_inputs, httpscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, httpscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()

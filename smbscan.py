@@ -17,6 +17,7 @@ def main():
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='445', dest='port')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Authentication
     parser.add_argument('--null', action='store_true', help='NULL bind', dest='null')
     parser.add_argument('--guest', action='store_true', help='guest account', dest='guest')
@@ -156,17 +157,17 @@ def main():
 
     Output.setup()
 
-    smbscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.resume)
+    smbscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def smbscan(input_targets, static_inputs, workers, actions, creds, timeout, resume):
+def smbscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
 
     args = (actions, creds, timeout)
 
-    dispatch_targets(input_targets, static_inputs, smbscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, smbscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()

@@ -14,6 +14,7 @@ def main():
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Actions
     parser.add_argument('--rpc', action='store_true', help='List RPC entries', dest='rpc')
     parser.add_argument('--mounts', action='store_true', help='List NFS mount points', dest='mounts')
@@ -51,17 +52,17 @@ def main():
 
     Output.setup()
 
-    rpcscan(targets, static_inputs, args.workers, actions, args.timeout, args.resume)
+    rpcscan(targets, static_inputs, args.workers, actions, args.timeout, args.delay, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def rpcscan(input_targets, static_inputs, workers, actions, timeout, resume):
+def rpcscan(input_targets, static_inputs, workers, actions, timeout, delay, resume):
 
     args = (actions, timeout)
 
-    dispatch_targets(input_targets, static_inputs, rpcscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, rpcscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()
