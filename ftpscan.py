@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--list', action='store_true', help='List contents if auth success', dest='list')
     parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=3, dest='recurse')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Bruteforce
     parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
     parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
@@ -60,17 +61,17 @@ def main():
 
     Output.setup()
 
-    ftpscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.resume)
+    ftpscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def ftpscan(input_targets, static_inputs, workers, actions, creds, timeout, resume):
+def ftpscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
 
     args = (actions, creds, timeout)
 
-    dispatch_targets(input_targets, static_inputs, ftpscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, ftpscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()

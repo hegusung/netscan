@@ -15,6 +15,7 @@ def main():
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Authentication
     parser.add_argument('--null', action='store_true', help='NULL bind', dest='null')
     parser.add_argument('--guest', action='store_true', help='guest account', dest='guest')

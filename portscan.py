@@ -23,7 +23,7 @@ def main():
     parser.add_argument('--script', metavar='nmap scripts', type=str, nargs='?', help='Execute nmap scripts or specific script categories (requires -sV enabled)', const='default', default=None, dest='scripts')
     parser.add_argument('--script-args', metavar='nmap scripts args', type=str, nargs='?', help='Nmap script arguments (requires -sV enabled)', default=None, dest='script_args')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
-    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Delay between each connections', default=0, dest='delay')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # Resume

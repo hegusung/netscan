@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--axfr', action='store_true', help='AXFR check', dest='axfr')
     parser.add_argument('--dc', action='store_true', help='Look for a Domain Controler from a domain', dest='dc')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # Resume
@@ -48,16 +49,16 @@ def main():
     if args.dc:
         actions.append(('dc',))
 
-    dnsscan(targets, static_inputs, args.workers, args.dns, actions, args.timeout, args.resume)
+    dnsscan(targets, static_inputs, args.workers, args.dns, actions, args.timeout, args.delay, args.resume)
 
     DB.stop_worker()
     Output.stop()
 
-def dnsscan(input_targets, static_inputs, workers, dns, actions, timeout, resume):
+def dnsscan(input_targets, static_inputs, workers, dns, actions, timeout, delay, resume):
 
     args = (dns, actions, timeout)
 
-    dispatch_targets(input_targets, static_inputs, dnsscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, dnsscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 if __name__ == '__main__':
     main()
