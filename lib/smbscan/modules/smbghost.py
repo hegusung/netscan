@@ -4,10 +4,14 @@ from ctypes import *
 import socket
 import struct
 import logging
+import re
 
 from utils.output import Output
 from utils.db import DB
 from utils.utils import gen_random_string, gen_bruteforce_creds
+from ..smb import SMBScan
+
+windows_build_pattern = re.compile("Windows 10.0 Build (\d+)")
 
 # source: https://github.com/ollypwn/SMBGhost/blob/master/scanner.py
 
@@ -16,6 +20,26 @@ class Module:
     description = 'Check for SMBGhost (CVE-2020-0796)'
 
     def run(self, target, args, creds, timeout):
+        # get the build version (via SMBv2)
+        smbscan = SMBScan(target['hostname'], target['port'], timeout, use_smbv1=False)
+        if not smbscan.connect():
+            return
+
+        smb_info = smbscan.get_server_info()
+
+        os = smb_info['server_os']
+        m = windows_build_pattern.match(os)
+        if not m:
+            return
+
+        build = int(m.group(1))
+
+        # Version 1903 (May 2019 Update) : 18362 (KB4560960)
+        # Version 1909 (November 2019 Update) : 18363 (KB4560960)
+
+        if not (build >= 18362 and build <= 18363):
+            return
+
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:
@@ -27,7 +51,7 @@ class Module:
                 'service': 'smb',
                 'url': 'smb://%s:%d' % (target['hostname'], target['port']),
                 'name': 'CVE-2020-0796 (SMBGhost)',
-                'description': 'Server smb://%s:%d is vulnerable to CVE-2020-0796 (SMBGhost)' % (target['hostname'], target['port']),
+                'description': 'Server smb://%s:%d is probably vulnerable to CVE-2020-0796 (SMBGhost)' % (target['hostname'], target['port']),
             }
             DB.insert_vulnerability(vuln_info)
 
@@ -45,6 +69,9 @@ def check(ip, port, timeout):
         nb, = struct.unpack(">I", sock.recv(4))
         res = sock.recv(nb)
 
+        # Source: https://pentest-tools.com/blog/how-to-detect-microsoft-smbghost-vulnerability/
+        # \x11\x03 = SMB 3.1.1
+        # \x02\x00 = NegotiateContextCount = 2
         if res[68:70] != b"\x11\x03" or res[70:72] != b"\x02\x00":
             vulnerable = False
         else:

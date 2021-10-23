@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--script', metavar='nmap scripts', type=str, nargs='?', help='Execute nmap scripts or specific script categories (requires -sV enabled)', const='default', default=None, dest='scripts')
     parser.add_argument('--script-args', metavar='nmap scripts args', type=str, nargs='?', help='Nmap script arguments (requires -sV enabled)', default=None, dest='script_args')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Delay between each connections', default=0, dest='delay')
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # Resume
@@ -63,17 +64,17 @@ def main():
 
     Output.setup()
 
-    portscan(targets, static_inputs, args.workers, args.service_scan, actions, args.timeout, args.resume)
+    portscan(targets, static_inputs, args.workers, args.service_scan, actions, args.timeout, args.delay, args.resume)
 
 
     DB.stop_worker()
     Output.stop()
 
-def portscan(input_targets, static_inputs, workers, service_scan, actions, timeout, resume):
+def portscan(input_targets, static_inputs, workers, service_scan, actions, timeout, delay, resume):
 
     args = (service_scan, actions, timeout)
 
-    dispatch_targets(input_targets, static_inputs, portscan_worker, args, workers=workers, resume=resume)
+    dispatch_targets(input_targets, static_inputs, portscan_worker, args, workers=workers, delay=delay, resume=resume)
 
     # Nmap can break the terminal, so fix it
     os.system("stty echo")
