@@ -4,6 +4,7 @@ from time import sleep
 import socket
 import traceback
 import struct
+import re
 
 from .smb import SMBScan, AuthFailure, sizeof_fmt
 from .smb_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_generator_count
@@ -19,6 +20,8 @@ Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
 
 smb_modules = ModuleManager('lib/smbscan/modules')
 
+windows_build = re.compile("Windows \S+ Build (\d+)")
+
 def smbscan_worker(target, actions, creds, timeout):
     try:
         smbscan = SMBScan(target['hostname'], target['port'], timeout)
@@ -28,6 +31,25 @@ def smbscan_worker(target, actions, creds, timeout):
 
             # Gather info
             smb_info = smbscan.get_server_info()
+
+            # Get build version
+            if smbscan.smbv1:
+                # Get build version via SMB2
+                smbv2 = SMBScan(target['hostname'], target['port'], timeout, use_smbv1=False)
+                if smbv2.connect():
+                    smb_info_v2 = smbv2.get_server_info()
+                    v2_os = smb_info_v2['server_os']
+                else:
+                    v2_os = ""
+            else:
+                v2_os = smb_info['server_os']
+
+            m = windows_build.match(v2_os)
+            if m:
+                build = m.group(1)
+            else:
+                build = "Unknown"
+
             smb_info['target'] = smbscan.url()
             smb_info['message_type'] = 'smb'
             Output.write(smb_info)
@@ -43,6 +65,7 @@ def smbscan_worker(target, actions, creds, timeout):
                     'hostname': smb_info['hostname'],
                     'signing': smb_info['signing'],
                     'smbv1': smb_info['smbv1'],
+                    'build': build,
                 }
             })
             DB.insert_domain_host({

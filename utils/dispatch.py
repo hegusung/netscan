@@ -18,14 +18,14 @@ manager = Manager()
 pg_lock = manager.RLock()
 tqdm.set_lock(pg_lock)
 
-def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10, process=True, pg_name=None, resume=0):
+def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10, process=True, pg_name=None, delay=0, resume=0):
     # Parse inputs
     target_gen = process_inputs(targets, static_inputs)
     target_size = count_process_inputs(targets, static_inputs)
 
-    dispatch(target_gen, target_size, worker_func, func_args, workers=workers, process=process, pg_name=pg_name, resume=resume)
+    dispatch(target_gen, target_size, worker_func, func_args, workers=workers, process=process, pg_name=pg_name, delay=delay, resume=resume)
 
-def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None, resume=0):
+def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None, delay=0, resume=0):
     try:
         worker_list = []
 
@@ -71,12 +71,12 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
         if process:
             # Start processes
             for _ in range(n_process):
-                p = Process(target=process_worker, args=(feed_queue, worker_func, func_args, pg_queue, n_threads))
+                p = Process(target=process_worker, args=(feed_queue, worker_func, func_args, pg_queue, n_threads, delay))
                 p.start()
                 worker_list.append(p)
         else:
             for _ in range(n_threads):
-                t = Thread(target=thread_worker, args=(feed_queue, worker_func, func_args, pg_queue))
+                t = Thread(target=thread_worker, args=(feed_queue, worker_func, func_args, pg_queue, delay))
                 t.start()
                 worker_list.append(t)
 
@@ -103,12 +103,12 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
                     if exitcode:
                         num_failed += 1
 
-def process_worker(feed_queue, worker_func, func_args, pg_queue, n_threads):
+def process_worker(feed_queue, worker_func, func_args, pg_queue, n_threads, delay):
     try:
         thread_list = []
 
         for _ in range(n_threads):
-            t = Thread(target=thread_worker, args=(feed_queue, worker_func, func_args, pg_queue))
+            t = Thread(target=thread_worker, args=(feed_queue, worker_func, func_args, pg_queue, delay))
             t.daemon = True
             t.start()
             thread_list.append(t)
@@ -118,13 +118,15 @@ def process_worker(feed_queue, worker_func, func_args, pg_queue, n_threads):
     except KeyboardInterrupt:
         pass
 
-def thread_worker(feed_queue, worker_func, func_args, pg_queue):
+def thread_worker(feed_queue, worker_func, func_args, pg_queue, delay):
     try:
         while True:
             target = json.loads(feed_queue.get())
 
             if target == None:
                 break
+
+            t0 = time.time()
 
             try:
                 worker_func(target, *func_args)
@@ -136,9 +138,13 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue):
                 logfile = open(log_path, "a")
                 logfile.write("%s: %s\n%s: %s\n%s\n\n" % (str(worker_func), str(target), type(e), e, traceback.format_exc()))
                 logfile.close()
-                
             finally:
                 pg_queue.put(1)
+
+                time_spent = time.time() - t0
+
+                if time_spent < delay:
+                    time.sleep(delay - time_spent)
     except KeyboardInterrupt:
         pass
 

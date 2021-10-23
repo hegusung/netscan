@@ -35,10 +35,15 @@ Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
 
 class SMBScan:
 
-    def __init__(self, hostname, port, timeout):
+    def __init__(self, hostname, port, timeout, use_smbv1=True):
         self.hostname = hostname
         self.port = port
         self.timeout = timeout
+
+        if use_smbv1:
+            self.prefered_dialect = SMB_DIALECT
+        else:
+            self.prefered_dialect = SMB2_DIALECT_21
 
         self.conn = None
         self.authenticated = False
@@ -151,6 +156,30 @@ class SMBScan:
 
     def connect(self):
         try:
+            self.conn = SMBConnection(self.hostname, self.hostname, None, self.port, timeout=self.timeout, preferredDialect=self.prefered_dialect)
+
+            if self.prefered_dialect == SMB_DIALECT:
+                self.smbv1 = True
+            else:
+                self.smbv1 = False
+
+            return True
+        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout) as e:
+            if self.prefered_dialect == SMB_DIALECT:
+                # SMBv1 didn't work, try SMBv2
+                self.prefered_dialect = SMB2_DIALECT_21
+
+                return self.connect()
+            else:
+                return False
+
+        except Exception as e:
+            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+            return False
+
+    """
+    def connect(self):
+        try:
             self.conn = SMBConnection(self.hostname, self.hostname, None, self.port, timeout=self.timeout, preferredDialect=SMB_DIALECT)
             self.smbv1 = True
 
@@ -168,6 +197,7 @@ class SMBScan:
         except Exception as e:
             Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             return False
+    """
 
     def disconnect(self):
         if self.conn:
