@@ -5,9 +5,8 @@ from server.smbserver import *
 from server.vulnerability_callback import VulnCallback
 
 def run_smb_server(ip, port):
-    global vuln_path
     server = SimpleSMBServer(ip,int(port))
-
+    
     vuln_path = os.path.join(os.path.dirname(__file__), 'empty')
 
     server.addShare("Files", os.path.join(os.path.dirname(__file__), 'files'), "Files")
@@ -21,14 +20,27 @@ def run_smb_server(ip, port):
     server.start()
 
 # This part is really quick n' dirty...
-def query_file_callback(file_path):
-    global vuln_path
+def query_file_callback(client_ip, share_name, file_path):
+    Output.highlight("%s> Requested ressource: \\%s\\%s" % (client_ip, share_name, file_path))
 
-    if file_path.startswith(vuln_path):
+    if share_name.lower() == "vuln":
         vuln_id = file_path.split('/')[-1]
-        print("VUlN ID: %s" % vuln_id)
 
         VulnCallback.check(vuln_id)
+    elif share_name.lower() == "ipc$":
+        if file_path == "spoolss":
+            # The module printspooler of smbscan has exploited a machine, create a vuln :
+            Output.vuln({'target': '[Vuln] smb://%s:%d' % (client_ip, 445), 'message': 'Has PrintSpooler service enabled and exploitable'})
+
+            vuln_info = {
+                'hostname': client_ip,
+                'port': 445,
+                'service': 'smb',
+                'url': 'smb://%s:%d' % (client_ip, 445),
+                'name': 'Printspooler enabled',
+                'description': 'Host %s has the PrintSpooler service enabled and exploitable' % (client_ip,),
+            }
+            DB.insert_vulnerability(vuln_info)
 
 def ntlm_challenge(client_ip, ntlm_chall):
     Output.major("NTLM challenge from %s> %s" % (client_ip, ntlm_chall))

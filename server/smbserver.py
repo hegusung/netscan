@@ -273,7 +273,6 @@ def openFile(path,fileName, accessMode, fileAttributes, openMode):
     return fid, mode, pathName, errorCode
 
 def queryFsInformation(path, filename, level=0, pktFlags = smb.SMB.FLAGS2_UNICODE):
-
     if pktFlags & smb.SMB.FLAGS2_UNICODE:
          encoding = 'utf-16le'
     else:
@@ -458,10 +457,6 @@ def queryPathInformation(path, filename, level):
        # strip leading '/'
        fileName = fileName[1:]
     pathName = os.path.join(path,fileName)
-
-    # Quick n' dirty to detect exploited vulns callback to smb server
-    from server.smb_server import query_file_callback
-    query_file_callback(pathName)
 
     if os.path.exists(pathName):
         (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat(pathName)
@@ -2016,6 +2011,13 @@ class SMBCommands:
              if len(fileName) > 0 and (fileName[0] == '/' or fileName[0] == '\\'):
                 # strip leading '/'
                 fileName = fileName[1:]
+
+             share_name = connData['ConnectedShares'][recvPacket['Tid']]['shareName']
+             client_ip = connData['ClientIP']
+             # Quick n' dirty to detect exploited vulns callback to smb server
+             from server.smb_server import query_file_callback
+             query_file_callback(client_ip, share_name, fileName)
+
              pathName = os.path.join(path,fileName)
              createDisposition = ntCreateAndXParameters['Disposition']
              mode = 0
@@ -2831,7 +2833,15 @@ class SMB2Commands:
                     errorCode = STATUS_LOGON_FAILURE
             else:
                 # No credentials provided, let's grant access
-                isGuest = True
+                
+                # Soooo, might sound stupid but:
+                # - set guest = True when the account tries to authenticate with an account
+                # - set guest = False when there is no user (Works for Printnightmare)
+                if len(authenticateMessage['user_name'].decode('utf-16le')) == 0:
+                    isGuest = False
+                else:
+                    isGuest = True
+
                 errorCode = STATUS_SUCCESS
 
             if errorCode == STATUS_SUCCESS:
@@ -2857,7 +2867,7 @@ class SMB2Commands:
                                               jtr_dump_path)
                 except:
                     smbServer.log("Could not write NTLM Hashes to the specified JTR_Dump_Path %s" % jtr_dump_path)
-
+                
                 if isGuest:
                     respSMBCommand['SessionFlags'] = 1
 
@@ -2972,6 +2982,13 @@ class SMB2Commands:
              if len(fileName) > 0 and (fileName[0] == '/' or fileName[0] == '\\'):
                 # strip leading '/'
                 fileName = fileName[1:]
+
+             share_name = connData['ConnectedShares'][recvPacket['TreeID']]['shareName']
+             client_ip = connData['ClientIP']
+             # Quick n' dirty to detect exploited vulns callback to smb server
+             from server.smb_server import query_file_callback
+             query_file_callback(client_ip, share_name, fileName)
+
              pathName = os.path.join(path,fileName)
              createDisposition = ntCreateRequest['CreateDisposition']
              mode = 0
