@@ -68,6 +68,15 @@ es_mapping = {
                     }
                 }
             },
+            "created_date": {
+                "type": "date"
+            },
+            "last_logon": {
+                "type": "date"
+            },
+            "last_password_change": {
+                "type": "date"
+            },
         }
     }
 }
@@ -649,6 +658,13 @@ class DB:
 
         if len(user_doc['domain']) == 0 or user_doc['domain'] == 'workgroup':
             return
+
+        if 'created_date' in user_doc:
+            user_doc['created_date'] = int(user_doc['created_date'].timestamp()*1000)
+        if 'last_logon' in user_doc:
+            user_doc['last_logon'] = int(user_doc['last_logon'].timestamp()*1000)
+        if 'last_password_change' in user_doc:
+            user_doc['last_password_change'] = int(user_doc['last_password_change'].timestamp()*1000)
 
         # deprecated...
         if 'password' in user_doc:

@@ -118,6 +118,10 @@ class LDAPScan:
 
             primaryGID = attr["primaryGroupID"]
 
+            created_date = attr["whenCreated"]
+            last_logon_date = attr["lastLogon"]
+            last_password_change_date = attr["pwdLastSet"]
+
             tags = []
             if 'userAccountControl' in attr:
                 if attr['userAccountControl'] & 0x0200 == 0:
@@ -145,6 +149,9 @@ class LDAPScan:
                 'username': username,
                 'fullname': fullname,
                 'comment': comment,
+                'created_date': created_date,
+                'last_logon': last_logon_date,
+                'last_password_change': last_password_change_date,
                 'sid': sid,
                 'rid': rid,
                 'dn': dn,
