@@ -98,7 +98,7 @@ class Module:
 
                         output = http.get(os.path.join(target['path'], url), auth=(auth_type, username, password))
 
-                        if output['code'] in [200]:
+                        if output != None and output['code'] in [200]:
                             Output.success({'target': http.url(os.path.join(target['path'], url)), 'message': 'Authentication success with login %s and password %s' % (username, password)})
 
                             cred_info = {
