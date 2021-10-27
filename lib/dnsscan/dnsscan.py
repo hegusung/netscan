@@ -77,6 +77,9 @@ class DNSScan:
             resolved = None
         except dns.resolver.NoAnswer:
             resolved = None
+        except dns.exception.Timeout as e:
+            Output.error(str(e))
+            resolved = None
 
         return resolved
 
@@ -101,6 +104,9 @@ class DNSScan:
                     resolved = None
                 except dns.resolver.NoAnswer:
                     resolved = None
+                except dns.exception.Timeout as e:
+                    Output.error(str(e))
+                    resolved = None
 
             dc_fqdn_list = list(set(dc_fqdn_list))
 
@@ -111,6 +117,9 @@ class DNSScan:
                 except dns.resolver.NXDOMAIN:
                     ip_list = None
                 except dns.resolver.NoAnswer:
+                    ip_list = None
+                except dns.exception.Timeout as e:
+                    Output.error(str(e))
                     ip_list = None
 
                 yield {"domain": self.hostname, "hostname": dc_fqdn, "ips": ip_list}
@@ -135,6 +144,8 @@ class DNSScan:
                 pass
             except dns.resolver.NoAnswer:
                 pass
+            except dns.exception.Timeout as e:
+                Output.error(str(e))
 
         f.close()
 
@@ -221,3 +232,5 @@ class DNSScan:
             pass
         except dns.resolver.NoAnswer:
             pass
+        except dns.exception.Timeout as e:
+            Output.error(str(e))
