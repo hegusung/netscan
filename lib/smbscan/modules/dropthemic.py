@@ -11,6 +11,7 @@ import re
 from utils.output import Output
 from utils.db import DB
 
+import impacket
 from impacket import version
 from impacket.examples.logger import ImpacketFormatter
 from impacket.smbconnection import SMBConnection, SessionError
@@ -111,8 +112,8 @@ def check(remote_host, port, domain, username, password, ntlm_hash):
             return False
 
         # smbserver.py and samba false positives
-        #if server_os in ["Windows 255.255 Build 65535", "Windows 6.1 Build 0"]:
-        #    return False
+        if server_os in ["Windows 255.255 Build 65535", "Windows 6.1 Build 0"]:
+            return False
 
         return True
     except SessionError as exc:
@@ -250,7 +251,7 @@ def mod_getNTLMSSPType3(type1, type2, user, password, domain, lmhash = '', nthas
     return ntlmChallengeResponse, exportedSessionKey
 
 from impacket.smbconnection import SMBConnection
-from impacket import smb, smb3, nmb, nt_errors, LOG
+from impacket import smb, smb3, nmb, nt_errors, LOG, crypto
 
 class mod_SMBConnection(SMBConnection):
 
@@ -322,6 +323,7 @@ class mod_SMBConnection(SMBConnection):
 
         return True
 
+from struct import unpack
 from six import indexbytes, b
 from binascii import a2b_hex
 from impacket.smb3structs import *
@@ -533,17 +535,19 @@ class mod_SMB3(smb3.SMB3):
                 raise
 
 from impacket.smb import SMB
-from impacket.structure import Structure
 
-class mod_SMB(smb.SMB):
+class mod_SMB(SMB):
 
     def login_extended(self, user, password, domain = '', lmhash = '', nthash = '', use_ntlmv2 = True ):
 
+        from impacket.smb import NewSMBPacket, SMBCommand, SMBSessionSetupAndX_Extended_Parameters, SMBSessionSetupAndX_Extended_Data, SMBSessionSetupAndX_Extended_Response_Parameters, SMBSessionSetupAndX_Extended_Response_Data, SMBSessionSetupAndXResponse_Parameters
+        from impacket.structure import Structure
+        
         # login feature does not support unicode
         # disable it if enabled
-        flags2 = self.__flags2
+        flags2 = self._SMB__flags2
         if flags2 & SMB.FLAGS2_UNICODE:
-            self.__flags2 = flags2 & (flags2 ^ SMB.FLAGS2_UNICODE)
+            self._SMB__flags2 = flags2 & (flags2 ^ SMB.FLAGS2_UNICODE)
 
         # Once everything's working we should join login methods into a single one
         smb = NewSMBPacket()
@@ -677,7 +681,7 @@ class mod_SMB(smb.SMB):
 
                 # restore unicode flag if needed
                 if flags2 & SMB.FLAGS2_UNICODE:
-                    self.__flags2 |= SMB.FLAGS2_UNICODE
+                    self._SMB__flags2 |= SMB.FLAGS2_UNICODE
 
                 return 1
         else:
