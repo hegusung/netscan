@@ -28,7 +28,7 @@ class Module:
 
         res = http.get(target['path'])
 
-        if res['code'] in [200,401] and ('glassfish' in res['title'].lower() or 'glassfish' in res['server'].lower()):
+        if res != None and res['code'] in [200,401] and ('glassfish' in res['title'].lower() or 'glassfish' in res['server'].lower()):
             http_info = {
                 'hostname': target['hostname'],
                 'port': target['port'],
