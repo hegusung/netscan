@@ -24,7 +24,7 @@ es_ids = {
     'port': 'port_{session}_{ip}_{protocol}_{port}',
     'script': 'script_{session}_{ip}_{protocol}_{port}_{name}',
     'http': 'http_{session}_{url}',
-    'content': 'content_{session}_{url}_{share}_{path}',
+    'content': 'content_{session}_{url}_{account}_{share}_{path}',
     'application': 'application_{session}_{url}_{name}_{version}',
     'database': 'database_{session}_{url}_{account}_{database}_{table}',
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
@@ -366,7 +366,7 @@ class DB:
     def insert_content(self, content_doc):
         content_doc['doc_type'] = 'content'
         content_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        content_doc = check_entry(content_doc, ['url', 'path', 'share', 'service'], ['size', 'access'])
+        content_doc = check_entry(content_doc, ['url', 'path', 'share', 'service', 'account'], ['size', 'access'])
 
         content_doc['service'] = content_doc['service'].lower()
 

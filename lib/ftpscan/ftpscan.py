@@ -64,6 +64,11 @@ def ftpscan_worker(target, actions, creds, timeout):
                             else:
                                 contents += " "*60+"- %s\n" % content['name']
 
+                            if 'username' in creds:
+                                account = creds['username']
+                            else:
+                                account = 'anonymous'
+
                             # Add to database
                             content_info = {
                                 'hostname': target['hostname'],
@@ -71,6 +76,7 @@ def ftpscan_worker(target, actions, creds, timeout):
                                 'url': ftpscan.url(),
                                 'service': 'ftp',
                                 'path': content['name'],
+                                'account': account,
                             }
                             if 'size' in content:
                                 content_info['size'] = content['size']

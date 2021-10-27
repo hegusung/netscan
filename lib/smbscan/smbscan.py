@@ -192,6 +192,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                 'share': share_info['name'],
                                 'service': 'smb',
                                 'path': '/',
+                                'account': "%s\\%s" % (creds['domain'], creds['username']),
                                 'access': share_info['access'],
                                 'comment': share_info['remark'],
                             }
@@ -235,6 +236,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                     'share': share,
                                     'service': 'smb',
                                     'path': content['name'].replace('\\', '/'),
+                                    'account': "%s\\%s" % (creds['domain'], creds['username']),
                                 }
                                 if 'size' in content:
                                     db_info['size'] = content['size']
