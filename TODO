@@ -1,6 +1,4 @@
-- PetitPotam https://github.com/topotam/PetitPotam multiple steps required.... check manually
-
-- Apache Tomcat RCE CVE-2020-1938, unauthenticated LFI, possibility to retrieve tomcat password ? (metasploit module)
+- Apache Tomcat RCE CVE-2020-1938, unauthenticated LFI (metasploit module)
 - Apache 2.4.49/2.4.50 LFI (simply implementable)
 
 - Port 6000: X11: x11-access
@@ -8,13 +6,10 @@
 - Bluekeep (detect_bluekeep.py check script available)
 
 - Windows DNS Server RCE CVE-2020-1350 (NSE script available)
-- Vcenter RCE CVE-2021-21972 (NSE script available)
+- Vcenter RCE CVE-2021-21972 (NSE script available) https://github.com/alt3kx/CVE-2021-21972/CVE-2021-21972.nse
 
 - Exchange CVE-2020-0688 (vulnerability on OWA, quite easy to implement)
 - Cisco ASA CVE-2020-3452 (easy to implement)
 
 - F5 BigIP RCE CVE-2021-22986 (easy to implement)
 - Windows TCP-IP CVE-2020-16898 (Only BSOD available)
-
-- Tomcat CVE-2020-9495, deserialization, but requires an upload feature, so meh
-- Weblogic CVE-2021-2109, authenticated RCE, so meh

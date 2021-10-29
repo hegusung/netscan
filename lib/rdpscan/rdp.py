@@ -7,6 +7,9 @@ import OpenSSL
 import traceback
 import struct
 
+import random
+import string
+
 from binascii import a2b_hex
 from Cryptodome.Cipher import ARC4
 from impacket import ntlm, version
@@ -32,6 +35,43 @@ class RDP:
 
     def url(self, path=None):
         return "rdp://%s:%d" % (self.hostname, self.port)
+
+    def check_if_rdp(self):
+        use_ssl = True
+
+        # check if rdp is open
+        try:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(self.timeout)
+                sock.connect((self.hostname, self.port))
+            except Exception as ex:
+                #print(f"[D] [{ip}] Exception occured during TCP connect: {ex}")
+                return False
+            status = rdp_connect(sock, use_ssl)
+            if status in ["SSL_NOT_ALLOWED_BY_SERVER", "SSL_CERT_NOT_ON_SERVER"]:
+                use_ssl = False
+                try:
+                    #print(f"[D] [{ip}] RDP reconnecting without SSL")
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(self.timeout)
+                    sock.connect((self.hostname, self.port))
+                except Exception as ex:
+                    #print(f"[D] [{ip}] Exception occured during TCP connect: {ex}")
+                    return False
+                status = rdp_connect(sock, use_ssl)
+            if status == "nossl":
+                status = None
+                use_ssl = False
+            elif status:
+                return True
+        except Exception as ex:
+            #print(f"[D] [{ip}] Exception occured during RDP connect: {ex}")
+            return False
+
+        sock.close()
+
+        return True
 
     def get_certificate_info(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -558,3 +598,123 @@ class SPNEGOCipher:
             self.__sequence += 1
 
         return signature, answer
+
+# https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/db6713ee-1c0e-4064-a3b3-0fac30b4037b
+
+# Taken from https://github.com/HynekPetrak/detect_bluekeep.py
+
+SEC_ENCRYPT = 0x08
+SEC_INFO_PKT = 0x40
+
+STATUS_VULNERABLE = "VULNERABLE"
+STATUS_UNKNOWN = "UNKNOWN"
+STATUS_NORDP = "NO RDP"
+STATUS_SAFE = "SAFE"
+
+NEGOTIATION_FAILURED = ["UNKNOWN_ERROR",
+    "SSL_REQUIRED_BY_SERVER", # 1
+    "SSL_NOT_ALLOWED_BY_SERVER",
+    "SSL_CERT_NOT_ON_SERVER",
+    "INCONSISTENT_FLAGS",
+    "HYBRID_REQUIRED_BY_SERVER", # 5
+    "SSL_WITH_USER_AUTH_REQUIRED_BY_SERVER"] # 6
+
+
+
+
+def pdu_connection_request(use_ssl = True):
+    pkt = (
+        b"\x03\x00" + # TPKT header
+        b"\x00\x2b" + # TPKT leangth
+        # X.224 Connection Request
+        b"\x26" + # length
+        b"\xe0" + # CR CDT
+        b"\x00\x00" + # DST-REF
+        b"\x00\x00" + # SRC-REF
+        b"\x00" + # CLASS OPTION = Class 0
+        # Cookie: mstshash=IDENTIFIER
+        b"\x43\x6f\x6f\x6b\x69\x65\x3a\x20\x6d\x73\x74\x73\x68\x61\x73\x68\x3d" +
+        ''.join(random.choice(string.ascii_letters)
+                   for i in range(5)).encode("ascii") + # "username"
+        b"\x0d\x0a" +
+        b"\x01" + # RDP_NEG_REQ
+        b"\x00" + # flags
+        b"\x08" # length
+    )
+    if not use_ssl:
+        pkt += b"\x00\x00\x00\x00\x00" # PROTOCOL_RDP - standard security
+    else:
+        pkt += b"\x00\x01\x00\x00\x00" # PROTOCOL_SSL - TLS security
+    return pkt
+
+
+def rdp_connect(sock, use_ssl):
+    ip, port = sock.getpeername()
+    #print(f"[D] [{ip}] Verifying RDP protocol...")
+
+    res = rdp_send_recv(sock, pdu_connection_request(use_ssl))
+    # 0300 0013 0e d0 0000 1234 00
+    # 03 - response type x03 TYPE_RDP_NEG_FAILURE x02 TYPE_RDP_NEG_RSP
+    # 00 0800 05000000
+    # Issue #2: 0300 000b 06 d0 0000 1234 00
+    if res[0:2] == b'\x03\x00' and (res[5] & 0xf0) == 0xd0:
+        if len(res) < 0xc or res[0xb] == 0x2:
+            #print(f"[D] [{ip}] RDP connection accepted by the server.")
+            if len(res) < 0xc:
+                return "nossl"
+            else:
+                return None
+        elif res[0xb] == 0x3:
+            #print(f"[D] [{ip}] RDP connection rejected by the server.")
+            fc = res[0xf]
+            if fc > 6:
+                fc = 0
+            fcs = NEGOTIATION_FAILURED[fc]
+            #print(f"[D] [{ip}] filureCode: {fcs}")
+            return fcs
+    raise RdpCommunicationError()
+
+def rdp_send_recv(sock, data):
+    rdp_send(sock, data)
+    return rdp_recv(sock)
+
+
+class RdpCommunicationError(Exception):
+    pass
+
+
+def rdp_send(sock, data):
+    sock.send(data)
+    # sock.flush
+    # sleep(0.1)
+    # sleep(0.5)
+
+
+def rdp_recv(sock):
+    res1 = sock.recv(4)
+    if res1 == b'':
+        raise RdpCommunicationError()  # nil due to a timeout
+    version = res1[0]
+    if version == 3:
+        l = struct.unpack(">H", res1[2:4])[0]
+    else:
+        l = res1[1]
+        if l & 0x80:
+            l &= 0x7f
+            l = l * 256 + res1[2]
+    if l < 4:
+        raise RdpCommunicationError()
+    res2 = b''
+    remaining = l - 4
+    #print(f"Received: {hexlify(res1)} to_receive: {l:04x}")
+    while remaining:
+        chunk = sock.recv(remaining)
+        res2 += chunk
+        remaining -= len(chunk)
+        # #print(f"Received: {(len(res2)+4):04x}")
+    if res2 == b'':
+        raise RdpCommunicationError()  # nil due to a timeout
+    #print(f"Received data: {hexlify(res1+res2)}")
+    return res1 + res2
+
+
