@@ -48,6 +48,7 @@ def rsyncscan_worker(target, timeout):
                 'share': share['name'],
                 'comment': share['description'],
                 'path': '/',
+                'account': 'N/A',
             }
             if share['anon'] == True:
                 db_info['access'] = ['READ']

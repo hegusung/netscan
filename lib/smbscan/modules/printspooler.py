@@ -17,7 +17,8 @@ class Module:
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintSpooler module requires 1 arg: target_ip'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintSpooler module requires 1 arg: listener_ip'})
+            return
 
         domain = creds['domain'] if 'domain' in creds else None
         user = creds['username'] if 'username' in creds else None
@@ -29,12 +30,12 @@ class Module:
 def check(ip, port, target_ip, domain, username, password, ntlm, timeout):
     dce = create_connection(ip, domain, username, password, ntlm)
     if dce == None:
-        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler failed (1)'})
+        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler failed: connection error'})
         return
 
     handle = call_open_printer(dce, ip)
     if handle == None:
-        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler failed (2)'})
+        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler failed: failed to access printer service'})
         return
 
     res = grab_hash(dce, handle, target_ip)

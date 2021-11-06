@@ -55,6 +55,8 @@ class Module:
             pass
         except TimeoutError as e:
             pass
+        except OSError:
+            pass
 
 
 decode_hex = codecs.getdecoder('hex_codec')

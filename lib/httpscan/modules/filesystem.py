@@ -39,6 +39,7 @@ class Module:
                     'url': '%s://%s:%d' % (target['method'], target['hostname'], target['port']),
                     'service': 'http',
                     'path': path,
+                    'account': 'anonymous',
                 }
                 content_info['share'] = 'N/A'
                 DB.insert_content(content_info)
@@ -60,6 +61,7 @@ class Module:
                     'url': '%s://%s:%d' % (target['method'], target['hostname'], target['port']),
                     'service': 'http',
                     'path': o.path,
+                    'account': 'anonymous',
                 }
                 content_info['share'] = 'N/A'
                 DB.insert_content(content_info)

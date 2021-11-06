@@ -9,6 +9,7 @@ Original author see: https://gist.github.com/UniIsland/3346170
 """
 
 import os
+import json
 from datetime import datetime
 import posixpath
 import http.server
@@ -78,15 +79,12 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Serve a POST request."""
-        print(self.path)
 
         if self.path.startswith('/ressources/'):
             file_name = self.path.split('/')[-1]
             r, info = self.post_ressource_result(file_name)
         elif self.path.startswith('/register_callback/'):
-            print("Got it !")
             vuln_id= self.deal_register_vuln_callback()
-            print(vuln_id)
 
             f = BytesIO()
             f.write(vuln_id.encode())
@@ -130,9 +128,8 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def deal_register_vuln_callback(self):
         remainbytes = int(self.headers['content-length'])
         vuln_info = self.rfile.read(remainbytes)
-        print(vuln_info)
 
-        vuln_uuid = VulnCallback.register(vuln_info)
+        vuln_uuid = VulnCallback.register(json.loads(vuln_info))
 
         return vuln_uuid
 

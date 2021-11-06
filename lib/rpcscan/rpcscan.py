@@ -126,6 +126,7 @@ def rpcscan_worker(target, actions, timeout):
                                 'service': 'nfs',
                                 'share': mountpoint['path'],
                                 'path': content['file'],
+                                'account': 'N/A',
                             }
                             if 'size' in content:
                                 db_info['size'] = content['size']

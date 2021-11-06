@@ -24,7 +24,7 @@ es_ids = {
     'port': 'port_{session}_{ip}_{protocol}_{port}',
     'script': 'script_{session}_{ip}_{protocol}_{port}_{name}',
     'http': 'http_{session}_{url}',
-    'content': 'content_{session}_{url}_{share}_{path}',
+    'content': 'content_{session}_{url}_{account}_{share}_{path}',
     'application': 'application_{session}_{url}_{name}_{version}',
     'database': 'database_{session}_{url}_{account}_{database}_{table}',
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
@@ -67,6 +67,15 @@ es_mapping = {
                         "ignore_above": 2000
                     }
                 }
+            },
+            "created_date": {
+                "type": "date"
+            },
+            "last_logon": {
+                "type": "date"
+            },
+            "last_password_change": {
+                "type": "date"
             },
         }
     }
@@ -357,7 +366,7 @@ class DB:
     def insert_content(self, content_doc):
         content_doc['doc_type'] = 'content'
         content_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        content_doc = check_entry(content_doc, ['url', 'path', 'share', 'service'], ['size', 'access'])
+        content_doc = check_entry(content_doc, ['url', 'path', 'share', 'service', 'account'], ['size', 'access'])
 
         content_doc['service'] = content_doc['service'].lower()
 
@@ -649,6 +658,13 @@ class DB:
 
         if len(user_doc['domain']) == 0 or user_doc['domain'] == 'workgroup':
             return
+
+        if 'created_date' in user_doc:
+            user_doc['created_date'] = int(user_doc['created_date'].timestamp()*1000)
+        if 'last_logon' in user_doc:
+            user_doc['last_logon'] = int(user_doc['last_logon'].timestamp()*1000)
+        if 'last_password_change' in user_doc:
+            user_doc['last_password_change'] = int(user_doc['last_password_change'].timestamp()*1000)
 
         # deprecated...
         if 'password' in user_doc:

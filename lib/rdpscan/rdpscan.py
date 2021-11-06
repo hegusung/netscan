@@ -12,123 +12,144 @@ from .rdp_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_
 from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
+from utils.modulemanager import ModuleManager
 
+rdp_modules = ModuleManager('lib/rdpscan/modules')
 
 def rdpscan_worker(target, actions, creds, timeout):
     try:
         rdp = RDP(target['hostname'], target['port'], timeout)
 
-        rdp_info = rdp.get_certificate_info()
+        is_rdp = rdp.check_if_rdp()
+         
+        if is_rdp:
+            try:
+                rdp_info = rdp.get_certificate_info()
 
-        Output.write({'target': rdp.url(), 'message': '%s' % rdp_info['hostname']})
-        DB.insert_port({
-            'hostname': target['hostname'],
-            'port': target['port'],
-            'protocol': 'tcp',
-            'service': 'rdp',
-            'service_info': {
-                'hostname': rdp_info['hostname'],
-            }
-        })
+                Output.write({'target': rdp.url(), 'message': 'RDP protocol: %s' % rdp_info['hostname']})
+                DB.insert_port({
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'protocol': 'tcp',
+                    'service': 'rdp',
+                    'service_info': {
+                        'hostname': rdp_info['hostname'],
+                    }
+                })
+            except ConnectionResetError:
+                Output.write({'target': rdp.url(), 'message': 'RDP Protocol'})
+                DB.insert_port({
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'protocol': 'tcp',
+                    'service': 'rdp',
+                    'service_info': {
+                    }
+                })
 
-        if 'username' in creds:
-            domain = creds['domain'] if 'domain' in creds else None
-            username = creds['username']
-            password = creds['password'] if 'password' in creds else None
-            ntlm_hash = creds['hash'] if 'hash' in creds else None
+            if 'username' in creds:
+                domain = creds['domain'] if 'domain' in creds else None
+                username = creds['username']
+                password = creds['password'] if 'password' in creds else None
+                ntlm_hash = creds['hash'] if 'hash' in creds else None
 
-            result = rdp.check_auth(domain, username, password, ntlm_hash)
+                result = rdp.check_auth(domain, username, password, ntlm_hash)
 
-            if domain:
-                user = '%s\\%s' % (domain, username)
-            else:
-                user = username
-            if password:
-                user_secret = 'password %s' % password
-            else:
-                user_secret = 'hash %s' % ntlm_hash
-            if result:
-                Output.success({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and %s' % (user, user_secret)})
-                if domain in [None, 'WORKGROUP']:
-                    # local account
-                    if password:
-                        cred_info = {
-                            'hostname': target['hostname'],
-                            'port': target['port'],
-                            'service': 'rdp',
-                            'url': rdp.url(),
-                            'type': 'password',
-                            'username': username,
-                            'password': password,
-                        }
+                if domain:
+                    user = '%s\\%s' % (domain, username)
+                else:
+                    user = username
+                if password:
+                    user_secret = 'password %s' % password
+                else:
+                    user_secret = 'hash %s' % ntlm_hash
+                if result:
+                    Output.success({'target': rdp.url(), 'message': 'Successful authentication with credentials %s and %s' % (user, user_secret)})
+                    if domain in [None, 'WORKGROUP']:
+                        # local account
+                        if password:
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'rdp',
+                                'url': rdp.url(),
+                                'type': 'password',
+                                'username': username,
+                                'password': password,
+                            }
+                        else:
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'rdp',
+                                'url': rdp.url(),
+                                'type': 'hash',
+                                'format': 'ntlm',
+                                'username': username,
+                                'hash': ntlm_hash,
+                            }
+                        DB.insert_credential(cred_info)
+
                     else:
-                        cred_info = {
-                            'hostname': target['hostname'],
-                            'port': target['port'],
-                            'service': 'rdp',
-                            'url': rdp.url(),
-                            'type': 'hash',
-                            'format': 'ntlm',
-                            'username': username,
-                            'hash': ntlm_hash,
-                        }
-                    DB.insert_credential(cred_info)
+                        # domain account 
+                        if password:
+                            cred_info = {
+                                'domain': creds['domain'],
+                                'username': creds['username'],
+                                'password': creds['password'],
+                            }
+                            DB.insert_domain_user(cred_info)
+                        else:
+                            cred_info = {
+                                'domain': creds['domain'],
+                                'username': creds['username'],
+                                'hash': creds['hash'],
+                            }
+                            DB.insert_domain_user(cred_info)
+
 
                 else:
-                    # domain account 
-                    if password:
-                        cred_info = {
-                            'domain': creds['domain'],
-                            'username': creds['username'],
-                            'password': creds['password'],
-                        }
-                        DB.insert_domain_user(cred_info)
+                    Output.minor({'target': rdp.url(), 'message': 'Authentication failure with credentials %s and %s' % (user, user_secret)})
+
+            if 'modules' in actions:
+                rdp_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
+
+            if 'bruteforce' in actions:
+                if 'username_file' in actions['bruteforce'] != None:
+                    Output.highlight({'target': rdp.url(), 'message': 'Starting bruteforce:'})
+
+                    if 'domain' in creds:
+                        domain = creds['domain']
                     else:
-                        cred_info = {
-                            'domain': creds['domain'],
-                            'username': creds['username'],
-                            'hash': creds['hash'],
-                        }
-                        DB.insert_domain_user(cred_info)
+                        domain = 'WORKGROUP'
+                    username_file = actions['bruteforce']['username_file']
+                    password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
+                    bruteforce_workers = actions['bruteforce']['workers']
 
-            else:
-                Output.minor({'target': rdp.url(), 'message': 'Authentication failure with credentials %s and %s' % (user, user_secret)})
+                    # The generator will provide a username:password_list couple
+                    gen = bruteforce_generator(target, domain, username_file, password_file)
+                    gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
 
-        if 'bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
-                Output.highlight({'target': rdp.url(), 'message': 'Starting bruteforce:'})
+                    args = (timeout,)
+                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
-                if 'domain' in creds:
-                    domain = creds['domain']
-                else:
-                    domain = 'WORKGROUP'
-                username_file = actions['bruteforce']['username_file']
-                password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                bruteforce_workers = actions['bruteforce']['workers']
+            if 'simple_bruteforce' in actions:
+                if 'username_file' in actions['bruteforce'] != None:
+                    Output.highlight({'target': rdp.url(), 'message': 'Starting simple bruteforce:'})
 
-                # The generator will provide a username:password_list couple
-                gen = bruteforce_generator(target, domain, username_file, password_file)
-                gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
+                    if 'domain' in creds:
+                        domain = creds['domain']
+                    else:
+                        domain = 'WORKGROUP'
+                    username_file = actions['bruteforce']['username_file']
+                    bruteforce_workers = actions['bruteforce']['workers']
 
-                args = (timeout,)
-                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-        if 'simple_bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
-                Output.highlight({'target': rdp.url(), 'message': 'Starting simple bruteforce:'})
+                    # The generator will provide a username:password_list couple
+                    gen = bruteforce_generator(target, domain, username_file, None, simple_bruteforce=True)
+                    gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
 
-                if 'domain' in creds:
-                    domain = creds['domain']
-                else:
-                    domain = 'WORKGROUP'
-                username_file = actions['bruteforce']['username_file']
-                bruteforce_workers = actions['bruteforce']['workers']
-
-                # The generator will provide a username:password_list couple
-                gen = bruteforce_generator(target, domain, username_file, None, simple_bruteforce=True)
-                gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
-
-                args = (timeout,)
-                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+                    args = (timeout,)
+                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except ssl.SSLError as e:
         pass
@@ -142,4 +163,5 @@ def rdpscan_worker(target, actions, creds, timeout):
         Output.write({'target': rdp.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
         rdp.disconnect()
+
 

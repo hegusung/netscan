@@ -38,10 +38,10 @@ def bruteforce_worker(target, timeout):
             else:
                 # domain account 
                 cred_info = {
-                    'domain': creds['domain'],
-                    'username': creds['username'],
+                    'domain': domain,
+                    'username': username,
                     'type': 'password',
-                    'password': creds['password'],
+                    'password': password,
                 }
                 DB.insert_domain_credential(cred_info)
 
