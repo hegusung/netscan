@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    parser.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules ("-m all" to execute all modules)', default=None, dest='modules')
+    parser.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to execute all modules)', default=None, dest='modules')
     # Module arguments
     parser.add_argument('--exec', metavar='command', nargs='?', type=str, help='Execute command if RCE from a module', default=None, dest='exec')
     parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Enable bruteforce, file name is optional', default=None, const='default', dest='bruteforce')
@@ -70,8 +70,9 @@ def main():
         module_args = {
             'exec': args.exec,
             'bruteforce': args.bruteforce,
+            'args': args.modules[1:],
         }
-        actions['modules'] = {'modules': args.modules, 'args': module_args}
+        actions['modules'] = {'modules': args.modules[0], 'args': module_args}
 
     # Parse cookies
     cookie_dict = {}
