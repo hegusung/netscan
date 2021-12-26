@@ -90,6 +90,10 @@ class DB:
         if self.nodb == False and db_enabled == False:
             self.nodb = True
 
+        self.es_file_storage = Config.config.get('Elasticsearch', 'document_storage_file')
+        self.es_file_storage_enabled = False if Config.config.get('Elasticsearch', 'enable_file_storage') in ['false', 'False'] else True
+        self.es_file_storage_count = 0
+
         # Check elasticsearch status
         if not self.nodb:
             if not Elasticsearch.ping():
@@ -119,10 +123,20 @@ class DB:
         self.send(None)
         qsize = self.db_queue.qsize()
         if qsize > 0:
-            Output.write('waiting for database thread to end properly... (%d remaining)' % qsize)
+            Output.minor('waiting for database thread to end properly... (%d remaining)' % qsize)
         self.db_thread.join()
         if qsize > 0:
-            Output.write('done')
+            Output.minor('done')
+
+        if self.es_file_storage_count > 0:
+            if self.es_file_storage_enabled:
+                Output.minor('%d Documents has been written to the following file: %s' % (self.es_file_storage_count, self.es_file_storage))
+                Output.minor('Please restore the data to an elasticsearch database using: ./es_query.py --restore %s' % (self.es_file_storage,))
+            else:
+                Output.error('Some documents failed to insert into the database, they have been stored in a file')
+                Output.error('%d Documents has been written to the following file: %s' % (self.es_file_storage_count, self.es_file_storage))
+                Output.error('Please restore the data to an elasticsearch database using: ./es_query.py --restore %s' % (self.es_file_storage,))
+
 
     @classmethod
     def send(self, doc):
@@ -145,7 +159,18 @@ class DB:
                 insert = db_queue.get(True, 5)
                 if insert == None:
                     if len(inserts) > 0:
-                        Elasticsearch.insert_bulk(inserts)
+                        error = Elasticsearch.insert_bulk(inserts)
+                        if error and not self.es_file_storage_enabled:
+                            # Backup in the file
+                            f = open(self.es_file_storage, 'a')
+                            for insert in inserts:
+                                append = insert[2]
+                                insert = insert[1]
+                                insert['append'] = append
+                                f.write("%s\n" % insert)
+                                self.es_file_storage_count += 1
+                            f.close()
+
                         inserts = []
                     break
                 insert = json.loads(insert)
@@ -154,20 +179,48 @@ class DB:
                 if not insert['doc_type'] in es_ids:
                     continue
 
+                if self.es_file_storage_enabled:
+                    f = open(self.es_file_storage, 'a')
+                    f.write("%s\n" % insert)
+                    f.close()
+                    self.es_file_storage_count += 1
+
                 if not self.nodb:
-                    # Elasticsearch.insert_document(es_ids[insert['doc_type']].format(**insert), insert)
                     if 'append' in insert:
                         append = insert['append']
                         del insert['append']
                     else:
                         append = None
                     inserts.append((es_ids[insert['doc_type']].format(**insert), insert, append))
+
                     if len(inserts) >= MAX_BULK:
-                        Elasticsearch.insert_bulk(inserts)
+                        error = Elasticsearch.insert_bulk(inserts)
+                        if error and not self.es_file_storage_enabled:
+                            # Backup in the file
+                            f = open(self.es_file_storage, 'a')
+                            for insert in inserts:
+                                append = insert[2]
+                                insert = insert[1]
+                                insert['append'] = append
+                                f.write("%s\n" % insert)
+                                self.es_file_storage_count += 1
+                            f.close()
+
                         inserts = []
             except queue.Empty:
                 if len(inserts) > 0:
-                    Elasticsearch.insert_bulk(inserts)
+                    error = Elasticsearch.insert_bulk(inserts)
+                    if error and not self.es_file_storage_enabled:
+                        # Backup in the file
+                        f = open(self.es_file_storage, 'a')
+                        for insert in inserts:
+                            append = insert[2]
+                            insert = insert[1]
+                            insert['append'] = append
+                            f.write("%s\n" % insert)
+                            self.es_file_storage_count += 1
+                        f.close()
+
                     inserts = []
             except BrokenPipeError:
                 break
@@ -796,7 +849,7 @@ class Elasticsearch(object):
         # Create index with correct mapping if it doesn't exist
         es = self.get_es_instance()
         if not es[0].indices.exists(index=es[1]):
-            print('Elasticsearch index doesn\'t exist, creating it')
+            Output.minor('Elasticsearch index doesn\'t exist, creating it')
 
             es[0].indices.create(
                 index=es[1],
@@ -813,7 +866,7 @@ class Elasticsearch(object):
 
             return res['count']
         except elasticsearch.exceptions.ConnectionError:
-            print("Elasticsearch: Unable to connect to elasticsearch instance")
+            Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
 
     @classmethod
     def search(self, doc):
@@ -824,7 +877,7 @@ class Elasticsearch(object):
 
             return res
         except elasticsearch.exceptions.ConnectionError:
-            print("Elasticsearch: Unable to connect to elasticsearch instance")
+            Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
 
     @classmethod
     def insert_document(self, id, doc):
@@ -865,10 +918,12 @@ class Elasticsearch(object):
             """
 
         except elasticsearch.exceptions.ConnectionError:
-            print("Elasticsearch: Unable to connect to elasticsearch instance")
+            Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
 
     @classmethod
     def insert_bulk(self, inserts):
+        error = False
+
         try:
             es = self.get_es_instance()
 
@@ -928,10 +983,13 @@ class Elasticsearch(object):
                 helpers.bulk(es[0], scripts, index=es[1])
 
         except elasticsearch.exceptions.ConnectionError:
-            print("Elasticsearch: Unable to connect to elasticsearch instance")
+            Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
+            error = True
         except Exception as e:
-            print('%s: %s\n%s' % (type(e), e, traceback.format_exc()))
+            Output.error('%s: %s\n%s' % (type(e), e, traceback.format_exc()))
+            error = True
 
+        return error
 
     @classmethod
     def insert_script(self, id, script):
@@ -945,7 +1003,7 @@ class Elasticsearch(object):
                 },
             )
         except elasticsearch.exceptions.ConnectionError:
-            print("Elasticsearch: Unable to connect to elasticsearch instance")
+            Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
 
 def resolve_hostname(hostname, timeout=5):
 
