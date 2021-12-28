@@ -546,7 +546,7 @@ def adscan_worker(target, actions, creds, timeout):
 
             if 'modules' in actions:
                 if smb_available:
-                    ad_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], timeout))
+                    ad_modules.execute_modules(actions['modules']['modules'], (target, creds, actions['modules']['args'], timeout))
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})
