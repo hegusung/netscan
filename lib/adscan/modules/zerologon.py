@@ -21,7 +21,7 @@ class Module:
     name = 'ZeroLogon'
     description = 'Check for ZeroLogon (CVE-2020-1472)'
 
-    def run(self, target, args, timeout):
+    def run(self, target, creds, args, timeout):
         vulnerable = check(target['hostname'], 445, timeout)
 
         if vulnerable:
