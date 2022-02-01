@@ -6,16 +6,17 @@ from time import sleep
 from utils.output import Output
 from utils.db import DB
 
+ttl_pattern = re.compile("^\d+ bytes from \S+: icmp_seq=\d+ ttl=(\d+) time=\S+ ms$")
 rtt_pattern = re.compile("^rtt\s+min/avg/max/mdev\s+=\s+(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)\s+ms.*$")
 
 def pingscan_worker(target, timeout):
     try:
         pingscan = PingScan(target['hostname'], timeout)
 
-        is_up, rtt = pingscan.check_up()
+        is_up, rtt, os = pingscan.check_up()
 
         if is_up:
-            Output.write({'target': '%s' % target['hostname'], 'message': "Up => %.4f ms" % rtt})
+            Output.write({'target': '%s' % target['hostname'], 'message': "Up => %.4f ms (%s)" % (rtt, os)})
 
             DB.insert_ip({
                 'hostname': target['hostname'],
@@ -39,13 +40,23 @@ class PingScan:
 
         if process_returncode == 0:
             rtt = None
+            os = 'Unknown'
 
             for line in process_output.decode().split('\n'):
+                m = ttl_pattern.match(line)
+                if m:
+                    if int(m.group(1)) == 64:
+                        os = 'Linux?'
+                    elif int(m.group(1)) == 128:
+                        os = 'Windows?'
+                    elif int(m.group(1)) == 255:
+                        os = 'AIX/FreeBSD?'
+
                 m = rtt_pattern.match(line)
                 if m:
                     rtt = float(m.group(2))
                     break
 
-            return True, rtt
+            return True, rtt, os
 
-        return False, None
+        return False, None, None

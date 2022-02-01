@@ -57,7 +57,7 @@ class Telnet:
             raise Exception('Not at the correct step')
 
         if self.step == 'login':
-            self.conn.write(username.encode() + b'\n')
+            self.conn.write(username.encode() + b'\r\n')
 
             # expecting a password form
             res = self.conn.expect([regex_password], self.timeout)
@@ -69,7 +69,7 @@ class Telnet:
             self.step = 'password'
 
         if self.step == 'password':
-            self.conn.write(password.encode() + b'\n')
+            self.conn.write(password.encode() + b'\r\n')
 
             # We need to received the whole answer before going further to make sure we didn't miss anything
             data = b''

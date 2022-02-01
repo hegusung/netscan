@@ -1,5 +1,7 @@
 from utils.utils import AuthFailure
 from pypsrp.client import Client
+import pypsrp
+import requests
 
 class WinRMScan:
 
@@ -33,6 +35,10 @@ class WinRMScan:
             self.conn.execute_ps("hostname")
 
             return True
+        except requests.exceptions.ConnectionError:
+            return False
+        except pypsrp.exceptions.AuthenticationError:
+            return False
         except Exception as e:
             print('%s: %s' % (type(e), e))
             return False
