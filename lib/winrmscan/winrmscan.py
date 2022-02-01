@@ -40,7 +40,7 @@ def winrmscan_worker(target, actions, creds, timeout):
                 Output.write({'target': target['hostname'], 'message': output})
 
     except Exception as e:
-        Output.write({'target': target['hostname'], 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+        Output.write({'target': target['hostname'], 'message': 'AAA %s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
         winrmscan.disconnect()
 

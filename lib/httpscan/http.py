@@ -1,5 +1,6 @@
 import re
 import requests
+import traceback
 from bs4 import BeautifulSoup
 import urllib3
 from urllib.parse import urljoin
@@ -55,23 +56,23 @@ class HTTP:
 
         return url
 
-    def get(self, path, params=None, data=None, ssl_version=ssl.PROTOCOL_TLSv1_2, auth=None, cookies={}, headers={}):
+    def get(self, path, params=None, data=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
 
         response_data = self.request('GET', path, params=params, data=data, ssl_version=ssl_version, auth=auth, cookies=cookies, headers=headers)
 
         return response_data
 
-    def put(self, path, data, ssl_version=ssl.PROTOCOL_TLSv1_2, auth=None, cookies={}, headers={}):
+    def put(self, path, data, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
         response_data = self.request('PUT', path, ssl_version=ssl_version, data=data, auth=auth, cookies=cookies, headers=headers)
 
         return response_data
 
-    def post(self, path, data, ssl_version=ssl.PROTOCOL_TLSv1_2, auth=None, cookies={}, headers={}):
+    def post(self, path, data, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
         response_data = self.request('POST', path, ssl_version=ssl_version, data=data, auth=auth, cookies=cookies, headers=headers)
 
         return response_data
 
-    def send_form(self, path, form, html=None, ssl_version=ssl.PROTOCOL_TLSv1_2, auth=None, cookies={}, headers={}):
+    def send_form(self, path, form, html=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
         base_url = self.url(path)
         # extract base url if any
         if html != None:
@@ -92,7 +93,7 @@ class HTTP:
 
         return self.request(method, url, ssl_version=ssl_version, data=form['args'], auth=auth, cookies=cookies, headers=headers)
 
-    def request(self, method, path, params=None, ssl_version=ssl.PROTOCOL_TLSv1_2, data=None, auth=None, cookies={}, recurse=6, headers={}):
+    def request(self, method, path, params=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, data=None, auth=None, cookies={}, recurse=6, headers={}):
         if auth == None and self.auth != None:
             auth = self.auth
 
@@ -176,7 +177,7 @@ class HTTP:
 
         except requests.exceptions.ConnectTimeout:
             response_data = None
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as e:
             response_data = None
         except requests.exceptions.ReadTimeout:
             response_data = None
@@ -217,6 +218,8 @@ class HTTP:
             ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
             names += ext.value.get_values_for_type(x509.DNSName)
         except x509.ExtensionNotFound:
+            pass
+        except ValueError:
             pass
 
         return list(set(names))
@@ -340,7 +343,13 @@ class SSLAdapter(HTTPAdapter):
         super(SSLAdapter, self).__init__(**kwargs)
 
     def init_poolmanager(self, connections, maxsize, block=False):
+        ssl_context = ssl.create_default_context()
+        ssl_context.options &= ~ssl.OP_NO_TLSv1_3 & ~ssl.OP_NO_TLSv1_2 & ~ssl.OP_NO_TLSv1_1
+        ssl_context.minimum_version = ssl.TLSVersion.TLSv1
+        ssl_context.check_hostname = False
+        ssl_context.set_ciphers('DEFAULT@SECLEVEL=1')
         self.poolmanager = PoolManager(num_pools=connections,
                                        maxsize=maxsize,
                                        block=block,
-                                       ssl_version=self.ssl_version)
+                                       ssl_version=self.ssl_version,
+                                       ssl_context=ssl_context)
