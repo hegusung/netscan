@@ -8,5 +8,7 @@ screenshots/*.jpg
 screenshots/*.png
 server/uploads/*
 server/files/*
-server/payloads/*obfuscated*
-server/ressources/*obfuscated*
+server/payloads/*.py
+server/ressources/*.dll
+server/ressources/*.exe
+server/ressources/*.ps1
