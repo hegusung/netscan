@@ -61,3 +61,13 @@ def detect_encoding(file, encodings=['utf8', 'iso-8859-1', 'utf16']):
 
     return encodings[0]
 
+def replace_binary(data, pattern, value):
+
+    if len(value) > len(pattern):
+        raise Exception("Value is longer than the pattern")
+
+    value = value + b'\0'*(len(pattern)-len(value))
+
+    data = data.replace(pattern, value)
+
+    return data
