@@ -34,6 +34,10 @@ class Module:
         password = creds['password'] if 'password' in creds else None
         ntlm_hash = creds['hash'] if 'hash' in creds else ''
 
+        if user == None:
+            Output.highlight({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Printnightmare module works best with an account !'})
+
+
         check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, timeout)
 
 def check(ip, port, listener_ip, domain, username, password, ntlm_hash, timeout):
