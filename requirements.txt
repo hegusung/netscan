@@ -22,3 +22,4 @@ chardet
 gevent
 twisted
 ldaptor
+opencv-python
