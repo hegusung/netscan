@@ -7,8 +7,10 @@ logs/**
 screenshots/*.jpg
 screenshots/*.png
 server/uploads/*
+!server/uploads/.gitkeep
 server/files/*
+!server/files/.gitkeep
 server/payloads/*.py
-server/ressources/*.dll
-server/ressources/*.exe
-server/ressources/*.ps1
+!server/payloads/.gitkeep
+server/ressources/*
+!server/ressources/.gitkeep
