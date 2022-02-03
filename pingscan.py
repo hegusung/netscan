@@ -25,6 +25,8 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
+
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -36,8 +38,6 @@ def main():
 
     static_inputs = {}
     static_inputs['port'] = [0]
-
-    Output.setup()
 
     pingscan(targets, static_inputs, args.workers, args.timeout, args.delay, args.resume)
 

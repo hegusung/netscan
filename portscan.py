@@ -38,6 +38,8 @@ def main():
             print("Unable to find nmap binary on system, is it installed ?")
             sys.exit()
 
+    Output.setup()
+
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -62,10 +64,7 @@ def main():
     if args.scripts:
         actions['scripts'] = {'scripts': args.scripts, 'args': args.script_args}
 
-    Output.setup()
-
     portscan(targets, static_inputs, args.workers, args.service_scan, actions, args.timeout, args.delay, args.resume)
-
 
     DB.stop_worker()
     Output.stop()

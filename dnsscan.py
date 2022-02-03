@@ -28,6 +28,8 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
+
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -38,8 +40,6 @@ def main():
         targets['target_file'] = args.target_file
 
     static_inputs = {}
-
-    Output.setup()
 
     actions = []
     if args.bruteforce:
