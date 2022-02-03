@@ -80,10 +80,13 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, timeout)
         'description': 'Server smb://%s:%d is vulnerable to CVE-2021-1675 (PrintNightmare)' % (ip, port),
     }
 
-    #TODO: Don't do this if listener_ip = share
-    vuln_id = VulnCallback.new_vulnerability_check(vuln_info)
+    if "\\\\" in listener_ip:
+        listener_share = listener_ip
+    else:
+        # Don't do this if listener_ip = share
+        vuln_id = VulnCallback.new_vulnerability_check(vuln_info)
 
-    listener_share = "\\\\%s\\vuln\\%s" % (listener_ip, vuln_id)
+        listener_share = "\\\\%s\\vuln\\%s" % (listener_ip, vuln_id)
 
     if "\\\\" in listener_share:
         listener_share = listener_share.replace("\\\\","\\??\\UNC\\")
