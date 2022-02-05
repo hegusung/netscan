@@ -27,11 +27,13 @@ service_filters = {
     'mongo': [{'service': 'mongo'}, {'port': 27017}],
     'postgresql': [{'service': 'postgresql'}, {'port': 5432}],
     'redis': [{'service': 'redis'}, {'port': 6379}],
+    # Other
     'rmi': [{'service': 'rmi'}],
     'winrm': [{'port': 5985}, {'port': 5986}],
     'x11': [{'port': 6000}],
     'docker': [{'port': 2375}, {'port': 2376}],
     'rlogin': [{'port': 513}],
+    'rtsp': [{'service': 'rtsp'}, {'port': 554}],
 }
 
 service_nmap_translate = {
@@ -58,6 +60,8 @@ def export_ports(session, service, output_dir):
         return
 
     export_ip_ports(session, service, output_dir)
+    export_domains(session, output_dir)
+    export_domain_controllers(session, output_dir)
     export_http_urls(session, output_dir)
 
 def export_hashes(session, service, output_dir):
@@ -210,6 +214,83 @@ def export_ip_ports(session, service, output_dir):
         # Make files unique
         os.system('sort %s | uniq > %s_tmp; mv %s_tmp %s' % (f['filename'], f['filename'], f['filename'], f['filename']))
 
+def export_domains(session, output_dir):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "port"        }},
+            { "match": { "service":   "smb"        }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    filename = os.path.join(output_dir, '%s_domain.txt' % session)
+    file = open(filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        s_service = None
+
+        if '.' in source['service_info']['domain']:
+            file.write('%s\n' % source['service_info']['domain'])
+        c += 1
+
+    file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    count = 0
+    for _ in open(filename):
+        count += 1
+    print("%s: %s   %d domains written" % ("domains".ljust(12), filename.ljust(40), count))
+
+def export_domain_controllers(session, output_dir):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "port"        }},
+            { "match": { "service":   "smb"        }},
+            { "match": { "service_info.is_dc" : True }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    filename = os.path.join(output_dir, '%s_domain_controller.txt' % session)
+    file = open(filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        s_service = None
+
+        file.write('%s %s\n' % (source['ip'], source['service_info']['domain']))
+        c += 1
+
+    file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    count = 0
+    for _ in open(filename):
+        count += 1
+    print("%s: %s   %d domain controllers written" % ("dom_ctrls".ljust(12), filename.ljust(40), count))
 
 def export_http_urls(session, output_dir):
 

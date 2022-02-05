@@ -600,7 +600,7 @@ class SMBScan:
         for session in enum.enumSessions():
             yield session
 
-    def list_spns(self):
+    def list_spns(self, baseDN=None):
         if self.conn == None:
             return
         if self.creds == None:
@@ -610,7 +610,7 @@ class SMBScan:
         domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
         password = self.creds['password'] if 'password' in self.creds else ''
 
-        get_spns = GetUserSPNs(self.hostname, username, password, domain)
+        get_spns = GetUserSPNs(self.hostname, username, password, domain, baseDN)
 
         for spn in get_spns.run():
             yield spn
