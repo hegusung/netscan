@@ -50,7 +50,7 @@ from impacket.ntlm import compute_lmhash, compute_nthash
 from impacket.krb5.kerberosv5 import KerberosError
 
 class GetUserSPNs:
-    def __init__(self, target, username, password, domain):
+    def __init__(self, target, username, password, domain, baseDN=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
@@ -64,13 +64,16 @@ class GetUserSPNs:
         self.__saveTGS = False
         self.__requestUser = None
 
-        # Create the baseDN
-        domainParts = self.__domain.split('.')
-        self.baseDN = ''
-        for i in domainParts:
-            self.baseDN += 'dc=%s,' % i
-        # Remove last ','
-        self.baseDN = self.baseDN[:-1]
+        if baseDN == None:
+            # Create the baseDN
+            domainParts = self.__domain.split('.')
+            self.baseDN = ''
+            for i in domainParts:
+                self.baseDN += 'dc=%s,' % i
+            # Remove last ','
+            self.baseDN = self.baseDN[:-1]
+        else:
+            self.baseDN = baseDN
 
     def getMachineName(self):
         if self.__kdcHost is not None:

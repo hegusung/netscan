@@ -156,6 +156,19 @@ def mssqlscan_worker(target, actions, creds, timeout):
                         output = "Hashes:\n"
                         for account in hashes:
                             output += " "*60+"- %s   %s\n" % (account['name'].ljust(30), account['password_hash'].decode())
+
+                            cred_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'mssql',
+                                'url': mssqlscan.url(),
+                                'type': 'hash',
+                                'format': 'mssql',
+                                'username': account['name'],
+                                'hash': '0x%s' % account['password_hash'],
+                            }
+                            DB.insert_credential(cred_info)
+
                         Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'sql' in actions:
                         output = "Query result:\n"

@@ -347,7 +347,7 @@ def adscan_worker(target, actions, creds, timeout):
             if 'spns' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'SPNs:'})
                 if smb_authenticated:
-                    for entry in smbscan.list_spns():
+                    for entry in smbscan.list_spns(ldapscan.defaultdomainnamingcontext):
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         tgs_hash = entry['tgs']['tgs'] if 'tgs' in entry['tgs'] else 'Unable to retreive TGS hash'
                         Output.write({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
