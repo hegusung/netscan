@@ -17,10 +17,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    Output.setup()
+
     Config.load_config()
     DB.start_worker(args.nodb)
-
-    Output.setup()
 
     VulnCallback.init()
 

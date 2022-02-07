@@ -22,7 +22,7 @@ version_pattern = re.compile('<p id="footerVersion">[^:]+: (\S+)</p>')
 
 class Module:
     name = 'Weblogic'
-    description = 'Discover and exploit Weblogic (bruteforce, CVE-2017-10271, CVE-2020-14882/3)'
+    description = 'Discover and exploit Weblogic (port 7001) (bruteforce, CVE-2017-10271, CVE-2020-14882/3)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
@@ -188,3 +188,16 @@ if (cmd != null) {
                                 'tags': ['weblogic'],
                             }
                             DB.insert_credential(cred_info)
+
+                            vuln_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'http',
+                                'url': http.url(url),
+                                'name': 'Default or predictable credentials on WebLogic service',
+                                'description': 'WebLogic %s possess the following default or weak credentials: %s:%s' % (http.url(url), username, password),
+                            }
+                            DB.insert_vulnerability(vuln_info)
+
+
+

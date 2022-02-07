@@ -63,11 +63,15 @@ class MySQLScan:
         success = False
 
         try:
-            self.conn = mysql.connector.connect(host=self.hostname, port=self.port, user=username, passwd=password, connect_timeout=self.timeout)
+            self.conn = mysql.connector.connect(host=self.hostname, port=self.port, user=username, passwd=password, connect_timeout=self.timeout, auth_plugin='mysql_native_password')
 
             version = self.conn.get_server_info()
 
             return True, version
+        except mysql.connector.errors.NotSupportedError as e:
+            raise AuthFailure(str(e))
+        except mysql.connector.errors.InterfaceError as e:
+            raise AuthFailure(str(e))
         except mysql.connector.errors.ProgrammingError as e:
             raise AuthFailure(str(e))
         except mysql.connector.errors.DatabaseError as e:

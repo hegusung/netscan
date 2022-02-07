@@ -21,7 +21,7 @@ lfi_urls = {
 
 class Module:
     name = 'Glassfish'
-    description = 'Discover and exploit glassfish (weak password, LFI)'
+    description = 'Discover and exploit glassfish (weak password, LFI) (port 4848)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
@@ -200,4 +200,16 @@ class Module:
                             'tags': ['glassfish'],
                         }
                         DB.insert_credential(cred_info)
+
+                        vuln_info = {
+                            'hostname': target['hostname'],
+                            'port': target['port'],
+                            'service': 'http',
+                            'url': http.url(target['path']),
+                            'name': 'Default or predictable credentials on Glassfish service',
+                            'description': 'Glassfish %s possess the following default or weak credentials: %s:%s' % (http.url(target['path']), username, password),
+                        }
+                        DB.insert_vulnerability(vuln_info)
+
+
 

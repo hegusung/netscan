@@ -9,16 +9,17 @@ from utils.utils import AuthFailure
 from utils.db import DB
 
 def bruteforce_worker(target, timeout, bruteforce_delay):
-    sleep(bruteforce_delay)
-
-    ssh = SSH(target['hostname'], target['port'], timeout)
 
     for password in target['b_password_list']:
+        sleep(bruteforce_delay)
+
         username = target['b_username']
 
         try:
             success = False
             stop = False
+
+            ssh = SSH(target['hostname'], target['port'], timeout)
 
             success = ssh.auth(username, password)
             if success:
@@ -33,6 +34,16 @@ def bruteforce_worker(target, timeout, bruteforce_delay):
                     'password': password,
                 }
                 DB.insert_credential(cred_info)
+
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'ssh',
+                    'url': ssh.url(),
+                    'name': 'Default or predictable credentials on SSH service',
+                    'description': 'Service %s possess the following default or weak credentials: %s:%s' % (ssh.url(), username, password),
+                }
+                DB.insert_vulnerability(vuln_info)
 
                 stop = True
 
@@ -50,14 +61,13 @@ def bruteforce_worker(target, timeout, bruteforce_delay):
             stop = True
             print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
 
+        try:
+            ssh.disconnect()
+        except:
+            pass
+
         if stop:
             break
-
-    try:
-        sshscan.disconnect()
-    except:
-        pass
-
 
 def bruteforce_generator(target, username_file, password_file, simple_bruteforce=False):
     password_list = []

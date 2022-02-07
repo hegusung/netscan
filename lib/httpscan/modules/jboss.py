@@ -59,34 +59,35 @@ class Module:
 
             res = http.get(full_url)
 
-            if not res or not res['code'] in [200,401]:
+            if not res or not res['code'] in [200,401,500]:
                 continue
 
-            http_info = {
-                'hostname': target['hostname'],
-                'port': target['port'],
-                'protocol': 'tcp',
-                'service': 'http',
-                'url': http.url(full_url),
-                'http': {
-                    'path': full_url,
-                    'code': res['code'],
-                    'server': res['server'],
-                    'title': res['title'],
-                    'content-type': res['content-type'],
-                },
-                'tags': ['jboss']
-            }
-            DB.insert_http_url(http_info)
+            if 'jboss' in res['title'].lower():
+                http_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'protocol': 'tcp',
+                    'service': 'http',
+                    'url': http.url(full_url),
+                    'http': {
+                        'path': full_url,
+                        'code': res['code'],
+                        'server': res['server'],
+                        'title': res['title'],
+                        'content-type': res['content-type'],
+                    },
+                    'tags': ['jboss']
+                }
+                DB.insert_http_url(http_info)
 
-            res['message_type'] = 'http'
-            res['target'] = http.url(full_url)
-            Output.write(res)
+                res['message_type'] = 'http'
+                res['target'] = http.url(full_url)
+                Output.write(res)
 
 
             if url in jboss_urls:
                 # JBoss should be a safe service
-                if safe and res['code'] in [200]:
+                if safe and res['code'] in [200] and ('apache-coyote' in res['server'].lower() or 'jboss' in res['title'].lower()):
                     Output.vuln({'target': http.url(full_url), 'message': 'JBoss url accessible without authentication'})
 
                     vuln_info = {
@@ -98,7 +99,19 @@ class Module:
                         'description': 'Jboss interface %s is accessible without authentication' % http.url(full_url),
                     }
                     DB.insert_vulnerability(vuln_info)
-                elif res['code'] in [401]:
+                elif res['code'] in [500] and url == 'invoker/readonly' and 'jboss' in res['title'].lower():
+                    Output.vuln({'target': http.url(full_url), 'message': 'JBoss vulnerable to CVE-2017-12149'})
+
+                    vuln_info = {
+                        'hostname': target['hostname'],
+                        'port': target['port'],
+                        'service': 'http',
+                        'url': http.url(full_url),
+                        'name': 'JBoss vulnerable to CVE-2017-12149',
+                        'description': 'Jboss interface %s is vulnerable to CVE-2019-12149' % http.url(full_url),
+                    }
+                    DB.insert_vulnerability(vuln_info)
+                elif res['code'] in [401] and ('apache-coyote' in res['server'].lower() or 'jboss' in res['title'].lower()):
                     try:
                         auth_type = res['auth_type']
 
@@ -199,6 +212,15 @@ class Module:
                                 }
                                 DB.insert_credential(cred_info)
 
+                                vuln_info = {
+                                    'hostname': target['hostname'],
+                                    'port': target['port'],
+                                    'service': 'http',
+                                    'url': http.url(full_url),
+                                    'name': 'Default or predictable credentials on JBoss service',
+                                    'description': 'JBoss %s possess the following default or weak credentials: %s:%s' % (http.url(full_url), username, password),
+                                }
+                                DB.insert_vulnerability(vuln_info)
 
             elif url in auth_7_8_urls:
                 if res['code'] in [200]:
@@ -236,6 +258,19 @@ class Module:
                                             'tags': ['jboss'],
                                         }
                                         DB.insert_credential(cred_info)
+
+                                        vuln_info = {
+                                            'hostname': target['hostname'],
+                                            'port': target['port'],
+                                            'service': 'http',
+                                            'url': http.url(full_url),
+                                            'name': 'Default or predictable credentials on JBoss service',
+                                            'description': 'JBoss %s possess the following default or weak credentials: %s:%s' % (http.url(full_url), username, password),
+                                        }
+                                        DB.insert_vulnerability(vuln_info)
+
+
+
 
                         except KeyError:
                             pass

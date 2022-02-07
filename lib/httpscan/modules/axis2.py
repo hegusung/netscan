@@ -104,3 +104,16 @@ class Module:
                         'tags': ['axis2'],
                     }
                     DB.insert_credential(cred_info)
+
+                    vuln_info = {
+                        'hostname': target['hostname'],
+                        'port': target['port'],
+                        'service': 'http',
+                        'url': http.url(login_url),
+                        'name': 'Default or predictable credentials on Axis2 service',
+                        'description': 'Axis2 %s possess the following default or weak credentials: %s:%s' % (http.url(login_url), username, password),
+                    }
+                    DB.insert_vulnerability(vuln_info)
+
+
+

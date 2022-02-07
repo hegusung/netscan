@@ -113,6 +113,16 @@ class Module:
                             }
                             DB.insert_credential(cred_info)
 
+                            vuln_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'http',
+                                'url': http.url(os.path.join(target['path'], url)),
+                                'name': 'Default or predictable credentials on Tomcat service',
+                                'description': 'Tomcat %s possess the following default or weak credentials: %s:%s' % (http.url(os.path.join(target['path'], url)), username, password),
+                            }
+                            DB.insert_vulnerability(vuln_info)
+
             except KeyError:
                 pass
 

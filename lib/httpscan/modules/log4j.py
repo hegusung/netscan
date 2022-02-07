@@ -80,7 +80,7 @@ headers = [
 
 class Module:
     name = 'Log4J'
-    description = 'Attempt a Log4shell exploit payload'
+    description = 'Attempt a Log4shell exploit payload [Experimental]'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
