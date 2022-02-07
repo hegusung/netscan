@@ -159,3 +159,15 @@ class Module:
                                 'tags': ['jenkins'],
                             }
                             DB.insert_credential(cred_info)
+
+                            vuln_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'http',
+                                'url': http.url(url),
+                                'name': 'Default or predictable credentials on Jenkins service',
+                                'description': 'Jenkins %s possess the following default or weak credentials: %s:%s' % (http.url(url), username, password),
+                            }
+                            DB.insert_vulnerability(vuln_info)
+
+

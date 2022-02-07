@@ -27,13 +27,15 @@ service_filters = {
     'mongo': [{'service': 'mongo'}, {'port': 27017}],
     'postgresql': [{'service': 'postgresql'}, {'port': 5432}],
     'redis': [{'service': 'redis'}, {'port': 6379}],
+    'oracle': [{'service': 'oracle'}, {'port': 1521}],
     # Other
     'rmi': [{'service': 'rmi'}],
     'winrm': [{'port': 5985}, {'port': 5986}],
     'x11': [{'port': 6000}],
-    'docker': [{'port': 2375}, {'port': 2376}],
+    'docker': [{'service': 'docker'}, {'port': 2375}, {'port': 2376}],
     'rlogin': [{'port': 513}],
     'rtsp': [{'service': 'rtsp'}, {'port': 554}],
+    'jdwp': [{'service': 'jdwp'},],
 }
 
 service_nmap_translate = {
@@ -44,6 +46,7 @@ service_nmap_translate = {
     'mongodb': 'mongo',
     'rpcbind': 'rpc',
     'java-rmi': 'rmi',
+    'oracle-tns': 'oracle',
 }
 
 def export_ports(session, service, output_dir):

@@ -41,6 +41,16 @@ def bruteforce_worker(target, timeout):
                 }
                 DB.insert_credential(cred_info)
 
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'mssql',
+                    'url': mssqlscan.url(),
+                    'name': 'Default or predictable credentials on MSSQL service',
+                    'description': 'Service %s possess the following default or weak credentials: %s:%s' % (mssqlscan.url(), username, password),
+                }
+                DB.insert_vulnerability(vuln_info)
+
             else:
                 # domain account 
                 pass

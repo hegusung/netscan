@@ -35,7 +35,7 @@ def redisscan_worker(target, actions, creds, timeout):
                 'version': version,
             })
 
-            Output.write({'target': redis.url(), 'message': 'Authentication success with anonymous credentials'})
+            Output.vuln({'target': redis.url(), 'message': 'Authentication success with anonymous credentials'})
             vuln_info = {
                 'hostname': target['hostname'],
                 'port': target['port'],
@@ -55,7 +55,7 @@ def redisscan_worker(target, actions, creds, timeout):
                 version = version2
                 if not version_printed:
                     Output.write({'target': redis.url(), 'message': version})
-                Output.write({'target': redis.url(), 'message': 'Authentication success with password %s' % (creds['password'],)})
+                Output.success({'target': redis.url(), 'message': 'Authentication success with password %s' % (creds['password'],)})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],

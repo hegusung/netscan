@@ -96,7 +96,7 @@ secrets = [
 
 class Module:
     name = 'Secrets'
-    description = 'Search for secrets in specific files'
+    description = 'Search for secrets in specific files [Experimental]'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)

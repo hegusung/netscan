@@ -18,7 +18,7 @@ password_input_pattern = re.compile('.*(password|pass).*', re.IGNORECASE)
 
 class Module:
     name = 'Bruteforce'
-    description = 'Discover and bruteforce authentication forms'
+    description = 'Discover and bruteforce authentication forms [Experimental]'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)

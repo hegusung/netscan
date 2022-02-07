@@ -29,6 +29,7 @@ creds = [
 
 pma_urls = [
     '',
+    'pma',
     'phpmyadmin',
     'phpMyAdmin',
 ]
@@ -153,4 +154,16 @@ class Module:
                                 'tags': ['phpmyadmin'],
                             }
                             DB.insert_credential(cred_info)
+
+                            vuln_info = {
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'service': 'http',
+                                'url': http.url(url),
+                                'name': 'Default or predictable credentials on PhpMyAdmin service',
+                                'description': 'PhpMyAdmin %s possess the following default or weak credentials: %s:%s' % (http.url(url), username, password),
+                            }
+                            DB.insert_vulnerability(vuln_info)
+
+
 

@@ -27,6 +27,16 @@ def bruteforce_worker(target, timeout):
             }
             DB.insert_credential(cred_info)
 
+            vuln_info = {
+                'hostname': target['hostname'],
+                'port': target['port'],
+                'service': 'ftp',
+                'url': ftpscan.url(),
+                'name': 'Default or predictable credentials on FTP service',
+                'description': 'Service %s possess the following default or weak credentials: %s:%s' % (ftpscan.url(), username, password),
+            }
+            DB.insert_vulnerability(vuln_info)
+
             stop = True
 
         try:

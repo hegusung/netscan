@@ -26,7 +26,7 @@ def main():
     parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
     parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=1, dest='bruteforce_workers')
-    parser.add_argument("--bruteforce-delay", metavar='seconds', type=int, nargs='?', help='Delay between each bruteforce attempt', default=1, dest='bruteforce_delay')
+    parser.add_argument("--bruteforce-delay", metavar='seconds', type=int, nargs='?', help='Delay between each bruteforce attempt', default=0, dest='bruteforce_delay')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
