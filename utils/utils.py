@@ -61,13 +61,29 @@ def detect_encoding(file, encodings=['utf8', 'iso-8859-1', 'utf16']):
 
     return encodings[0]
 
-def replace_binary(data, pattern, value):
+def replace_binary(data, pattern, value, size=None):
+    if not size:
+        size = len(pattern)
 
-    if len(value) > len(pattern):
+    if len(value) > size:
         raise Exception("Value is longer than the pattern")
 
-    value = value + b'\0'*(len(pattern)-len(value))
+    value = value + b'\0'
 
-    data = data.replace(pattern, value)
+    data = bytearray(data)
 
-    return data
+    index = data.find(pattern)
+
+    if index == -1:
+        raise Exception("Unable to find %s in base binary" % pattern)
+
+    for j in range(0, size):
+        if j < len(value):
+            data[index+j] = value[j]
+        else:
+            data[index+j] = 0
+
+    #data = data.replace(pattern, value)
+
+    return bytes(data)
+
