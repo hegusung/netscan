@@ -17,7 +17,7 @@ def main():
     if args.list:
         print("Available payloads:")
         for name, module in modules.items():
-            print(" - %s %s" % (module.name, ' '.join(module.args)))
+            print(" - [%s] %s %s" % (module.type, module.name, ' '.join(['<%s>' % s for s in module.args])))
         return
     else:
         if args.payload[0].lower() in modules:

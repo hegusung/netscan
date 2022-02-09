@@ -4,7 +4,7 @@ import importlib
 class PayloadManager:
 
     @classmethod
-    def list_payloads(self):
+    def list_payloads(self, filter=None):
         module_dict = {}
 
         path = os.path.join(os.path.dirname(__file__), 'payloads')
@@ -16,7 +16,12 @@ class PayloadManager:
                 except ModuleNotFoundError:
                     mod = importlib.import_module('payloads.%s' % module_filename[:-3])
                 module_class = getattr(mod, "Payload")
-                module_dict[module_class.name.lower()] = module_class()
+
+                if filter:
+                    if module_class.type == filter:
+                        module_dict[module_class.name.lower()] = module_class()
+                else:
+                    module_dict[module_class.name.lower()] = module_class()
 
         return module_dict
 

@@ -187,9 +187,13 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         module = None
         modules = PayloadManager.list_payloads()
         for payload_name, mod in modules.items():
-            if file_hash == mod.md5:
-                module = mod
-                break
+            try:
+                if file_hash == mod.md5:
+                    module = mod
+                    break
+            except AttributeError:
+                # The payload has no md5 field, just continue
+                continue
 
         if module:
             path = os.path.join(os.path.dirname(__file__), 'uploads', '%s_%s_%s' % (timestamp, self.client_address[0], module.name))
