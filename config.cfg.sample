@@ -17,6 +17,10 @@ enable_smb = true
 enable_ldap = true
 ldap_port = 3890
 
+[ReverseshellListener]
+bind_ip = 0.0.0.0
+bind_port = 4444
+
 [Logging]
 enabled = false
 folder = logs/

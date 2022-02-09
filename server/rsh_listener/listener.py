@@ -3,6 +3,8 @@ import socket
 import queue
 import time
 
+from utils.output import Output
+
 class Listener:
 
     def __init__(self, bind_ip, bind_port):
@@ -20,7 +22,7 @@ class Listener:
         s.bind((self.bind_ip, self.bind_port))
         s.listen()
 
-        print('\033[92mlistening on %s:%d\033[0m' % (self.bind_ip, self.bind_port))
+        Output.success('Listening on %s:%d' % (self.bind_ip, self.bind_port))
 
         while True:
             conn, addr = s.accept()
@@ -30,7 +32,7 @@ class Listener:
             else:
                 conn_id = 1
 
-            print('\033[94mNew reverse shell from %s => ID: %d\033[0m' % (addr, conn_id))
+            Output.success('New reverse shell from %s => ID: %d' % (addr, conn_id))
 
             t = threading.Thread(target=self.reverse_shell_thread, args=(conn_id,))
             t.daemon = True
@@ -55,8 +57,12 @@ class Listener:
                 q.put(data)
             except socket.timeout:
                 time.sleep(0.01)
+            except OSError:
+                Output.minor('Reverse shell %d died' % conn_id)
+                del self.connection_dict[conn_id]
+                break
             except ConnectionResetError:
-                print('\033[93mReverse shell %d died\033[0m' % conn_id)
+                Output.minor('Reverse shell %d died' % conn_id)
                 del self.connection_dict[conn_id]
                 break
 
