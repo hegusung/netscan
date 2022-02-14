@@ -15,6 +15,9 @@ from copy import copy
 from utils.utils import check_ip
 from utils.config import Config
 from utils.output import Output
+import urllib3
+
+urllib3.disable_warnings()
 
 MAX_BULK = 100
 
@@ -97,7 +100,7 @@ class DB:
         # Check elasticsearch status
         if not self.nodb:
             if not Elasticsearch.ping():
-                print("Unable to connect to the elasticsearch instance")
+                print("Unable to connect to the elasticsearch instance !")
                 sys.exit()
 
             Elasticsearch.check_index()
@@ -835,7 +838,21 @@ class Elasticsearch(object):
             es_port = int(Config.config.get('Elasticsearch', 'port'))
             es_index = Config.config.get('Elasticsearch', 'index').lower()
 
-            self.elasticsearch_instance = (elasticsearch.Elasticsearch(['http://%s:%d' % (es_ip, es_port)], max_retries=5, retry_on_timeout=True), es_index)
+            es_ssl = Config.config.get('Elasticsearch', 'ssl').strip().lower()
+            es_username = Config.config.get('Elasticsearch', 'username').strip()
+            es_password = Config.config.get('Elasticsearch', 'password').strip()
+
+            if es_ssl == 'true':
+                es_method = "https"
+            else:
+                es_method = "http"
+
+            es_url = '%s://%s:%d' % (es_method, es_ip, es_port)
+
+            if len(es_username) == 0:
+                self.elasticsearch_instance = (elasticsearch.Elasticsearch([es_url], max_retries=5, retry_on_timeout=True, verify_certs=False, ssl_show_warn=False), es_index)
+            else:
+                self.elasticsearch_instance = (elasticsearch.Elasticsearch([es_url], max_retries=5, retry_on_timeout=True, verify_certs=False, ssl_show_warn=False, http_auth=(es_username, es_password)), es_index)
 
         return self.elasticsearch_instance
 

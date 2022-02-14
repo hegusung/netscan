@@ -6,6 +6,9 @@ enabled = false
 index = pentest
 host = 127.0.0.1
 port = 9200
+ssl = false
+username = 
+password = 
 enable_file_storage = false
 document_storage_file = /tmp/es_file_storage.txt
 
