@@ -132,12 +132,30 @@ class LDAPScan:
                     tags.append('Account disabled')
                 if attr['userAccountControl'] & 0x0020 != 0:
                     tags.append('Password not required')
+                if attr['userAccountControl'] & 0x0080 != 0:
+                    tags.append('Encrypted text password allowed')
+                if attr['userAccountControl'] & 0x0800 != 0:
+                    tags.append('Interdomain trust account')
+                if attr['userAccountControl'] & 0x1000 != 0:
+                    tags.append('Workstation trust account')
+                if attr['userAccountControl'] & 0x2000 != 0:
+                    tags.append('Server trust account')
                 if attr['userAccountControl'] & 0x10000 != 0:
                     tags.append('Password never expire')
+                if attr['userAccountControl'] & 0x40000 != 0:
+                    tags.append('Smartcard required')
+                if attr['userAccountControl'] & 0x80000 != 0:
+                    tags.append('Trusted for delegation')
+                if attr['userAccountControl'] & 0x100000 != 0:
+                    tags.append('Account is sensitive and cannot be delegated')
+                if attr['userAccountControl'] & 0x200000 != 0:
+                    tags.append('Use DES key only')
                 if attr['userAccountControl'] & 0x400000 != 0:
                     tags.append('Do not require pre-auth')
-                if attr['userAccountControl'] & 0x80000 != 0:
+                if attr['userAccountControl'] & 0x1000000 != 0:
                     tags.append('Trusted to auth for delegation')
+                if attr['userAccountControl'] & 0x4000000 != 0:
+                    tags.append('Partial secrets account')
             else:
                 continue
 
@@ -371,8 +389,34 @@ class LDAPScan:
 
             tags = []
             if 'userAccountControl' in attr:
+                if attr['userAccountControl'] & 2 != 0:
+                    tags.append('Account disabled')
+                if attr['userAccountControl'] & 0x0020 != 0:
+                    tags.append('Password not required')
+                if attr['userAccountControl'] & 0x0080 != 0:
+                    tags.append('Encrypted text password allowed')
+                if attr['userAccountControl'] & 0x0800 != 0:
+                    tags.append('Interdomain trust account')
+                if attr['userAccountControl'] & 0x1000 != 0:
+                    tags.append('Workstation trust account')
+                if attr['userAccountControl'] & 0x2000 != 0:
+                    tags.append('Server trust account')
+                if attr['userAccountControl'] & 0x10000 != 0:
+                    tags.append('Password never expire')
+                if attr['userAccountControl'] & 0x40000 != 0:
+                    tags.append('Smartcard required')
                 if attr['userAccountControl'] & 0x80000 != 0:
                     tags.append('Trusted for delegation')
+                if attr['userAccountControl'] & 0x100000 != 0:
+                    tags.append('Account is sensitive and cannot be delegated')
+                if attr['userAccountControl'] & 0x200000 != 0:
+                    tags.append('Use DES key only')
+                if attr['userAccountControl'] & 0x400000 != 0:
+                    tags.append('Do not require pre-auth')
+                if attr['userAccountControl'] & 0x1000000 != 0:
+                    tags.append('Trusted to auth for delegation')
+                if attr['userAccountControl'] & 0x4000000 != 0:
+                    tags.append('Partial secrets account')
 
             yield {
                 'domain': domain,

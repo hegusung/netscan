@@ -5,9 +5,10 @@ from multiprocessing import Process, Queue, Manager
 import queue
 import time
 import os
+import multiprocessing
 
 import traceback
-from threading import Thread
+from threading import Thread, Lock
 from tqdm import tqdm
 import json
 
@@ -26,6 +27,7 @@ def dispatch_targets(targets, static_inputs, worker_func, func_args, workers=10,
     dispatch(target_gen, target_size, worker_func, func_args, workers=workers, process=process, pg_name=pg_name, delay=delay, resume=resume)
 
 def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg_name=None, delay=0, resume=0):
+
     try:
         worker_list = []
 
@@ -36,7 +38,7 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
             n_threads = int(workers)
 
         # prepare progress bar thread
-        pg_queue = manager.Queue()
+        pg_queue = multiprocessing.Queue()
         pg_thread = Thread(target=progressbar_worker, args=(gen_size, pg_queue, pg_name))
         pg_thread.daemon = True
         pg_thread.start()
@@ -63,8 +65,8 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
             n_all = n_threads
 
         # Start feeding worker
-        feed_queue = manager.Queue()
-        feed_thread = Thread(target=feedqueue_worker, args=(gen, feed_queue, n_all))
+        feed_queue = multiprocessing.Queue()
+        feed_thread = Process(target=feedqueue_worker, args=(gen, feed_queue, n_all, 10))
         feed_thread.daemon = True
         feed_thread.start()
 
@@ -145,6 +147,7 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue, delay):
 
                 if time_spent < delay:
                     time.sleep(delay - time_spent)
+
     except KeyboardInterrupt:
         pass
 
@@ -180,7 +183,7 @@ def progressbar_worker(target_size, pg_queue, pg_name):
 
     pg.close()
 
-def feedqueue_worker(target_gen, feed_queue, nb_workers):
+def feedqueue_worker(target_gen, feed_queue, nb_workers, bulk_nb):
     try:
         for target in target_gen:
             feed_queue.put(json.dumps(target))

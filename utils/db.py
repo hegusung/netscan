@@ -97,7 +97,7 @@ class DB:
         # Check elasticsearch status
         if not self.nodb:
             if not Elasticsearch.ping():
-                print("Unable to connect to the elasticsearch instance")
+                Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
                 sys.exit()
 
             Elasticsearch.check_index()
