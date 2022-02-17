@@ -9,7 +9,6 @@ import tqdm
 from tqdm import tqdm
 
 # Sometimes tqdm hangs during write
-#tqdm.get_lock().locks = []
 from utils.dispatch import pg_lock
 tqdm.set_lock(pg_lock)
 
