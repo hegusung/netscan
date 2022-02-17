@@ -18,6 +18,10 @@ cp config.cfg.sample config.cfg
 ### Installing the database and dashboards
 
 1. Install Elasticsearch and Kibana
+ To prevent an elasticsearch error, execute this first:
+```
+sysctl -w vm.max_map_count=262144
+```
 
 2. Import the kibana dashboards in located at "kibana/kibana_dashboards.ndjson"
 
