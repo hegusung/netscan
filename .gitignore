@@ -13,5 +13,7 @@ server/files/*
 !server/files/.gitkeep
 server/payloads/*.py
 !server/payloads/.gitkeep
+!server/payloads/invoke_mimikatz.py
 server/ressources/*
 !server/ressources/.gitkeep
+!server/ressources/Invoke-Mimikatz.ps1
