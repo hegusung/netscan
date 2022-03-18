@@ -213,6 +213,8 @@ class HTTP:
             names.append(name[0].value)
         except x509.ExtensionNotFound:
             pass
+        except IndexError:
+            pass
 
         try:
             ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)

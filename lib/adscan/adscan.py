@@ -138,13 +138,20 @@ def adscan_worker(target, actions, creds, timeout):
                     password = creds['hash']
             else:
                 password = None
+
+            success = False
             try:
                 ldapscan = LDAPScan(target['hostname'], 636, timeout, ssl=True)
                 success, ldap_info = ldapscan.connect(domain, username, password)
-            except LDAPSocketSendError:
+            except LDAPSocketSendError as e:
                 Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
-                ldapscan = LDAPScan(target['hostname'], 389, timeout)
+                ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
                 success, ldap_info = ldapscan.connect(domain, username, password)
+            else:
+                if smb_authenticated and not success:
+                    Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
+                    ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
+                    success, ldap_info = ldapscan.connect(domain, username, password)
 
             if success:
                 ldap_available = True
@@ -440,6 +447,10 @@ def adscan_worker(target, actions, creds, timeout):
                     for entry in ldapscan.list_acls():
                         if len(entry['rights']) > 0:
                             Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s]' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']))})
+
+            if 'gettgt' in actions:
+                Output.highlight({'target': smbscan.url(), 'message': 'Dumping the TGT of the current user...'})
+                smbscan.gettgt()
 
             if 'users_brute' in actions:
                 # Technically only needs kerberos but well....

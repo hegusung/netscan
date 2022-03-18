@@ -38,7 +38,7 @@ class Module:
             #print("%s > %s" % (target['hostname'], vulnerable))
 
             if vulnerable == STATUS_VULNERABLE:
-                Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2019-0708 (BlueKeep)'})
+                Output.vuln({'target': 'rdp://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2019-0708 (BlueKeep)'})
 
                 vuln_info = {
                     'hostname': target['hostname'],

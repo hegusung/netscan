@@ -43,6 +43,7 @@ class LDAPScan:
 
                 # Gather info on service
                 info = vars(self.server.info)
+
                 self.defaultdomainnamingcontext = info["other"]["defaultNamingContext"]
                 if type(self.defaultdomainnamingcontext) == list:
                     self.defaultdomainnamingcontext = self.defaultdomainnamingcontext[0]
@@ -119,7 +120,10 @@ class LDAPScan:
             primaryGID = attr["primaryGroupID"]
 
             created_date = attr["whenCreated"]
-            last_logon_date = attr["lastLogon"]
+            try:
+                last_logon_date = attr["lastLogon"]
+            except KeyError:
+                last_logon_date = None
             last_password_change_date = attr["pwdLastSet"]
 
             tags = []

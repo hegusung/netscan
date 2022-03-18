@@ -167,6 +167,7 @@ class DB:
                                 append = insert[2]
                                 insert = insert[1]
                                 insert['append'] = append
+                                insert = json.dumps(insert)
                                 f.write("%s\n" % insert)
                                 self.es_file_storage_count += 1
                             f.close()
@@ -181,6 +182,7 @@ class DB:
 
                 if self.es_file_storage_enabled:
                     f = open(self.es_file_storage, 'a')
+                    insert = json.dumps(insert)
                     f.write("%s\n" % insert)
                     f.close()
                     self.es_file_storage_count += 1
@@ -202,6 +204,7 @@ class DB:
                                 append = insert[2]
                                 insert = insert[1]
                                 insert['append'] = append
+                                insert = json.dumps(insert)
                                 f.write("%s\n" % insert)
                                 self.es_file_storage_count += 1
                             f.close()
@@ -217,6 +220,7 @@ class DB:
                             append = insert[2]
                             insert = insert[1]
                             insert['append'] = append
+                            insert = json.dumps(insert)
                             f.write("%s\n" % insert)
                             self.es_file_storage_count += 1
                         f.close()
@@ -714,7 +718,7 @@ class DB:
 
         if 'created_date' in user_doc:
             user_doc['created_date'] = int(user_doc['created_date'].timestamp()*1000)
-        if 'last_logon' in user_doc:
+        if 'last_logon' in user_doc and user_doc['last_logon'] != None:
             user_doc['last_logon'] = int(user_doc['last_logon'].timestamp()*1000)
         if 'last_password_change' in user_doc:
             user_doc['last_password_change'] = int(user_doc['last_password_change'].timestamp()*1000)

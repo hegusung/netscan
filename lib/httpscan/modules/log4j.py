@@ -50,7 +50,7 @@ headers = [
     "X-Forwarded-Scheme",
     "X-Forwarded-Server",
     "X-Forwarded-Ssl",
-    "X-Forwarder-For",
+    "X-Forwarded-For",
     "X-Forward-For",
     "X-Forward-Proto",
     "X-Frame-Options",

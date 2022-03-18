@@ -63,6 +63,7 @@ def export_ports(session, service, output_dir):
         return
 
     export_ip_ports(session, service, output_dir)
+    export_undiscovered_services(session, output_dir)
     export_domains(session, output_dir)
     export_domain_controllers(session, output_dir)
     export_http_urls(session, output_dir)
@@ -295,6 +296,52 @@ def export_domain_controllers(session, output_dir):
         count += 1
     print("%s: %s   %d domain controllers written" % ("dom_ctrls".ljust(12), filename.ljust(40), count))
 
+def export_undiscovered_services(session, output_dir):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "port"        }},
+            { "match": { "session": session }},
+          ],
+          "must_not": [
+              { "exists": { "field": "nmap_service" }},
+              { "exists": { "field": "service" }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    filename = os.path.join(output_dir, '%s_undiscovered_service.txt' % session)
+    try:
+        os.remove(filename)
+    except FileNotFoundError:
+        pass
+    file = open(filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        s_service = None
+
+        file.write('%s:%d\n' % (source['ip'], source['port']))
+        c += 1
+
+    file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    count = 0
+    for _ in open(filename):
+        count += 1
+    print("%s: %s   %d ip:port written" % ("undiscovered".ljust(12), filename.ljust(40), count))
+
+
 def export_http_urls(session, output_dir):
 
     query = {
@@ -469,7 +516,7 @@ def dump(session, output_file):
       "query": {
         "bool": {
           "must": [
-            { "match": { "session": session }}
+            #{ "match": { "session": session }}
           ],
           "filter": [
           ]

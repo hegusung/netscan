@@ -10,6 +10,7 @@
 AD:
 - List Permissions of a specific LDAP objects
 - Add user tag (Admin, RDP) in ES
-- Add last password change for user and computer accounts 
-- Add last authentication date for user and computer accounts
-
+- List current user groups (or specific user)
+- Make SMBv1 enabled visible in kibana
+- Kerberos (generate TGT, authenticate to SMB and LDAP via kerberos, getTGT.py)
+- ADCS (generate certificate from auth, get TGT from certificate (code from certipy)) 

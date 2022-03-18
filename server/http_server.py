@@ -125,6 +125,17 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self.copyfile(f, self.wfile)
             f.close()
 
+    def do_PUT(self):
+        if self.path.endswith('/'):
+            self.send_response(405, "Method not allowed")
+            return
+        else:
+            path = os.path.join(os.path.dirname(__file__), "files" + self.path)
+            length = int(self.headers['Content-Length'])
+            with open(path, 'wb') as f:
+                f.write(self.rfile.read(length))
+        self.send_response(201, "File created")
+
     def deal_register_vuln_callback(self):
         remainbytes = int(self.headers['content-length'])
         vuln_info = self.rfile.read(remainbytes)
@@ -137,6 +148,8 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         content_type = self.headers['content-type']
         if not content_type:
             return (False, "Content-Type header doesn't contain boundary")
+        if content_type == 'application/x-www-form-urlencoded':
+            return (False, "Unexpected content_type")
         boundary = content_type.split("=")[1].encode()
         remainbytes = int(self.headers['content-length'])
         line = self.rfile.readline()

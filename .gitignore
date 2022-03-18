@@ -15,3 +15,4 @@ server/payloads/*.py
 !server/payloads/.gitkeep
 server/ressources/*
 !server/ressources/.gitkeep
+*.ccache

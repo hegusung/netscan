@@ -279,6 +279,7 @@ class PortScan:
             raise Exception("Failed to parse nmap XML output (probably due to nmap core dump)")
 
 def top_ports(top_n, protocols=['tcp']):
+    every_port = range(1,65536)
     try:
         if top_n == None:
             return None
@@ -311,4 +312,31 @@ def top_ports(top_n, protocols=['tcp']):
     except Exception as e:
         print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
 
-    return [p['port'] for p in sorted(ports, key=itemgetter('freq'), reverse=True)[top_start:top_end]]
+    import time
+    t = time.time()
+    output = []
+
+    top_port_list = [p['port'] for p in sorted(ports, key=itemgetter('freq'), reverse=True)]
+
+    if top_start < len(top_port_list):
+        output = top_port_list[top_start:top_end]
+
+    count = len(output)
+    total_top = top_end-top_start
+    current_top = len(top_port_list)
+
+    if total_top > count:
+        for port in every_port: 
+            if port in top_port_list:
+                continue
+
+            if current_top >= top_start and current_top < top_end:
+                output.append(port)
+                count += 1
+    
+            if total_top <= count:
+                break
+
+            current_top += 1
+
+    return output
