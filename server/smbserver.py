@@ -3211,7 +3211,7 @@ class SMB2Commands:
                 if queryInfo['InfoType'] == smb2.SMB2_0_INFO_FILE:
                     if queryInfo['FileInfoClass'] == smb2.SMB2_FILE_INTERNAL_INFO:
                         # No need to call queryFileInformation, we have the data here
-                        infoRecord = smb2.FileInternalInformation()
+                        infoRecord = smb2.FILE_INTERNAL_INFORMATION()
                         infoRecord['IndexNumber'] = fileID
                     else:
                         infoRecord, errorCode = queryFileInformation(os.path.dirname(fileName),
@@ -4299,8 +4299,8 @@ smb.SMB.TRANS_TRANSACT_NMPIPE          :self.__smbTransHandler.transactNamedPipe
                             done = True
 
         except Exception as e:
-            #import traceback
-            #traceback.print_exc()
+            import traceback
+            traceback.print_exc()
             # Something wen't wrong, defaulting to Bad user ID
             self.log('processRequest (0x%x,%s)' % (packet['Command'],e), logging.ERROR)
             raise
