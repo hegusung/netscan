@@ -20,6 +20,12 @@ from impacket.dcerpc.v5 import transport, scmr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.examples.secretsdump import RemoteOperations, SAMHashes, LSASecrets, NTDSHashes
 
+from impacket.krb5.ccache import CCache
+from impacket.krb5.kerberosv5 import getKerberosTGT
+from impacket.krb5 import constants
+from impacket.krb5.types import Principal
+
+
 from .exec.smbexec import SMBEXEC
 from .exec.wmiexec import WMIEXEC
 from .exec.mmcexec import MMCEXEC
@@ -124,6 +130,39 @@ class SMBScan:
 
         return success, self.is_admin
 
+    def kerberos_auth(self):
+        if not self.conn:
+            Output.write({'target': self.url(), 'message': 'enum_host_info(): please connect first'})
+
+        self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
+
+        success = False
+        self.is_admin = False
+
+        try:
+            self.conn.kerberosLogin('', '', '', '', '', None, self.hostname)
+            success = True
+
+            self.creds = {'kerberos': True}
+
+            self.is_admin = self.check_if_admin(kerberos=True)
+        except impacket.krb5.kerberosv5.KerberosError as e:
+            success = False
+            if "KDC_ERR_S_PRINCIPAL_UNKNOWN" in str(e):
+                Output.error({'target': self.url(), 'message': "KDC_ERR_S_PRINCIPAL_UNKNOWN received, you shoudl specify the server FQDN instead of the IP"})
+                raise AuthFailure("KDC_ERR_S_PRINCIPAL_UNKNOWN")
+            else:
+                Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+                raise AuthFailure("%s: %s" % (type(e), e))
+        except Exception as e:
+            success = False
+            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+            raise AuthFailure("%s: %s" % (type(e), e))
+
+        self.authenticated = success
+
+        return success, self.is_admin
+
     def get_server_info(self):
         if not self.conn:
             self.conn()
@@ -177,28 +216,6 @@ class SMBScan:
             Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             return False
 
-    """
-    def connect(self):
-        try:
-            self.conn = SMBConnection(self.hostname, self.hostname, None, self.port, timeout=self.timeout, preferredDialect=SMB_DIALECT)
-            self.smbv1 = True
-
-            return True
-        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout) as e:
-            try:
-                self.conn = SMBConnection(self.hostname, self.hostname, None, timeout=self.timeout, preferredDialect=SMB2_DIALECT_21)
-                self.smbv1 = False
-
-                return True
-            except socket.error as e:
-                return False
-            except Exception as e:
-                return False
-        except Exception as e:
-            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
-            return False
-    """
-
     def disconnect(self):
         if self.conn:
             try:
@@ -219,7 +236,7 @@ class SMBScan:
             self.remote_ops = None
             self.bootkey = None
 
-    def check_if_admin(self, domain='WORKGROUP', username='', password=None, hash=None):
+    def check_if_admin(self, domain='WORKGROUP', username='', password=None, hash=None, kerberos=False):
         admin_privs = False
 
         stringBinding = r'ncacn_np:{}[\pipe\svcctl]'.format(self.hostname)
@@ -240,6 +257,7 @@ class SMBScan:
         if hasattr(rpctransport, 'set_credentials'):
             # This method exists only for selected protocol sequences.
             rpctransport.set_credentials(username, password if password is not None else '', domain, lmhash, nthash)
+        rpctransport.set_kerberos(kerberos, self.hostname)
         try:
             dce = rpctransport.get_dce_rpc()
             dce.connect()
@@ -256,6 +274,39 @@ class SMBScan:
             pass
 
         return admin_privs
+
+    def gettgt(self):
+        if self.authenticated:
+            try:
+                domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+                username = self.creds['username'] if 'username' in self.creds else ''
+                password = self.creds['password'] if 'password' in self.creds else ''
+                hash = self.creds['hash'] if 'hash' in self.creds else ''
+                if hash != '':
+                    if not ':' in hash:
+                        nthash = hash
+                        lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+                    else:
+                        nthash = hash.split(':')[1]
+                        lmhash = hash.split(':')[0]
+
+                username_principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+
+
+                tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(username_principal, password, domain,
+                                                                    unhexlify(lmhash), unhexlify(nthash), '',
+                                                                    self.hostname)
+
+                ccache = CCache()
+
+                ccache.fromTGT(tgt, oldSessionKey, oldSessionKey)
+                ticket_file = "%s_%s.ccache" % (domain, username)
+                Output.highlight({'target': self.url(), 'message': "Saving TGT to %s" % ticket_file})
+                ccache.saveFile(ticket_file)
+            except Exception as e:
+                print("%s: %s" % (type(e), str(e)))
+        else:
+            Output.write({'target': self.url(), 'message': "getTGT error: Not authenticated"})
 
     def list_shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
@@ -374,7 +425,7 @@ class SMBScan:
         username = self.creds['username'] if 'username' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
-        # I don't support kerberos yet
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
         output = None
         exec = None
@@ -425,8 +476,10 @@ class SMBScan:
         if self.remote_ops is not None and self.bootkey is not None:
             return
 
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
+
         try:
-            self.remote_ops  = RemoteOperations(self.conn, False, None) #self.__doKerberos, self.__kdcHost
+            self.remote_ops  = RemoteOperations(self.conn, do_kerberos, self.hostname) #self.__doKerberos, self.__kdcHost
             self.remote_ops.enableRegistry()
             self.bootkey = self.remote_ops.getBootKey()
         except Exception as e:

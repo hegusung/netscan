@@ -6,7 +6,7 @@ from time import sleep
 from utils.output import Output
 from utils.db import DB
 
-ttl_pattern = re.compile("^\d+.+\S+ ?: icmp_seq=\d+ ttl=(\d+) \S+=\S+ ms$")
+ttl_pattern = re.compile("^\d+.+: icmp_seq=\d+ ttl=(\d+) \S+=\S+\s+ms.*$")
 rtt_pattern = re.compile("^rtt\s+min/avg/max/mdev\s+=\s+(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)\s+ms.*$")
 
 def pingscan_worker(target, timeout):
@@ -51,6 +51,8 @@ class PingScan:
                         os = 'Windows?'
                     elif int(m.group(1)) == 255:
                         os = 'AIX/FreeBSD?'
+                    else:
+                        os = 'Unknown (ttl=%s)' % m.group(1)
 
                 m = rtt_pattern.match(line)
                 if m:

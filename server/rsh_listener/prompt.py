@@ -121,7 +121,7 @@ class Prompt:
 
                 try:
                     data = self.listener.connection_dict[conn_id]['received_queue'].get(block=False)
-                    print(data.decode(), end='', flush=True)
+                    print(data.decode(errors='replace'), end='', flush=True)
                 except queue.Empty:
                     pass
                 except KeyError:

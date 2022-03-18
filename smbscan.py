@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import argparse
 import sys
+import os
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
@@ -13,55 +14,66 @@ from utils.config import Config
 
 def main():
     parser = argparse.ArgumentParser(description='SMBScan')
-    parser.add_argument('targets', type=str, nargs='?')
-    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
-    parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='445', dest='port')
-    parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
-    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
+    target_group = parser.add_argument_group("Targets")
+    target_group.add_argument('targets', type=str, nargs='?')
+    target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
+    target_group.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='445', dest='port')
     # Authentication
-    parser.add_argument('--null', action='store_true', help='NULL bind', dest='null')
-    parser.add_argument('--guest', action='store_true', help='guest account', dest='guest')
-    parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
-    parser.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default='WORKGROUP', dest='domain')
-    parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
-    parser.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
+    auth_group = parser.add_argument_group("Authentication")
+    auth_group.add_argument('--null', action='store_true', help='NULL bind', dest='null')
+    auth_group.add_argument('--guest', action='store_true', help='guest account', dest='guest')
+    auth_group.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
+    auth_group.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default='WORKGROUP', dest='domain')
+    auth_group.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
+    auth_group.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
+    auth_group.add_argument('-k', metavar='ticket', type=str, nargs='?', help='Kerberos authentication (uses KRB5CCNAME environement variable if not parameter is defined)', default=None, const='', dest='kerberos')
     # Share-related
-    parser.add_argument('--shares', action='store_true', help='List shares', dest='shares')
-    parser.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
-    parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
+    share_group = parser.add_argument_group("Shared folders")
+    share_group.add_argument('--shares', action='store_true', help='List shares', dest='shares')
+    share_group.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
+    share_group.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
     # Execution-related
-    parser.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
-    parser.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
-    parser.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
-    parser.add_argument("--list-payloads", action='store_true', help='List payloads', dest='list_payloads')
+    cmd_group = parser.add_argument_group("Command execution (admin rights required)")
+    cmd_group.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
+    cmd_group.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
+    cmd_group.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
+    cmd_group.add_argument("--list-payloads", action='store_true', help='List payloads', dest='list_payloads')
     # Dump secrets
-    parser.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
-    parser.add_argument("--lsa", action='store_true', help='dump LSA secrets from target systems')
+    secrets_group = parser.add_argument_group("Secrets dumping (admin rights required)")
+    secrets_group.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
+    secrets_group.add_argument("--lsa", action='store_true', help='dump LSA secrets from target systems')
     # Enum
-    parser.add_argument("--users", action='store_true', help='dump users from target systems')
-    parser.add_argument("--groups", action='store_true', help='dump groups from target systems')
-    parser.add_argument("--admins", action='store_true', help='dump admins from target systems')
-    parser.add_argument("--apps", action='store_true', help='dump applications list from target systems')
-    parser.add_argument("--processes", action='store_true', help='dump processes list from target systems')
-    parser.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
-    parser.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
-    parser.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
-    parser.add_argument("--rid-brute", metavar="range", help='RID bruteforce', type=str, default=None, dest='rid_brute')
+    enum_group = parser.add_argument_group("Enumerate the target")
+    enum_group.add_argument("--users", action='store_true', help='dump users from target systems')
+    enum_group.add_argument("--groups", action='store_true', help='dump groups from target systems')
+    enum_group.add_argument("--admins", action='store_true', help='dump admins from target systems')
+    enum_group.add_argument("--apps", action='store_true', help='dump applications list from target systems')
+    enum_group.add_argument("--processes", action='store_true', help='dump processes list from target systems')
+    enum_group.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
+    enum_group.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
+    enum_group.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
+    enum_group.add_argument("--rid-brute", metavar="range", help='RID bruteforce', type=str, default=None, dest='rid_brute')
     # Bruteforce
-    parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
-    parser.add_argument("--simple-bruteforce", action='store_true', help='Enable simple bruteforce (username=password)', dest='simple_bruteforce')
-    parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
-    parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
-    parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
+    bruteforce_group = parser.add_argument_group("Bruteforce")
+    bruteforce_group.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
+    bruteforce_group.add_argument("--simple-bruteforce", action='store_true', help='Enable simple bruteforce (username=password)', dest='simple_bruteforce')
+    bruteforce_group.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
+    bruteforce_group.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
+    bruteforce_group.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
     # Modules
-    parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    parser.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
+    module_group = parser.add_argument_group("Modules")
+    module_group.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
+    module_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
+    
+    misc_group = parser.add_argument_group("Misc")
+    misc_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Dispatcher arguments
-    parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # Resume
-    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
+    misc_group.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
     # DB arguments
-    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+    misc_group.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
 
@@ -106,6 +118,10 @@ def main():
             creds['password'] = args.password
         if args.hash:
             creds['hash'] = args.hash
+    if args.kerberos != None:
+        if len(args.kerberos) != 0:
+            os.environ['KRB5CCNAME'] = args.kerberos
+        creds['kerberos'] = True
 
     actions = {}
     if args.list:

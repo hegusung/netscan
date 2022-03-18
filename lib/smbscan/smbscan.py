@@ -83,9 +83,17 @@ def smbscan_worker(target, actions, creds, timeout):
             success = False
             is_admin = False
             # Authenticate
-            if not 'username' in creds:
-                pass
-            else:
+            if 'kerberos' in creds:
+                try:
+                    ticket = os.environ['KRB5CCNAME']
+
+                    success, is_admin = smbscan.kerberos_auth()
+
+                    Output.success({'target': smbscan.url(), 'message': 'Successful authentication from kerberos ticket %s' % ticket})
+                except AuthFailure as e:
+                    Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with kerberos ticket %s' % ticket})
+
+            elif 'username' in creds:
                 if not 'domain' in creds:
                     creds['domain'] = 'WORKGROUP'
 
