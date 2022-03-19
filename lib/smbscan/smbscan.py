@@ -87,11 +87,39 @@ def smbscan_worker(target, actions, creds, timeout):
                 try:
                     ticket = os.environ['KRB5CCNAME']
 
-                    success, is_admin = smbscan.kerberos_auth()
+                    from impacket.krb5.ccache import CCache
+                    ccache = CCache.loadFile(ticket)
+                    domain = ccache.principal.realm['data'].decode('utf-8')
+                    principal = 'cifs/%s@%s' % (smb_info['hostname'].upper(), domain.upper())
+                    ticket_creds = ccache.getCredential(principal)
+                    if ticket_creds is not None:
+                        user = ticket_creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
+                    elif len(ccache.principal.components) > 0:
+                        user = ccache.principal.components[0]['data'].decode('utf-8')
 
-                    Output.success({'target': smbscan.url(), 'message': 'Successful authentication from kerberos ticket %s' % ticket})
+                    creds['username'] = user
+                    creds['domain'] = domain
+
+                    dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
+
+                    success, is_admin = smbscan.kerberos_auth(dc_ip=dc_ip)
+
+                    Output.success({'target': smbscan.url(), 'message': 'Successful authentication from kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+
+                    if is_admin:
+                        Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+
+                        if 'domain' in creds and not creds['domain'] in [None, 'WORKGROUP']:
+                                # domain account 
+                                cred_info = {
+                                    'domain': domain,
+                                    'username': user,
+                                    'admin_of': target['hostname'],
+                                }
+                                DB.insert_domain_user(cred_info)
+
                 except AuthFailure as e:
-                    Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with kerberos ticket %s' % ticket})
+                    Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
 
             elif 'username' in creds:
                 if not 'domain' in creds:

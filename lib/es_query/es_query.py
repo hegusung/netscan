@@ -516,7 +516,7 @@ def dump(session, output_file):
       "query": {
         "bool": {
           "must": [
-            #{ "match": { "session": session }}
+            { "match": { "session": session }}
           ],
           "filter": [
           ]

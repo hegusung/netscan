@@ -66,6 +66,8 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
+
     if args.list_modules:
         print('Available modules:')
         for module in ad_modules.list_modules():
@@ -91,17 +93,17 @@ def main():
         creds['username'] = 'guest'
         creds['password'] = ''
     else:
-        if args.domain:
-            creds['domain'] = args.domain
-        else:
-            print('Please specify the domain (complete FQDN)')
-            sys.exit()
         if args.username:
             creds['username'] = args.username
         if args.password:
             creds['password'] = args.password
         if args.hash:
             creds['hash'] = args.hash
+    if args.domain:
+        creds['domain'] = args.domain
+    else:
+        print('Please specify the domain (complete FQDN)')
+        sys.exit()
 
     actions = {}
     if args.users:
@@ -147,7 +149,6 @@ def main():
         }
         actions['modules'] = {'modules': args.modules, 'args': module_args}
 
-    Output.setup()
 
     adscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
 

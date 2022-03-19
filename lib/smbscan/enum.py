@@ -14,7 +14,7 @@ class ListUsersException(Exception):
     pass
 
 class Enum:
-    def __init__(self, hostname, port, domain, username, password, hash, conn):
+    def __init__(self, hostname, port, domain, username, password, hash, conn, doKerberos):
 
         self.__username = username
         self.__addr = hostname
@@ -25,7 +25,7 @@ class Enum:
         self.__lmhash = ''
         self.__nthash = ''
         self.__aesKey = None
-        self.__doKerberos = False
+        self.__doKerberos = doKerberos
         self.__host_domain = conn.getServerDomain()
 
         if self.__hash is not None:

@@ -45,7 +45,7 @@ from impacket.smbconnection import SMBConnection, SMB_DIALECT, SMB2_DIALECT_002,
 from impacket.dcerpc.v5.dcomrt import DCERPCSessionError
 
 class MMCEXEC:
-    def __init__(self, host, username, password, domain, smbconnection, hashes, share_name):
+    def __init__(self, host, username, password, domain, smbconnection, hashes, share_name, doKerberos=False):
         self.__host = host
         self.__username = username
         self.__password = password
@@ -60,6 +60,7 @@ class MMCEXEC:
         self.__pwd = 'C:\\'
         self.__quit = None
         self.__executeShellCommand = None
+        self.__doKerberos = doKerberos
         self.__retOutput = True
 
         if hashes is not None:
@@ -69,7 +70,7 @@ class MMCEXEC:
             else:
                 self.__nthash = hashes
 
-        dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, None, oxidResolver=True)
+        dcom = DCOMConnection(self.__host, self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, None, oxidResolver=True, doKerberos=self.__doKerberos)
         try:
             iInterface = dcom.CoCreateInstanceEx(string_to_bin('49B2791A-B1AE-4C90-9B8E-E860BA07F889'), IID_IDispatch)
             iMMC = IDispatch(iInterface)
