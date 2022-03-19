@@ -27,6 +27,7 @@ def main():
     auth_group.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     auth_group.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
     auth_group.add_argument('-k', metavar='ticket', type=str, nargs='?', help='Kerberos authentication (uses KRB5CCNAME environement variable if not parameter is defined)', default=None, const='', dest='kerberos')
+    auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
     # Share-related
     share_group = parser.add_argument_group("Shared folders")
     share_group.add_argument('--shares', action='store_true', help='List shares', dest='shares')
@@ -77,6 +78,8 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
+
     if args.list_modules:
         print('Available modules:')
         for module in smb_modules.list_modules():
@@ -122,6 +125,8 @@ def main():
         if len(args.kerberos) != 0:
             os.environ['KRB5CCNAME'] = args.kerberos
         creds['kerberos'] = True
+    if args.dc_ip != None:
+        creds['dc_ip'] = args.dc_ip
 
     actions = {}
     if args.list:
@@ -171,7 +176,6 @@ def main():
     if args.modules:
         actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
-    Output.setup()
 
     smbscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 

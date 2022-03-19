@@ -33,14 +33,16 @@ class Module:
         user = creds['username'] if 'username' in creds else None
         password = creds['password'] if 'password' in creds else None
         ntlm_hash = creds['hash'] if 'hash' in creds else ''
+        do_kerberos = creds['kerberos'] if 'kerberos' in creds else False
+        dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
         if user == None:
             Output.highlight({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Printnightmare module works best with an account !'})
 
 
-        check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, timeout)
+        check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, do_kerberos, dc_ip, timeout)
 
-def check(ip, port, listener_ip, domain, username, password, ntlm_hash, timeout):
+def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerberos, dc_ip, timeout):
 
     do_kerberos = False
     pipe = 'lsarpc'
@@ -51,7 +53,7 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, timeout)
         nthash = ''
 
     #connect
-    dce = connect(username, password, domain, lmhash, nthash, ip, port)
+    dce = connect(username, password, domain, lmhash, nthash, do_kerberos, dc_ip, ip, port)
     #handle = "\\\\{0}\x00".format(address)
     handle = NULL
     
@@ -134,7 +136,7 @@ class DRIVER_INFO_2_ARRAY(Structure):
                 self['drivers'].append(attr)
                 remaining = remaining[len(attr):]
 
-def connect(username, password, domain, lmhash, nthash, address, port):
+def connect(username, password, domain, lmhash, nthash, do_kerberos, dc_ip, address, port):
     binding = r'ncacn_np:{0}[\PIPE\spoolss]'.format(address)
     rpctransport = transport.DCERPCTransportFactory(binding)
     
@@ -144,6 +146,7 @@ def connect(username, password, domain, lmhash, nthash, address, port):
     if hasattr(rpctransport, 'set_credentials'):
         # This method exists only for selected protocol sequences.
         rpctransport.set_credentials(username, password, domain, lmhash, nthash)
+    rpctransport.set_kerberos(do_kerberos, dc_ip)
     
     #print("[*] Connecting to {0}".format(binding))
     try:

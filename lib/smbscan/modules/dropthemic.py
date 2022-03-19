@@ -22,7 +22,7 @@ from impacket.ntlm import AV_PAIRS, NTLMSSP_AV_TIME, NTLMSSP_AV_FLAGS, NTOWFv2, 
 
 class Module:
     name = 'DropTheMic'
-    description = 'Check for DropTheMic (CVE-2019-1040)'
+    description = 'Check for DropTheMic (CVE-2019-1040) (not compatible with kerberos)'
 
     def run(self, target, args, creds, timeout):
         domain = creds['domain'] if 'domain' in creds else None

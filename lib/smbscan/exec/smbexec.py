@@ -8,7 +8,7 @@ from utils.utils import gen_random_string
 
 class SMBEXEC:
 
-    def __init__(self, host, username = '', password = '', domain = '', hashes = None, share = None, port=445):
+    def __init__(self, host, username = '', password = '', domain = '', hashes = None, share = None, port=445, doKerberos=False, kdcHost=None):
         self.__host = host
         #self.__share_name = share_name
         self.__port = port
@@ -29,7 +29,8 @@ class SMBEXEC:
         self.__conn = None
         #self.__mode  = mode
         #self.__aesKey = aesKey
-        #self.__doKerberos = doKerberos
+        self.__doKerberos = doKerberos
+        self.__kdcHost = kdcHost
 
         if hashes is not None:
         #This checks to see if we didn't provide the LM Hash
@@ -51,7 +52,7 @@ class SMBEXEC:
         if hasattr(self.__rpctransport, 'set_credentials'):
             # This method exists only for selected protocol sequences.
             self.__rpctransport.set_credentials(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
-        #rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
+        self.__rpctransport.set_kerberos(self.__doKerberos, self.__kdcHost)
 
         self.__scmr = self.__rpctransport.get_dce_rpc()
         self.__scmr.connect()

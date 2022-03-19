@@ -130,7 +130,7 @@ class SMBScan:
 
         return success, self.is_admin
 
-    def kerberos_auth(self):
+    def kerberos_auth(self, dc_ip=None):
         if not self.conn:
             Output.write({'target': self.url(), 'message': 'enum_host_info(): please connect first'})
 
@@ -139,18 +139,24 @@ class SMBScan:
         success = False
         self.is_admin = False
 
+        domain = ''
+        username = ''
+
         try:
-            self.conn.kerberosLogin('', '', '', '', '', None, self.hostname)
+            self.conn.kerberosLogin(username, '', domain, '', '', None, dc_ip)
             success = True
 
-            self.creds = {'kerberos': True}
+            self.creds = {'kerberos': True, 'dc_ip': dc_ip}
 
-            self.is_admin = self.check_if_admin(kerberos=True)
+            self.is_admin = self.check_if_admin(kerberos=True, dc_ip=dc_ip)
         except impacket.krb5.kerberosv5.KerberosError as e:
             success = False
             if "KDC_ERR_S_PRINCIPAL_UNKNOWN" in str(e):
-                Output.error({'target': self.url(), 'message': "KDC_ERR_S_PRINCIPAL_UNKNOWN received, you shoudl specify the server FQDN instead of the IP"})
+                Output.error({'target': self.url(), 'message': "KDC_ERR_S_PRINCIPAL_UNKNOWN received, you should specify the server FQDN instead of the IP"})
                 raise AuthFailure("KDC_ERR_S_PRINCIPAL_UNKNOWN")
+            elif "KDC_ERR_WRONG_REALM" in str(e):
+                Output.error({'target': self.url(), 'message': "KDC_ERR_WRONG_REALM received, you should define the DC ip with --dc-ip"})
+                raise AuthFailure("KDC_ERR_WRONG_REALM")
             else:
                 Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
                 raise AuthFailure("%s: %s" % (type(e), e))
@@ -236,12 +242,13 @@ class SMBScan:
             self.remote_ops = None
             self.bootkey = None
 
-    def check_if_admin(self, domain='WORKGROUP', username='', password=None, hash=None, kerberos=False):
+    def check_if_admin(self, domain='', username='', password='', hash=None, kerberos=False, dc_ip=None):
         admin_privs = False
 
         stringBinding = r'ncacn_np:{}[\pipe\svcctl]'.format(self.hostname)
 
         rpctransport = transport.DCERPCTransportFactory(stringBinding)
+        rpctransport.setRemoteHost(self.hostname)
         rpctransport.set_dport(self.port)
 
         lmhash = ''
@@ -256,8 +263,9 @@ class SMBScan:
 
         if hasattr(rpctransport, 'set_credentials'):
             # This method exists only for selected protocol sequences.
-            rpctransport.set_credentials(username, password if password is not None else '', domain, lmhash, nthash)
-        rpctransport.set_kerberos(kerberos, self.hostname)
+            rpctransport.set_credentials(username, password, domain, lmhash, nthash, None)
+            pass
+        rpctransport.set_kerberos(kerberos, dc_ip)
         try:
             dce = rpctransport.get_dce_rpc()
             dce.connect()
@@ -270,7 +278,8 @@ class SMBScan:
 
             resp = scmr.hROpenSCManagerW(dce, lpMachineName, 'ServicesActive\x00', 0xF003F)
             admin_privs = True
-        except DCERPCException:
+        except DCERPCException as e:
+            print("%s: %s" % (type(e), str(e)))
             pass
 
         return admin_privs
@@ -282,6 +291,8 @@ class SMBScan:
                 username = self.creds['username'] if 'username' in self.creds else ''
                 password = self.creds['password'] if 'password' in self.creds else ''
                 hash = self.creds['hash'] if 'hash' in self.creds else ''
+                lmhash = ''
+                nthash = ''
                 if hash != '':
                     if not ':' in hash:
                         nthash = hash
@@ -421,11 +432,12 @@ class SMBScan:
             exec_methods = [exec_method]
 
         smb_share = "C$"
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         username = self.creds['username'] if 'username' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
         do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
+        dc_ip = self.creds['dc_ip'] if 'dc_ip' in self.creds else None
 
         output = None
         exec = None
@@ -433,7 +445,7 @@ class SMBScan:
         for method in exec_methods:
             if method == 'wmiexec':
                 try:
-                    exec = WMIEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share)
+                    exec = WMIEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share, do_kerberos)
                     break
                 except Exception as e:
                     if 'access_denied' in str(e):
@@ -443,7 +455,7 @@ class SMBScan:
                     continue
             elif method == 'smbexec':
                 try:
-                    exec = SMBEXEC(self.hostname, username, password, domain, hash, smb_share)
+                    exec = SMBEXEC(self.hostname, username, password, domain, hash, smb_share, doKerberos=do_kerberos, kdcHost=dc_ip)
                     break
                 except Exception as e:
                     if 'access_denied' in str(e):
@@ -453,7 +465,7 @@ class SMBScan:
                     continue
             elif method == 'mmcexec':
                 try:
-                    exec = MMCEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share)
+                    exec = MMCEXEC(self.hostname, username, password, domain, self.conn, hash, smb_share, doKerberos=do_kerberos)
                     break
                 except Exception as e:
                     if 'access_denied' in str(e):
@@ -477,9 +489,10 @@ class SMBScan:
             return
 
         do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
+        dc_ip = self.creds['dc_ip'] if 'dc_ip' in self.creds else None
 
         try:
-            self.remote_ops  = RemoteOperations(self.conn, do_kerberos, self.hostname) #self.__doKerberos, self.__kdcHost
+            self.remote_ops  = RemoteOperations(self.conn, do_kerberos, dc_ip) #self.__doKerberos, self.__kdcHost
             self.remote_ops.enableRegistry()
             self.bootkey = self.remote_ops.getBootKey()
         except Exception as e:
@@ -548,11 +561,12 @@ class SMBScan:
 
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         for user in enum.enumUsers():
             yield user
@@ -564,11 +578,12 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         for group in enum.enumGroups():
             yield group
@@ -580,11 +595,12 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         for user in enum.enumAdmins():
             yield user
@@ -596,11 +612,12 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        wmi = WMI(self.hostname, username, password, domain, hashes=hash)
+        wmi = WMI(self.hostname, username, password, domain, hashes=hash, doKerberos=do_kerberos)
 
         for process in wmi.enumProcesses():
             yield process
@@ -613,11 +630,12 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         return enum.enumPasswordPolicy()
 
@@ -628,11 +646,12 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         for logged in enum.enumLoggedIn():
             yield logged
@@ -644,11 +663,12 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         for session in enum.enumSessions():
             yield session
@@ -660,7 +680,7 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
 
         get_spns = GetUserSPNs(self.hostname, username, password, domain, baseDN)
@@ -675,11 +695,12 @@ class SMBScan:
             return
 
         username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else 'WORKGROUP'
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
         password = self.creds['password'] if 'password' in self.creds else ''
         hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
 
-        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn)
+        enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         for entry in enum.RIDBruteforce(start, end):
             yield entry

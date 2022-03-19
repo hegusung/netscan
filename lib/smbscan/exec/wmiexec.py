@@ -9,7 +9,7 @@ from impacket.dcerpc.v5.dcom import wmi
 from impacket.dcerpc.v5.dtypes import NULL
 
 class WMIEXEC:
-    def __init__(self, target, username, password, domain, smbconnection, hashes=None, share=None):
+    def __init__(self, target, username, password, domain, smbconnection, hashes=None, share=None, doKerberos=False):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -23,7 +23,7 @@ class WMIEXEC:
         self.__shell = 'cmd.exe /Q /c '
         self.__pwd = 'C:\\'
         self.__aesKey = None
-        self.__doKerberos = False
+        self.__doKerberos = doKerberos
         self.__retOutput = True
 
         if hashes is not None:

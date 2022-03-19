@@ -5,7 +5,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from utils.output import Output
 
 class WMI:
-    def __init__(self, target, username, password, domain, hashes=None):
+    def __init__(self, target, username, password, domain, hashes=None, doKerberos=False):
         self.__target = target
         self.__username = username
         self.__password = password
@@ -13,7 +13,7 @@ class WMI:
         self.__lmhash = ''
         self.__nthash = ''
         self.__aesKey = None
-        self.__doKerberos = False
+        self.__doKerberos = doKerberos
         self.__retOutput = True
 
         if hashes is not None:
