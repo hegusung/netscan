@@ -741,6 +741,14 @@ class DB:
                 user_doc['append']['hash'] = [user_doc['hash']]
             del user_doc['hash']
 
+        if 'group' in user_doc:
+            if not 'append' in user_doc:
+                append = {'group': user_doc['group']}
+                user_doc['append'] = append
+            else:
+                user_doc['append']['group'] = [user_doc['group']]
+            del user_doc['group']
+
         if 'tags' in user_doc:
             if not 'append' in user_doc:
                 append = {'tags': user_doc['tags']}
@@ -778,6 +786,14 @@ class DB:
 
         if len(group_doc['domain']) == 0 or group_doc['domain'] == 'workgroup':
             return
+
+        if 'user' in group_doc:
+            if not 'append' in group_doc:
+                append = {'user': group_doc['user']}
+                group_doc['append'] = append
+            else:
+                group_doc['append']['user'] = [group_doc['user']]
+            del group_doc['user']
 
         self.send(group_doc)
 

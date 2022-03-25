@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import argparse
 import sys
+import os
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
@@ -23,8 +24,10 @@ def main():
     auth_group.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default=None, dest='domain')
     auth_group.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     auth_group.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NT or NTLM hash', default=None, dest='hash')
+    auth_group.add_argument('-k', metavar='ticket', type=str, nargs='?', help='Kerberos authentication (uses KRB5CCNAME environement variable if not parameter is defined)', default=None, const='', dest='kerberos')
+    auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
     # Enum
-    user_group = parser.add_argument_group("Domain user actions")
+    user_group = parser.add_argument_group("Domain user enumeration")
     user_group.add_argument("--users", action='store_true', help='dump users from Active Directory, display if the account has one of the following enabled: AdminCount, Account disabled, Password not required, Password never expire, Do not require pre-auth, Trusted to auth for delegation')
     user_group.add_argument("--admins", action='store_true', help='dump users with administrative privileges from Active Directory')
     user_group.add_argument("--rdp", action='store_true', help='dump users with rdp rights from Active Directory')
@@ -35,16 +38,35 @@ def main():
     user_group.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
     user_group.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
     user_group.add_argument("--trusts", action='store_true', help='dump trusts from Active Directory')
-    user_group.add_argument("--casrv", action='store_true', help='Discover the domain root Certificate Authority')
-    user_group.add_argument("--cacerts", action='store_true', help='List CA certificates from Active Directory')
-    user_group.add_argument("--gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory')
-    user_group.add_argument("--acl", action='store_true', help='Extract ACEs/ACLs of the current user from Active Directory')
-    user_group.add_argument("--gettgt", action='store_true', help='Get a TGT ticket for the current user')
+    user_group.add_argument("--list-groups", metavar='username', type=str, nargs='?', help='List groups of a specific user / group', default=None, const='', dest='list_groups')
+    user_group.add_argument("--list-users", metavar='groupname', type=str, nargs='?', help='List users of a specific group', default=None, dest='list_users')
+    user_group.add_argument("--constrained-delegation", action='store_true', help='List constrained delegations', dest='constrained_delegation')
+
+    acls_group = parser.add_argument_group("Enumerate ACLs/ACEs")
+    acls_group.add_argument("--gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory')
+    acls_group.add_argument("--acls", metavar='username', type=str, nargs='?', help='Extract interesting ACEs/ACLs of a user from the Active Directory', default=None, const='', dest='acls')
+    acls_group.add_argument("--all-acls", metavar='username', type=str, nargs='?', help='Extract all ACEs/ACLs of a user from the Active Directory', default=None, const='', dest='acls_all')
+    acls_group.add_argument("--object-acl", metavar='object', type=str, nargs='?', help='List the interesting ACLs of a specific object (LDAP DN, name or sid)', default=None, dest='object_acl')
+    acls_group.add_argument("--all-object-acl", metavar='object', type=str, nargs='?', help='List all the ACLs of a specific object (LDAP DN, name or sid)', default=None, dest='object_acl_all')
+
+    kerb_group = parser.add_argument_group("Request kerberos tickets")
+    kerb_group.add_argument("--gettgt", action='store_true', help='Get a TGT ticket for the current user')
+    kerb_group.add_argument("--gettgs", metavar=("SPN", "[impersonate]"), type=str, nargs='+', help='Get a TGS ticket for the specified SPN', dest='gettgs')
+
+    adcs_group = parser.add_argument_group("ADCS")
+    adcs_group.add_argument("--adcs", action='store_true', help='Discover the domain root Certificate Authority')
+    adcs_group.add_argument("--ca-certs", action='store_true', help='List CA certificates from Active Directory', dest='ca_certs')
+    adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory', dest='cert_templates')
+    adcs_group.add_argument("--esc1", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC1)', default=None, const='', dest='esc1')
+    adcs_group.add_argument("--esc2", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC2)', default=None, const='', dest='esc2')
+    adcs_group.add_argument("--esc3", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC3)', default=None, const='', dest='esc3')
+    adcs_group.add_argument("--esc4", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC4)', default=None, const='', dest='esc4')
+
     # Dump
     admin_group = parser.add_argument_group("Domain admin actions")
-    admin_group.add_argument("--gmsa", action='store_true', help="[Admin required] Dump gMSA passwords")
-    admin_group.add_argument("--laps", action='store_true', help="[Admin required] Dump LAPS passwords")
-    admin_group.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="[Admin required] dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
+    admin_group.add_argument("--gmsa", action='store_true', help="Dump gMSA passwords")
+    admin_group.add_argument("--laps", action='store_true', help="Dump LAPS passwords")
+    admin_group.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="Dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
 
     # Bruteforce
     bruteforce_group = parser.add_argument_group("Bruteforce")
@@ -59,6 +81,7 @@ def main():
     misc_group = parser.add_argument_group("Misc")
     misc_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
+    misc_group.add_argument("--no-ssl", action='store_true', help="Perform a LDAP connection instead of LDAPS", dest='no_ssl')
     # Dispatcher arguments
     misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # DB arguments
@@ -104,6 +127,16 @@ def main():
     else:
         print('Please specify the domain (complete FQDN)')
         sys.exit()
+    if args.kerberos != None:
+        if len(args.kerberos) != 0:
+            os.environ['KRB5CCNAME'] = args.kerberos
+        if not 'KRB5CCNAME' in os.environ:
+            Output.error("Cannot use -k without KRB5CCNAME environment variable set")
+            sys.exit()
+
+        creds['kerberos'] = True
+    if args.dc_ip != None:
+        creds['dc_ip'] = args.dc_ip
 
     actions = {}
     if args.users:
@@ -126,16 +159,44 @@ def main():
         actions['passpol'] = {}
     if args.trusts:
         actions['trusts'] = {}
-    if args.casrv:
+
+    if args.adcs:
         actions['casrv'] = {}
-    if args.cacerts:
-        actions['cacerts'] = {}
+    if args.ca_certs:
+        actions['ca_certs'] = {}
+    if args.cert_templates:
+        actions['cert_templates'] = {}
+    if args.esc1 != None:
+        actions['esc1'] = {'user': args.esc1}
+    if args.esc2 != None:
+        actions['esc2'] = {'user': args.esc2}
+    if args.esc3 != None:
+        actions['esc3'] = {'user': args.esc3}
+    if args.esc4 != None:
+        actions['esc4'] = {'user': args.esc4}
+
     if args.gpos:
         actions['gpos'] = {}
-    if args.acl:
-        actions['acl'] = {}
+    if args.acls != None:
+        actions['acls'] = {'user': args.acls}
+    if args.acls_all != None:
+        actions['acls'] = {'user': args.acls_all, 'all': True}
+    if args.object_acl != None:
+        actions['object_acl'] = {'object': args.object_acl}
+    if args.object_acl_all != None:
+        actions['object_acl'] = {'object': args.object_acl_all, 'all': True}
+    if args.constrained_delegation:
+        actions['constrained_delegation'] = {}
     if args.gettgt:
         actions['gettgt'] = {}
+    if args.gettgs:
+        actions['gettgs'] = {'spn': args.gettgs[0]}
+        if len(args.gettgs) > 1:
+            actions['gettgs']['impersonate'] = args.gettgs[1]
+    if args.list_groups != None:
+        actions['list_groups'] = {'user': args.list_groups}
+    if args.list_users != None:
+        actions['list_users'] = {'group': args.list_users}
     if args.users_brute:
         actions['users_brute'] = {'username_file': args.users_brute}
     if args.gmsa:
@@ -150,14 +211,14 @@ def main():
         actions['modules'] = {'modules': args.modules, 'args': module_args}
 
 
-    adscan(targets, static_inputs, args.workers, actions, creds, args.timeout)
+    adscan(targets, static_inputs, args.workers, actions, creds, args.no_ssl, args.timeout)
 
     DB.stop_worker()
     Output.stop()
 
-def adscan(input_targets, static_inputs, workers, actions, creds, timeout):
+def adscan(input_targets, static_inputs, workers, actions, creds, no_ssl, timeout):
 
-    args = (actions, creds, timeout)
+    args = (actions, creds, no_ssl, timeout)
 
     dispatch_targets(input_targets, static_inputs, adscan_worker, args, workers=workers)
 

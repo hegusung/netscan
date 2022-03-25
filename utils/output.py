@@ -133,40 +133,43 @@ class Output:
 
     @classmethod
     def output_worker(self, output_queue):
-        while True:
-            message = output_queue.get()
-            if message == None:
-                break
+        try:
+            while True:
+                message = output_queue.get()
+                if message == None:
+                    break
 
-            if type(message) == str:
-                message = {'message': message}
+                if type(message) == str:
+                    message = {'message': message}
 
-            if not 'time' in message:
-                now = datetime.now()
-                message['time'] = now.strftime(Config.config.get('Format', 'time'))
+                if not 'time' in message:
+                    now = datetime.now()
+                    message['time'] = now.strftime(Config.config.get('Format', 'time'))
 
-            # Select the correct formating
-            try:
-                output_format = Config.config.get('Format', message['message_type'])
-            except KeyError:
-                if 'target' in message:
-                    output_format = Config.config.get('Format', 'target')
+                # Select the correct formating
+                try:
+                    output_format = Config.config.get('Format', message['message_type'])
+                except KeyError:
+                    if 'target' in message:
+                        output_format = Config.config.get('Format', 'target')
+                    else:
+                        output_format = Config.config.get('Format', 'default')
+     
+                if 'type' in message:
+                    message_type = message['type']
                 else:
-                    output_format = Config.config.get('Format', 'default')
- 
-            if 'type' in message:
-                message_type = message['type']
-            else:
-                message_type = 'normal'
+                    message_type = 'normal'
 
-            # Log to a file before coloring
-            self.log(message, output_format)
+                # Log to a file before coloring
+                self.log(message, output_format)
 
-            self.color(message, message_type)
+                self.color(message, message_type)
 
-            # Remove control characters which breaks terminal
-            message = output_format.format(**message)
-            message = ''.join([c if ord(c) not in [0x9d, 0x9e, 0x9f] else '\\x%x' % ord(c) for c in message])
+                # Remove control characters which breaks terminal
+                message = output_format.format(**message)
+                message = ''.join([c if ord(c) not in [0x9d, 0x9e, 0x9f] else '\\x%x' % ord(c) for c in message])
 
-            tqdm.write(message)
-            sys.stdout.flush()
+                tqdm.write(message)
+                sys.stdout.flush()
+        except EOFError:
+            pass

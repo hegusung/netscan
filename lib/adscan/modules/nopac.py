@@ -31,6 +31,10 @@ class Module:
             Output.minor("Please specify a valid account for the NoPac module")
             return
 
+        if 'kerberos' in creds:
+            Output.minor("NoPac module requires an user and password/ntlm hash authentication")
+            return
+
         username = creds['username']
         domain = creds['domain']
         password = creds['password'] if 'password' in creds else ''
