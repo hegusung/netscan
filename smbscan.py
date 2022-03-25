@@ -124,6 +124,10 @@ def main():
     if args.kerberos != None:
         if len(args.kerberos) != 0:
             os.environ['KRB5CCNAME'] = args.kerberos
+        if not 'KRB5CCNAME' in os.environ:
+            Output.error("Cannot use -k without KRB5CCNAME environment variable set")
+            sys.exit()
+
         creds['kerberos'] = True
     if args.dc_ip != None:
         creds['dc_ip'] = args.dc_ip

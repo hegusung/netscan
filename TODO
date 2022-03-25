@@ -8,9 +8,4 @@
 - Windows TCP-IP CVE-2020-16898 (Only BSOD available)
 
 AD:
-- List Permissions of a specific LDAP objects
-- Add user tag (Admin, RDP) in ES
-- List current user groups (or specific user)
-- Make SMBv1 enabled visible in kibana
-- Kerberos (generate TGT, authenticate to SMB and LDAP via kerberos, getTGT.py)
-- ADCS (generate certificate from auth, get TGT from certificate (code from certipy)) 
+- RDBC attack

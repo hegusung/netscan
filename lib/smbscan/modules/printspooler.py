@@ -17,7 +17,7 @@ class Module:
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintSpooler module requires 1 arg: listener_ip'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintSpooler module requires 1 arg: -m printspooler <listener_ip>'})
             return
 
         domain = creds['domain'] if 'domain' in creds else None

@@ -24,7 +24,7 @@ class Module:
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintNightmare module requires 1 arg: listener_ip'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintNightmare module requires 1 arg: -m printnightmare <listener_ip>'})
             return
         else:
             listener_ip = args[0]

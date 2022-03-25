@@ -50,15 +50,15 @@ from impacket.ntlm import compute_lmhash, compute_nthash
 from impacket.krb5.kerberosv5 import KerberosError
 
 class GetUserSPNs:
-    def __init__(self, target, username, password, domain, baseDN=None):
+    def __init__(self, target, username, password, domain, nt_hash, lm_hash, doKerberos, baseDN=None):
         self.__username = username
         self.__password = password
         self.__domain = domain
-        self.__lmhash = ''
-        self.__nthash = ''
+        self.__lmhash = lm_hash
+        self.__nthash = nt_hash
         self.__outputFileName = None
         self.__aesKey = ''
-        self.__doKerberos = False
+        self.__doKerberos = doKerberos
         self.__requestTGS = True
         self.__kdcHost = target
         self.__saveTGS = False
@@ -95,8 +95,45 @@ class GetUserSPNs:
         t /= 10000000
         return t
 
+    def parseFile(self, domain='', username='', target=''):
+        if os.getenv('KRB5CCNAME') == None:
+            return domain, username, None, None
+        ccache = CCache.loadFile(os.getenv('KRB5CCNAME'))
+        if ccache is None:
+            return domain, username, None, None
+
+        if domain == '':
+            domain = ccache.principal.realm['data'].decode('utf-8')
+
+        creds = None
+        if target != '':
+            principal = '%s@%s' % (target.upper(), domain.upper())
+            creds = ccache.getCredential(principal)
+
+        TGT = None
+        TGS = None
+        if creds is None:
+            principal = 'krbtgt/%s@%s' % (domain.upper(), domain.upper())
+            creds = ccache.getCredential(principal)
+            if creds is not None:
+                TGT = creds.toTGT()
+            else:
+                pass
+        else:
+            TGS = creds.toTGS(principal)
+
+        if username == '' and creds is not None:
+            username = creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
+        elif username == '' and len(ccache.principal.components) > 0:
+            username = ccache.principal.components[0]['data'].decode('utf-8')
+
+        return domain, username, TGT, TGS
+
     def getTGT(self):
-        domain, _, TGT, _ = CCache.parseFile(self.__domain)
+
+        # CCache.parseFile not implemented in latest pip 
+        #domain, _, TGT, _ = CCache.parseFile(self.__domain)
+        domain, _, TGT, _ = self.parseFile(self.__domain)
         if TGT is not None:
             return TGT
 

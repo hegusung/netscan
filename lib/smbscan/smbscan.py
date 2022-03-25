@@ -406,17 +406,18 @@ def smbscan_worker(target, actions, creds, timeout):
                 if 'passpol' in actions:
                     try:
                         password_policy = smbscan.enum_password_policy()
-                        output = "Password policy:\n"
-                        output += " "*60+"- Complexity:       %s\n" % ("Enabled" if password_policy['complexity'] == 1 else "Disabled",)
-                        output += " "*60+"- Minimum length:   %d\n" % password_policy['minimum_length']
-                        output += " "*60+"- History:          last %d passwords\n" % password_policy['history_length']
-                        output += " "*60+"- Maximum age:      %s\n" % password_policy['maximum_age']
-                        output += " "*60+"- Minimum age:      %s\n" % password_policy['minimum_age']
-                        output += " "*60+"- Lock threshold:   %s\n" % (str(password_policy['lock_threshold']) if password_policy['lock_threshold'] != 0 else "Disabled",)
-                        if password_policy['lock_threshold'] != 0:
-                            output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
+                        if password_policy:
+                            output = "Password policy:\n"
+                            output += " "*60+"- Complexity:       %s\n" % ("Enabled" if password_policy['complexity'] == 1 else "Disabled",)
+                            output += " "*60+"- Minimum length:   %d\n" % password_policy['minimum_length']
+                            output += " "*60+"- History:          last %d passwords\n" % password_policy['history_length']
+                            output += " "*60+"- Maximum age:      %s\n" % password_policy['maximum_age']
+                            output += " "*60+"- Minimum age:      %s\n" % password_policy['minimum_age']
+                            output += " "*60+"- Lock threshold:   %s\n" % (str(password_policy['lock_threshold']) if password_policy['lock_threshold'] != 0 else "Disabled",)
+                            if password_policy['lock_threshold'] != 0:
+                                output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
 
-                        Output.highlight({'target': smbscan.url(), 'message': output})
+                            Output.highlight({'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
                             Output.error({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})

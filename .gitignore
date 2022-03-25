@@ -5,6 +5,7 @@ __pycache__/
 **.py[cod]
 *$py.class
 logs/**
+!logs/.gitkeep
 screenshots/*.jpg
 screenshots/*.png
 server/uploads/*
@@ -18,3 +19,4 @@ server/ressources/*
 !server/ressources/.gitkeep
 !server/ressources/Invoke-Mimikatz.ps1
 *.ccache
+*.pfx
