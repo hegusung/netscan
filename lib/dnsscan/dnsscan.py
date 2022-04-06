@@ -10,8 +10,8 @@ from utils.db import DB
 
 ip_regex = re.compile("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
 
-def dnsscan_worker(target, dn_server, actions, timeout):
-    dnsscan = DNSScan(target['hostname'], dn_server, timeout)
+def dnsscan_worker(target, dn_server, do_tcp, actions, timeout):
+    dnsscan = DNSScan(target['hostname'], dn_server, do_tcp, timeout)
 
     resolved = dnsscan.resolve()
 
@@ -65,10 +65,11 @@ def dnsscan_worker(target, dn_server, actions, timeout):
 
 class DNSScan:
 
-    def __init__(self, hostname, dn_server, timeout):
+    def __init__(self, hostname, dn_server, do_tcp, timeout):
         self.hostname = hostname
         self.timeout = timeout
         self.dn_server = dn_server
+        self.do_tcp = do_tcp
 
         self.resolver = dns.resolver.Resolver()
         self.resolver.timeout = timeout
@@ -80,11 +81,11 @@ class DNSScan:
         try:
             if self.is_ip(self.hostname):
                 # self.hostname is an IP, performing reverse dns
-                answer = self.resolver.query(dns.reversename.from_address(self.hostname), "PTR")
+                answer = self.resolver.query(dns.reversename.from_address(self.hostname), "PTR", tcp=self.do_tcp)
                 resolved = {"query_type": "PTR", "resolved": [str(r) for r in answer]}
             else:
                 # self.hostname is a hostname, performing A dns query
-                answer = self.resolver.query(self.hostname, "A")
+                answer = self.resolver.query(self.hostname, "A", tcp=self.do_tcp)
                 resolved = {"query_type": "A", "resolved": [str(r) for r in answer]}
         except dns.resolver.NXDOMAIN:
             resolved = None
@@ -111,7 +112,7 @@ class DNSScan:
 
             for prepend in prepend_fqdn:
                 try:
-                    for r in self.resolver.query(prepend + self.hostname, "SRV"):
+                    for r in self.resolver.query(prepend + self.hostname, "SRV", tcp=self.do_tcp):
                         dc_fqdn_list.append(str(r).split()[-1])
                 except dns.resolver.NXDOMAIN:
                     resolved = None
@@ -125,7 +126,7 @@ class DNSScan:
 
             for dc_fqdn in dc_fqdn_list:
                 try:
-                    answer = self.resolver.query(dc_fqdn, "A")
+                    answer = self.resolver.query(dc_fqdn, "A", tcp=self.do_tcp)
                     ip_list = [str(r) for r in answer]
                 except dns.resolver.NXDOMAIN:
                     ip_list = None
@@ -150,7 +151,7 @@ class DNSScan:
             subdomain = "%s.%s" % (subdomain, self.hostname)
 
             try:
-                answer = self.resolver.query(subdomain, "A")
+                answer = self.resolver.query(subdomain, "A", tcp=self.do_tcp)
                 for r in answer:
                     yield {"target": subdomain, "query_type": "A", "resolved": str(r)}
             except dns.resolver.NXDOMAIN:
@@ -171,10 +172,10 @@ class DNSScan:
         #resolver.timeout = self.timeout
         if self.dn_server != None:
             self.resolver.nameservers = [self.dn_server]
-        answer = self.resolver.query(self.hostname, "NS")
+        answer = self.resolver.query(self.hostname, "NS", tcp=self.do_tcp)
 
         for ns_dns in answer:
-            answer = self.resolver.query(str(ns_dns), "A")
+            answer = self.resolver.query(str(ns_dns), "A", tcp=self.do_tcp)
             ns_ip = list(answer)[0]
 
             Output.highlight({"target": self.hostname, "message": "Checking AXFR against nameserver %s (%s)" % (ns_dns, ns_ip)})
@@ -240,7 +241,7 @@ class DNSScan:
             return
 
         try:
-            answer = self.resolver.query(self.hostname, 'NS')
+            answer = self.resolver.query(self.hostname, 'NS', tcp=self.do_tcp)
             for r in answer:
                 yield {"target": self.hostname, "query_type": "NS", "resolved": str(r)}
         except dns.resolver.NXDOMAIN:
