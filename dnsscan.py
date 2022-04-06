@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Bruteforce subdomains', default=None, dest='bruteforce')
     parser.add_argument('--axfr', action='store_true', help='AXFR check', dest='axfr')
     parser.add_argument('--dc', action='store_true', help='Look for a Domain Controler from a domain', dest='dc')
+    parser.add_argument('--tcp', action='store_true', help='Make TCP queries', dest='do_tcp')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Dispatcher arguments
@@ -49,14 +50,14 @@ def main():
     if args.dc:
         actions.append(('dc',))
 
-    dnsscan(targets, static_inputs, args.workers, args.dns, actions, args.timeout, args.delay, args.resume)
+    dnsscan(targets, static_inputs, args.workers, args.dns, args.do_tcp, actions, args.timeout, args.delay, args.resume)
 
     DB.stop_worker()
     Output.stop()
 
-def dnsscan(input_targets, static_inputs, workers, dns, actions, timeout, delay, resume):
+def dnsscan(input_targets, static_inputs, workers, dns, do_tcp, actions, timeout, delay, resume):
 
-    args = (dns, actions, timeout)
+    args = (dns, do_tcp, actions, timeout)
 
     dispatch_targets(input_targets, static_inputs, dnsscan_worker, args, workers=workers, delay=delay, resume=resume)
 
