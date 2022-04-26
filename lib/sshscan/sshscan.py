@@ -13,8 +13,11 @@ from .ssh_bruteforce import *
 from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
+from utils.modulemanager import ModuleManager
 
 logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+
+ssh_modules = ModuleManager('lib/sshscan/modules')
 
 def sshscan_worker(target, actions, creds, timeout):
     try:
@@ -56,6 +59,9 @@ def sshscan_worker(target, actions, creds, timeout):
                     Output.write({'target': target['hostname'], 'message': output})
             else:
                 Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+
+        if 'modules' in actions:
+            ssh_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:

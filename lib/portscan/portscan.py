@@ -98,7 +98,8 @@ class PortScan:
     def service_check(self, scripts=None, args=None):
 
         try:
-            xml_output = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+            xml_dir = tempfile.mkdtemp()
+            xml_output = os.path.join(xml_dir, next(tempfile._get_candidate_names()))
 
             nmap_command = "%s -sV -Pn -T3 -p %d %s -oX %s" % (nmap_bin, self.port, self.hostname, xml_output)
             if scripts != None:
@@ -115,6 +116,11 @@ class PortScan:
 
         try:
             os.remove(xml_output)
+        except FileNotFoundError:
+            pass
+
+        try:
+            os.rmdir(xml_dir)
         except FileNotFoundError:
             pass
 

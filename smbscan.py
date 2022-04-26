@@ -78,8 +78,6 @@ def main():
 
     args = parser.parse_args()
 
-    Output.setup()
-
     if args.list_modules:
         print('Available modules:')
         for module in smb_modules.list_modules():
@@ -94,6 +92,8 @@ def main():
 
     Config.load_config()
     DB.start_worker(args.nodb)
+
+    Output.setup()
 
     targets = {}
     if args.targets:
