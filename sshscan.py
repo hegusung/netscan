@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 import argparse
+import sys
 
 from utils.process_inputs import process_inputs, str_comma, str_ports
 from utils.dispatch import dispatch_targets
 from utils.output import Output
-from lib.sshscan.sshscan import sshscan_worker
+from lib.sshscan.sshscan import sshscan_worker, ssh_modules
 
 from utils.db import DB
 from utils.config import Config
@@ -28,6 +29,10 @@ def main():
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=1, dest='bruteforce_workers')
     parser.add_argument("--bruteforce-delay", metavar='seconds', type=int, nargs='?', help='Delay between each bruteforce attempt', default=0, dest='bruteforce_delay')
 
+    # Modules
+    parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
+    parser.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
+
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # Resume
@@ -36,6 +41,12 @@ def main():
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+
+    if args.list_modules:
+        print('Available modules:')
+        for module in ssh_modules.list_modules():
+            print('- %s   %s' % (module['name'].ljust(15), module['description']))
+        sys.exit()
 
     Config.load_config()
     DB.start_worker(args.nodb)
@@ -66,11 +77,12 @@ def main():
             'workers': args.bruteforce_workers,
             'bruteforce_delay': args.bruteforce_delay,
         }
+    if args.modules:
+        actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
     Output.setup()
 
     sshscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
-
 
     DB.stop_worker()
     Output.stop()

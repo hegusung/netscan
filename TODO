@@ -7,5 +7,10 @@
 - F5 BigIP RCE CVE-2021-22986 (easy to implement)
 - Windows TCP-IP CVE-2020-16898 (Only BSOD available)
 
+SSH:
+Automated checks based of kernel / os version:
+- dirty cow
+- pkexec
+
 AD:
 - RDBC attack
