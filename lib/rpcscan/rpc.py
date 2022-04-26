@@ -136,9 +136,11 @@ class RPC(object):
                     self.client.bind(('',random_port))
                     binded = True
                 except OSError as e:
+                    print(e)
                     if "Permission denied" in str(e):
                         break
         except PermissionError as e:
+            print(e)
             pass
 
         self.client.connect((self.host, self.port))
