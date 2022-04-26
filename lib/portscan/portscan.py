@@ -146,6 +146,7 @@ class PortScan:
                         service = service_info.get('name')
                         product = service_info.get('product')
                         version = service_info.get('version')
+                        extrainfo = service_info.get('extrainfo')
                         if product != None:
                             if version != None:
                                 version = "%s %s" % (product, version)
@@ -153,6 +154,9 @@ class PortScan:
                                 version = product
                         else:
                             version = ""
+
+                        if extrainfo != None:
+                            version = "%s (%s)" % (version, extrainfo)
 
                         data["service"] = service
                         data["version"] = version

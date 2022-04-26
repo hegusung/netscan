@@ -65,8 +65,8 @@ def rpcscan_worker(target, actions, timeout):
             if 'mounts' in actions:
                 output = 'Mountpoints:\n'
                 for mountpoint in mounts:
-                    output += ' '*60+'- %s  [%s]' % (mountpoint['path'], mountpoint['authorized'])
-                    Output.write({'target': 'rpc://%s:%d' % (target['hostname'], mount_port) , 'message': output})
+                    output += ' '*60+'- %s  [%s]\n' % (mountpoint['path'], mountpoint['authorized'])
+                Output.write({'target': 'rpc://%s:%d' % (target['hostname'], mount_port) , 'message': output})
 
             nfs_port = portmap.getport(NFS.program, NFS.program_version)
 
