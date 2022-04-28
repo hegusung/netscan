@@ -20,7 +20,7 @@ def check(hostname, port, user, password, timeout):
     '''
     sudo --version | grep "Sudo ver" "
     '''
-    command = "bash -c \"ip addr | grep -oP \'(?<=inet\\s)\\d+(\\.\\d+){3}\'\""
+    command = "bash -c \"ip addr | grep -oP \'(?<=inet\\s)\\d+(\\.\\d+){3}\/[0-99]\'\""
 
     ssh = SSH(hostname, port, timeout)
     connected = ssh.auth(user, password)
