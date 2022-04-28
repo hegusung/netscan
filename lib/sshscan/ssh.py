@@ -41,9 +41,36 @@ class SSH:
 
         return True
 
-    def execute(self, command):
+    def upload_file(self, local_path, remote_path):
+        # Function to upload files on server
+        sftp = paramiko.SFTPClient.from_transport(self.conn)
+        sftp.put(local_path, remote_path)
+        sftp.close()
+
+    def download_file(self, remote_path, local_path):
+        # Function to download files on server
+        sftp = paramiko.SFTPClient.from_transport(self.conn)
+        sftp.put(remote_path, local_path)
+        sftp.close()
+
+    def read_file(self, remote_path):
+        # Function to upload files on server
+        sftp = paramiko.SFTPClient.from_transport(self.conn)
+        remote_file = sftp.open(remote_path)
+        content = ''
+        try:
+            for line in remote_file:
+                content += line
+            return content
+        finally:
+            remote_file.close()
+
+    def execute(self, command, timeout=None):
+        if timeout == None:
+            timeout = self.timeout
+
         chan = self.conn.open_channel("session")
-        chan.settimeout(self.timeout)
+        chan.settimeout(timeout)
 
         result = ''
 
