@@ -25,7 +25,7 @@ def check(hostname, port, user, password, timeout):
         # Upload linpeas
         try:
             ssh.upload_file("lib/sshscan/linpeas.sh", "/tmp/linpeas.sh")
-            Output.highlight({'target': 'ssh://%s:%d' % (hostname, port), 'message': 'Linpeas is running...'})
+            Output.highlight({'target': 'ssh://%s:%d' % (hostname, port), 'message': 'Running linpeas...'})
         except Exception as e:
             print("%s: %s" % (type(e), str(e)))
 
