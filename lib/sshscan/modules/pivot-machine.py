@@ -16,10 +16,7 @@ class Module:
 
 def check(hostname, port, user, password, timeout):
 
-    # Command to check sudo version
-    '''
-    sudo --version | grep "Sudo ver" "
-    '''
+    # Command to get ip and mask of each interfaces
     command = "bash -c \"export PATH=/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/bin/ && ip addr | grep -oP \'(?<=inet\\s)\\d+(\\.\\d+){3}\\/\\d{1,2}\'\""
     
     ssh = SSH(hostname, port, timeout)
