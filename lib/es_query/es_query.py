@@ -2,10 +2,13 @@ import os
 import json
 import os.path
 from tqdm import tqdm
+from colorama import init, Fore, Style, Back
 
 from utils.db import DB
 from utils.db import Elasticsearch
 from utils.output import Output
+
+output = []
 
 service_filters = {
     'http': [{'service': 'http'}, {'port': 80}, {'port': 443}, {'port': 8000}, {'port': 8080}],
@@ -49,7 +52,33 @@ service_nmap_translate = {
     'oracle-tns': 'oracle',
 }
 
+
+def pprint(output_list):
+    init()
+
+    COLUMN_1_LENGTH = 15
+    COLUMN_2_LENGTH = 60
+    COLUMN_3_LENGTH = 30
+
+    print("|" + "-" * (COLUMN_1_LENGTH + COLUMN_2_LENGTH + COLUMN_3_LENGTH + 2) + "|")
+    print(Style.BRIGHT + Back.RED + Fore.WHITE + "|%s|%s|%s|" % ("TYPE".center(COLUMN_1_LENGTH), "FILENAME".center(COLUMN_2_LENGTH), "COUNT".center(COLUMN_3_LENGTH)) + Style.RESET_ALL)
+    print("|" + "-" * (COLUMN_1_LENGTH + COLUMN_2_LENGTH + COLUMN_3_LENGTH + 2) + "|")
+    
+    for log in output_list:
+        type, filename, count, text = log
+
+        color = Style.BRIGHT + Fore.GREEN if count > 0 else Fore.WHITE
+
+        print((color + "|%s|%s|%s|" + Style.RESET_ALL) % (type.center(COLUMN_1_LENGTH), filename.center(COLUMN_2_LENGTH), " ".join([str(count), text]).center(COLUMN_3_LENGTH)))
+        #print("|" + "-" * (COLUMN_1_LENGTH + COLUMN_2_LENGTH + COLUMN_3_LENGTH + 2) + "|")
+
+    print("|" + "-" * (COLUMN_1_LENGTH + COLUMN_2_LENGTH + COLUMN_3_LENGTH + 2) + "|")
+
+
 def export_ports(session, service, output_dir):
+    global output
+    output = []
+
     if not session:
         print('A session must be defined')
         return
@@ -68,6 +97,9 @@ def export_ports(session, service, output_dir):
     export_domain_controllers(session, output_dir)
     export_http_urls(session, output_dir)
 
+    pprint(output)
+
+
 def export_hashes(session, service, output_dir):
     if not session:
         print('A session must be defined')
@@ -84,7 +116,9 @@ def export_hashes(session, service, output_dir):
     export_local_hashes(session, output_dir)
     export_domain_hashes(session, output_dir)
 
+
 def export_ip_ports(session, service, output_dir):
+    global output
 
     # Create output files in dir if non existant
     ip_filename = os.path.join(output_dir, '%s_ips.txt' % session)
@@ -200,7 +234,8 @@ def export_ip_ports(session, service, output_dir):
     count = 0
     for _ in open(ip_filename):
         count += 1
-    print("%s: %s   %d ips written" % ("ip".ljust(12), ip_filename.ljust(40), count))
+    
+    output.append(("ip", ip_filename, count,  "ips written"))
 
     ip_port_file.close()
     # Make files unique
@@ -208,17 +243,19 @@ def export_ip_ports(session, service, output_dir):
     count = 0
     for _ in open(ip_port_filename):
         count += 1
-    print("%s: %s   %d ports written" % ("ip:port".ljust(12), ip_port_filename.ljust(40), count))
+    output.append(("ip:port", ip_port_filename, count, "ports written"))
 
     for service, f in output_files.items():
         f['file'].close()
 
-        print("%s: %s   %d ports written" % (service.ljust(12), f['filename'].ljust(40), f['count']))
+        output.append((service, f['filename'], f['count'],  "ports written"))
 
         # Make files unique
         os.system('sort %s | uniq > %s_tmp; mv %s_tmp %s' % (f['filename'], f['filename'], f['filename'], f['filename']))
 
+
 def export_domains(session, output_dir):
+    global output
 
     query = {
       "query": {
@@ -255,9 +292,12 @@ def export_domains(session, output_dir):
     count = 0
     for _ in open(filename):
         count += 1
-    print("%s: %s   %d domains written" % ("domains".ljust(12), filename.ljust(40), count))
+    
+    output.append(("domains", filename, count,  "domains written"))
+
 
 def export_domain_controllers(session, output_dir):
+    global output
 
     query = {
       "query": {
@@ -294,9 +334,12 @@ def export_domain_controllers(session, output_dir):
     count = 0
     for _ in open(filename):
         count += 1
-    print("%s: %s   %d domain controllers written" % ("dom_ctrls".ljust(12), filename.ljust(40), count))
+    
+    output.append(("dom_ctrls", filename, count,  "domain controllers written"))
+
 
 def export_undiscovered_services(session, output_dir):
+    global output
 
     query = {
       "query": {
@@ -339,10 +382,13 @@ def export_undiscovered_services(session, output_dir):
     count = 0
     for _ in open(filename):
         count += 1
-    print("%s: %s   %d ip:port written" % ("undiscovered".ljust(12), filename.ljust(40), count))
+
+    output.append(("undiscovered", filename, count,  "ip:port written"))
 
 
 def export_http_urls(session, output_dir):
+
+    global output
 
     query = {
       "query": {
@@ -377,7 +423,9 @@ def export_http_urls(session, output_dir):
     count = 0
     for _ in open(url_filename):
         count += 1
-    print("%s: %s   %d urls written" % ("urls".ljust(12), url_filename.ljust(40), count))
+      
+    output.append(("urls", url_filename, count,  "urls written"))
+
 
 def export_domain_hashes(session, output_dir):
 
@@ -446,7 +494,9 @@ def export_domain_hashes(session, output_dir):
     count = 0
     for _ in open(hashfile_filename):
         count += 1
-    print("%s: %s   %d hashes written" % ("Domain hashes".ljust(12), hashfile_filename.ljust(40), count))
+
+    output.append(("Domain hashes", hashfile_filename, count,  "hashes written"))
+
 
 def export_local_hashes(session, output_dir):
        
@@ -501,7 +551,9 @@ def export_local_hashes(session, output_dir):
         count = 0
         for _ in open(hashfile_filename):
             count += 1
-        print("%s: %s   %d hashes written" % (format.ljust(12), hashfile_filename.ljust(40), count))
+
+        output.append((format, hashfile_filename, count,  "hashes written"))
+
 
 def dump(session, output_file):
     if not session:
@@ -544,6 +596,7 @@ def dump(session, output_file):
     pg.close()
 
     Output.write("%d documents dumped to %s" % (c, output_file))
+
 
 def restore(session, input_file):
     if not session:
