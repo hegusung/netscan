@@ -83,17 +83,23 @@ class PortScan:
 
     def check_open(self):
 
-        sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(self.timeout)
+        retry = 0
+        while True:
+            sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(self.timeout)
 
-        result = sock.connect_ex((self.hostname, self.port))
+            result = sock.connect_ex((self.hostname, self.port))
+            #print("%s:%s => %s" % (self.hostname, self.port, result))
 
-        sock.close()
+            sock.close()
 
-        if result == 0:
-            return True
-        else:
-            return False
+            # Error 11: ressource temporaly unavailable
+            if result == 0:
+                return True
+            elif result == 11:
+                return False
+            else:
+                return False
 
     def service_check(self, scripts=None, args=None):
 

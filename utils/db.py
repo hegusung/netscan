@@ -39,6 +39,8 @@ es_ids = {
     'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
     'domain_password': 'domain_password_{session}_{domain}_{username}_{password}',
     'domain_hash': 'domain_hash_{session}_{domain}_{username}_{format}_{hash}',
+    'host_linux': 'host_linux_{session}_{ip}',
+    'host_linux_pkg': 'host_linux_pkg_{session}_{ip}_{pkg_name}',
 }
 
 es_mapping = {
@@ -826,6 +828,83 @@ class DB:
             return
 
         self.send(vuln_doc)
+
+    @classmethod
+    def insert_host_linux(self, host_doc):
+        host_doc['doc_type'] = 'host_linux'
+        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        host_doc = check_entry(host_doc, ['hostname', 'host'], [])
+
+        to_insert = []
+        if check_ip(host_doc['hostname']):
+            # 'hostname' is an IP
+            host_doc['ip'] = host_doc['hostname']
+            del host_doc['hostname']
+
+            to_insert.append(host_doc)
+        else:
+            # 'hostname' is an IP
+            ip_list = resolve_hostname(host_doc['hostname'])
+
+            for ip in ip_list:
+                # insert hostname in DNS database
+                self.insert_dns({
+                    'source': host_doc['hostname'],
+                    'query_type': 'A',
+                    'target': ip,
+                })
+
+                host_doc_tmp = copy(host_doc)
+                host_doc_tmp['ip'] = ip
+                del host_doc_tmp['hostname']
+
+                to_insert.append(host_doc_tmp)
+
+        for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
+            self.send(doc)
+
+    @classmethod
+    def insert_host_linux_pkg(self, host_doc):
+        host_doc['doc_type'] = 'host_linux_pkg'
+        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        host_doc = check_entry(host_doc, ['hostname', 'host'], [])
+
+        to_insert = []
+        if check_ip(host_doc['hostname']):
+            # 'hostname' is an IP
+            host_doc['ip'] = host_doc['hostname']
+            del host_doc['hostname']
+
+            to_insert.append(host_doc)
+        else:
+            # 'hostname' is an IP
+            ip_list = resolve_hostname(host_doc['hostname'])
+
+            for ip in ip_list:
+                # insert hostname in DNS database
+                self.insert_dns({
+                    'source': host_doc['hostname'],
+                    'query_type': 'A',
+                    'target': ip,
+                })
+
+                host_doc_tmp = copy(host_doc)
+                host_doc_tmp['ip'] = ip
+                del host_doc_tmp['hostname']
+
+                to_insert.append(host_doc_tmp)
+
+        for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
+            self.send(doc)
+
 
 def check_entry(entry, required_list, optional_list):
     for required in required_list:
