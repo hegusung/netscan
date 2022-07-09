@@ -21,3 +21,4 @@ server/ressources/*
 !server/ressources/Invoke-Mimikatz.ps1
 *.ccache
 *.pfx
+!lib/sshscan/linpeas.sh
