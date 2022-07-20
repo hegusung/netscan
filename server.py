@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-
+import psutil
 import argparse
 import threading
 
@@ -23,6 +23,13 @@ if __name__ == '__main__':
     DB.start_worker(args.nodb)
 
     VulnCallback.init()
+
+    # Listing interfaces
+    Output.success("Listing interface addresses:")
+    ifs_addrs = psutil.net_if_addrs()
+    for key, value in ifs_addrs.items():
+        if str(value[0].family) == 'AddressFamily.AF_INET':
+            Output.success(" - %s: %s/%s" % (key.ljust(20), value[0].address, value[0].netmask))
 
     bind_ip = Config.config.get('Server', 'bind_ip')
     http_port = int(Config.config.get('Server', 'http_port'))
