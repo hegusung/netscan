@@ -20,6 +20,7 @@ def main():
     # Authentication
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
+    parser.add_argument('--key', metavar='ssh_key_file', type=str, nargs='?', help='Use a SSH key file', default=None, dest='key_file')
     # Action
     parser.add_argument('--cmd', metavar='command', type=str, nargs='?', help='Execute a command', default=None, dest='command')
     # Bruteforce
@@ -66,6 +67,8 @@ def main():
         creds['username'] = args.username
     if args.password:
         creds['password'] = args.password
+    if args.key_file:
+        creds['key_file'] = args.key_file
 
     actions = {}
     if args.command:

@@ -36,11 +36,17 @@ def sshscan_worker(target, actions, creds, timeout):
             'version': version,
         })
 
-        if 'username' in creds and 'password' in creds:
+        if 'username' in creds and ('password' in creds or 'key_file' in creds):
 
-            success = ssh.auth(creds['username'], creds['password'])
+            if 'password' in creds:
+                success = ssh.auth(creds['username'], creds['password'])
+            elif 'key_file' in creds:
+                success = ssh.auth_key(creds['username'], creds['key_file'])
             if success:
-                Output.success({'target': ssh.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
+                if 'password' in creds:
+                    Output.success({'target': ssh.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
+                elif 'key_file' in creds:
+                    Output.success({'target': ssh.url(), 'message': 'Successful authentication with username %s and key %s' % (creds['username'], creds['key_file'])})
                 cred_info = {
                     'hostname': target['hostname'],
                     'port': target['port'],
@@ -48,7 +54,7 @@ def sshscan_worker(target, actions, creds, timeout):
                     'url': ssh.url(),
                     'type': 'password',
                     'username': creds['username'],
-                    'password': creds['password'],
+                    'password': creds['password'] if 'password' in creds else creds['key_file'],
                 }
                 DB.insert_credential(cred_info)
 
@@ -58,7 +64,10 @@ def sshscan_worker(target, actions, creds, timeout):
                     output += ssh.execute(actions['command']['command'])
                     Output.write({'target': target['hostname'], 'message': output})
             else:
-                Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+                if 'password' in creds:
+                    Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+                elif 'key_file' in creds:
+                    Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and key %s' % (creds['username'], creds['key_file'])})
 
         if 'modules' in actions:
             ssh_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
@@ -79,7 +88,10 @@ def sshscan_worker(target, actions, creds, timeout):
                 dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except paramiko.AuthenticationException as e:
-        Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+        if 'password' in creds:
+            Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
+        elif 'key_file' in creds:
+            Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and key %s' % (creds['username'], creds['key_file'])})
     except ValueError as e:
         Output.minor({'target': ssh.url(), 'message': "Authentication failure because of crypto failure: %s" % str(e)})
     except paramiko.SSHException as e:
