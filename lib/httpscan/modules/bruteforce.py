@@ -133,6 +133,7 @@ class Module:
                         }
                         DB.insert_credential(cred_info)
         elif res['code'] in [401]:
+            print(res)
             # bruteforce login form
             http_info = {
                 'hostname': target['hostname'],
@@ -153,9 +154,13 @@ class Module:
             Output.highlight({'target': http.url(target['path']), 'message': 'Authentication form'})
 
             if args['bruteforce'] != None:
-                Output.highlight({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
                 try:
-                    auth_type = res['auth_type']
+                    try:
+                        auth_type = res['auth_type']
+                    except KeyError:
+                        auth_type = "Basic"
+                
+                    Output.highlight({'target': http.url(target['path']), 'message': 'Starting %s bruteforce...' % auth_type})
 
                     for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                         username, password = cred.split(':')
@@ -176,6 +181,7 @@ class Module:
                             }
                             DB.insert_credential(cred_info)
 
-                except KeyError:
+                except KeyError as e:
+                    print(e)
                     pass
 

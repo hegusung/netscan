@@ -95,13 +95,20 @@ class RDP:
 
     def check_auth(self, domain, username, password, hashes = None):
        if hashes is not None:
-           lmhash, nthash = hashes.split(':')
+           if ':' in hashes:
+               lmhash, nthash = hashes.split(':')
+           else:
+               lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+               nthash = hashes
            lmhash = a2b_hex(lmhash)
            nthash = a2b_hex(nthash)
 
        else:
            lmhash = ''
            nthash = ''
+
+       if password == None:
+           password = ''
 
        tpkt = TPKT()
        tpdu = TPDU()
