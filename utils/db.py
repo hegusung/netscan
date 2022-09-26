@@ -187,8 +187,8 @@ class DB:
 
                 if self.es_file_storage_enabled:
                     f = open(self.es_file_storage, 'a')
-                    insert = json.dumps(insert)
-                    f.write("%s\n" % insert)
+                    insert_file = json.dumps(insert)
+                    f.write("%s\n" % insert_file)
                     f.close()
                     self.es_file_storage_count += 1
 
@@ -234,6 +234,7 @@ class DB:
             except BrokenPipeError:
                 break
             except Exception as e:
+                traceback.print_exc()
                 print('%s: %s' % (type(e), e))
 
     @classmethod
