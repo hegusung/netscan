@@ -4,7 +4,7 @@ from lib.sshscan.ssh import SSH
 from utils.output import Output
 
 class Module:
-    name = 'Sudo'
+    name = 'Sudo-version'
     description = 'Check sudo version'
 
     def run(self, target, args, creds, timeout):

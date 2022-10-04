@@ -4,8 +4,8 @@ from lib.sshscan.ssh import SSH
 from utils.output import Output
 
 class Module:
-    name = 'sudo-privs'
-    description = 'Get kernel informations'
+    name = 'Sudo-privs'
+    description = 'Get sudo privileges list'
 
     def run(self, target, args, creds, timeout):
         user = creds['username'] if 'username' in creds else None
