@@ -41,6 +41,13 @@ class SSH:
 
         return True
 
+    def auth_key(self, username, key_file):
+        self.conn = paramiko.Transport((self.hostname, self.port))
+        rsa_key = paramiko.RSAKey.from_private_key_file(key_file)
+        self.conn.connect(username=username, pkey=rsa_key)
+
+        return True
+
     def upload_file(self, local_path, remote_path):
         # Function to upload files on server
         sftp = paramiko.SFTPClient.from_transport(self.conn)

@@ -197,21 +197,24 @@ def adscan_worker(target, actions, creds, no_ssl, timeout):
             dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
             success = False
+            ldap_port = 389
+            ldaps_port = 636
+            gc_port = 3268
             if no_ssl:
-                ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
+                ldapscan = LDAPScan(target['hostname'], ldap_port, timeout, ssl=False)
                 success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
             else:
                 try:
-                    ldapscan = LDAPScan(target['hostname'], 636, timeout, ssl=True)
+                    ldapscan = LDAPScan(target['hostname'], ldaps_port, timeout, ssl=True)
                     success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
                 except OpenSSL.SSL.SysCallError as e:
                     Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
-                    ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
+                    ldapscan = LDAPScan(target['hostname'], ldap_port, timeout, ssl=False)
                     success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
                 else:
                     if smb_authenticated and not success:
                         Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
-                        ldapscan = LDAPScan(target['hostname'], 389, timeout, ssl=False)
+                        ldapscan = LDAPScan(target['hostname'], ldap_port, timeout, ssl=False)
                         success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
 
             if success:

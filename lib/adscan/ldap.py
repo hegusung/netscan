@@ -60,6 +60,8 @@ class LDAPScan:
             url += ":%d" % self.port
         if not self.ssl and not self.port == 389:
             url += ":%d" % self.port
+        print(url)
+        url = "gc://%s" % self.hostname
         return url
 
     def connect(self, domain, username='', password='', ntlm='', doKerberos=False, dc_ip=None):
@@ -175,7 +177,10 @@ class LDAPScan:
                 last_logon_date = datetime.fromtimestamp(getUnixTime(int(str(attr['lastLogon']))))
             except KeyError:
                 last_logon_date = None
-            last_password_change_date = datetime.fromtimestamp(getUnixTime(int(str(attr['pwdLastSet']))))
+            try:
+                last_password_change_date = datetime.fromtimestamp(getUnixTime(int(str(attr['pwdLastSet']))))
+            except KeyError:
+                last_password_change_date = None
 
             tags = []
             if 'userAccountControl' in attr:
@@ -259,7 +264,6 @@ class LDAPScan:
         sc = ldap.SimplePagedResultsControl(size=100)
         attributes = ['distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf']
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=user)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
-
 
     def list_admins(self):
 

@@ -723,7 +723,7 @@ class DB:
         if 'last_logon' in user_doc and user_doc['last_logon'] != None:
             user_doc['last_logon'] = int(user_doc['last_logon'].timestamp()*1000)
         if 'last_password_change' in user_doc:
-            user_doc['last_password_change'] = int(user_doc['last_password_change'].timestamp()*1000)
+            user_doc['last_password_change'] = int(user_doc['last_password_change'].timestamp()*1000) if user_doc['last_password_change'] != None else None
 
         # deprecated...
         if 'password' in user_doc:
