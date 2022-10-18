@@ -203,7 +203,10 @@ class HTTP:
         sock_ssl.set_tlsext_host_name(hostname_idna)
         sock_ssl.do_handshake()
         cert = sock_ssl.get_peer_certificate()
-        cert = cert.to_cryptography()
+        try:
+            cert = cert.to_cryptography()
+        except ValueError:
+            return []
         sock_ssl.close()
         sock.close()
 
@@ -249,6 +252,8 @@ class HTTP:
                 if len(html) >= max_size:
                     break
         except requests.exceptions.ChunkedEncodingError:
+            pass
+        except LookupError:
             pass
 
         auth_type = None
