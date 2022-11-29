@@ -75,6 +75,33 @@ def smbscan_worker(target, actions, creds, timeout):
                 'hostname': smb_info['hostname'],
             })
 
+            ip = target['hostname']
+            if smb_info['signing'] == False:
+                Output.vuln({'target': 'smb://%s:445' % (ip,), 'message': 'SMB protocol is not signed, vulnerable to relay attacks'})
+
+                vuln_info = {
+                    'hostname': ip,
+                    'port': 445,
+                    'service': 'smb',
+                    'url': 'smb://%s' % (ip,),
+                    'name': 'SMB Signing disabled',
+                    'description': 'Server smb://%s SMB signature is not enabled, vulnerable to relay attacks' % (ip,),
+                }
+                DB.insert_vulnerability(vuln_info)
+
+            if smb_info['smbv1'] == True:
+                Output.vuln({'target': 'smb://%s:445' % (ip,), 'message': 'SMBv1 protocol is deprecated'})
+
+                vuln_info = {
+                    'hostname': ip,
+                    'port': 445,
+                    'service': 'smb',
+                    'url': 'smb://%s' % (ip,),
+                    'name': 'SMBv1 enabled',
+                    'description': 'Server smb://%s SMBv1 protocol is enabled, prone to vulnerabilities' % (ip,),
+                }
+                DB.insert_vulnerability(vuln_info)
+
             smbscan.disconnect()
 
             # Start new connection
