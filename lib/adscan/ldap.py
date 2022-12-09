@@ -60,7 +60,6 @@ class LDAPScan:
             url += ":%d" % self.port
         if not self.ssl and not self.port == 389:
             url += ":%d" % self.port
-        print(url)
         url = "gc://%s" % self.hostname
         return url
 
@@ -318,6 +317,8 @@ class LDAPScan:
         elif name.startswith('S-'):
             search_filter="(objectsid=%s)" % name
         elif name.startswith('CN='):
+            name = name.replace('(', '\\28')
+            name = name.replace(')', '\\29')
             search_filter="(distinguishedName=%s)" % name
         else:
             search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
@@ -365,7 +366,10 @@ class LDAPScan:
                     last_logon_date = datetime.fromtimestamp(getUnixTime(int(str(attr['lastLogon']))))
                 except KeyError:
                     last_logon_date = None
-                last_password_change_date = datetime.fromtimestamp(getUnixTime(int(str(attr['pwdLastSet']))))
+                try:
+                    last_password_change_date = datetime.fromtimestamp(getUnixTime(int(str(attr['pwdLastSet']))))
+                except KeyError:
+                    last_password_change_date = None
 
                 tags = []
                 if 'userAccountControl' in attr:
