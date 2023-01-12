@@ -15,6 +15,8 @@ from copy import copy
 from utils.utils import check_ip
 from utils.config import Config
 from utils.output import Output
+import urllib3
+urllib3.disable_warnings()
 
 MAX_BULK = 100
 
@@ -935,7 +937,19 @@ class Elasticsearch(object):
             es_port = int(Config.config.get('Elasticsearch', 'port'))
             es_index = Config.config.get('Elasticsearch', 'index').lower()
 
-            self.elasticsearch_instance = (elasticsearch.Elasticsearch(['http://%s:%d' % (es_ip, es_port)], max_retries=5, retry_on_timeout=True), es_index)
+            if Config.config.get('Elasticsearch', 'ssl').lower() == 'true':
+                url = 'https://%s:%d' % (es_ip, es_port)
+                ssl = True
+            else:
+                url = 'http://%s:%d' % (es_ip, es_port)
+                ssl = False
+
+            username = Config.config.get('Elasticsearch', 'username')
+            password = Config.config.get('Elasticsearch', 'password')
+            if len(username) != 0:
+                self.elasticsearch_instance = (elasticsearch.Elasticsearch([url], max_retries=5, retry_on_timeout=True, http_auth=(username, password), verify_certs=False, ssl_show_warn=False), es_index)
+            else:
+                self.elasticsearch_instance = (elasticsearch.Elasticsearch([url], max_retries=5, retry_on_timeout=True, verify_certs=False, ssl_show_warn=False), es_index)
 
         return self.elasticsearch_instance
 

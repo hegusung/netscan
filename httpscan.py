@@ -48,6 +48,7 @@ def main():
             print('- %s   %s' % (module['name'].ljust(15), module['description']))
         sys.exit()
 
+    Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -101,7 +102,6 @@ def main():
 
             header_dict[key] = value
 
-    Output.setup()
     httpscan(targets, static_inputs, args.workers, actions, args.useragent, header_dict, args.http_auth, cookie_dict, args.proxy, args.dir_bruteforce, args.extensions, args.dir_bruteforce_workers, args.timeout, args.delay, args.resume)
 
     DB.stop_worker()
