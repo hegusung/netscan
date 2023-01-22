@@ -32,6 +32,10 @@ es_ids = {
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
+    'domain': 'domain_domain_{session}_{domain}',
+    'domain_container': 'domain_container_{session}_{domain}_{guid}',
+    'domain_ou': 'domain_ou_{session}_{domain}_{guid}',
+    'domain_gpo': 'domain_gpo_{session}_{domain}_{guid}',
     'domain_host': 'domain_host_{session}_{domain}_{hostname}',
     'domain_user': 'domain_user_{session}_{domain}_{username}',
     'domain_group': 'domain_group_{session}_{domain}_{groupname}',
@@ -649,6 +653,72 @@ class DB:
             self.send(doc)
 
     @classmethod
+    def insert_domain_domain(self, domain_doc):
+        domain_doc['doc_type'] = 'domain'
+        domain_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        domain_doc = check_entry(domain_doc, ['domain', 'parameters', 'sid', 'dn'], [])
+
+        domain_doc['domain'] = domain_doc['domain'].lower()
+
+        if len(domain_doc['domain']) == 0 or domain_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in domain_doc:
+            domain_doc['created_date'] = int(domain_doc['created_date'].timestamp()*1000)
+
+        self.send(domain_doc)
+
+    @classmethod
+    def insert_domain_container(self, container_doc):
+        container_doc['doc_type'] = 'domain_container'
+        container_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        container_doc = check_entry(container_doc, ['domain', 'guid', 'dn'], [])
+
+        container_doc['domain'] = container_doc['domain'].lower()
+
+        if len(container_doc['domain']) == 0 or container_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in container_doc:
+            container_doc['created_date'] = int(container_doc['created_date'].timestamp()*1000)
+
+        self.send(container_doc)
+
+    @classmethod
+    def insert_domain_ou(self, ou_doc):
+        ou_doc['doc_type'] = 'domain_ou'
+        ou_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        ou_doc = check_entry(ou_doc, ['domain', 'guid', 'dn'], [])
+
+        ou_doc['domain'] = ou_doc['domain'].lower()
+
+        if len(ou_doc['domain']) == 0 or ou_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in ou_doc:
+            ou_doc['created_date'] = int(ou_doc['created_date'].timestamp()*1000)
+
+        self.send(ou_doc)
+
+    @classmethod
+    def insert_domain_gpo(self, gpo_doc):
+        gpo_doc['doc_type'] = 'domain_gpo'
+        gpo_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        gpo_doc = check_entry(gpo_doc, ['domain', 'guid', 'dn'], [])
+
+        gpo_doc['domain'] = gpo_doc['domain'].lower()
+
+        if len(gpo_doc['domain']) == 0 or gpo_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in gpo_doc:
+            gpo_doc['created_date'] = int(gpo_doc['created_date'].timestamp()*1000)
+
+        self.send(gpo_doc)
+
+
+
+    @classmethod
     def insert_domain_host(self, host_doc):
         host_doc['doc_type'] = 'domain_host'
         host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
@@ -704,7 +774,7 @@ class DB:
                 append = {'tags': host_doc['tags']}
                 host_doc['append'] = append
             else:
-                host_doc['append']['tags'] = [host_doc['tags']]
+                host_doc['append']['tags'] = host_doc['tags']
             del host_doc['tags']
 
         self.send(host_doc)
@@ -759,7 +829,7 @@ class DB:
                 append = {'tags': user_doc['tags']}
                 user_doc['append'] = append
             else:
-                user_doc['append']['tags'] = [user_doc['tags']]
+                user_doc['append']['tags'] = user_doc['tags']
             del user_doc['tags']
 
         self.send(user_doc)
