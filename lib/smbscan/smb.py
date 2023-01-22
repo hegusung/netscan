@@ -642,6 +642,7 @@ class SMBScan:
                 write = False
 
                 if share_name != 'IPC$':
+                    print("YA")
                     try:
                         self.conn.listPath(share_name, '\\*')
                         read = True
@@ -672,6 +673,8 @@ class SMBScan:
 
     def list_content(self, path="\\", share=None, recurse=3):
         if not share:
+            return
+        if share == 'IPC$':
             return
         try:
             has_content = False
