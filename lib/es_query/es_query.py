@@ -95,6 +95,7 @@ def export_ports(session, service, output_dir):
     export_undiscovered_services(session, output_dir)
     export_domains(session, output_dir)
     export_domain_controllers(session, output_dir)
+    export_domain_hosts(session, output_dir)
     export_http_urls(session, output_dir)
 
     pprint(output)
@@ -553,6 +554,43 @@ def export_local_hashes(session, output_dir):
             count += 1
 
         output.append((format, hashfile_filename, count,  "hashes written"))
+
+def export_domain_hosts(session, output_dir):
+       
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "domain_host"        }},
+            { "match": { "session": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    # Create output files in dir if non existant
+
+    domain_host_filename = os.path.join(output_dir, '%s_domain_hosts.txt' % session)
+    domain_host_file = open(domain_host_filename, 'a')
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        domain_host_file.write('%s\n' % source['dns'])
+        c += 1
+
+    domain_host_file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(domain_host_filename))
+    count = 0
+    for _ in open(domain_host_filename):
+        count += 1
+      
+    output.append(("domain_hosts", domain_host_filename, count,  "Domain hosts written"))
 
 
 def dump(session, output_file):

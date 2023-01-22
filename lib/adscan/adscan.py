@@ -392,6 +392,7 @@ def adscan_worker(target, actions, creds, no_ssl, timeout):
                             'domain': entry['domain'],
                             'os': entry['os'],
                             'hostname': entry['hostname'],
+                            'dns': entry['dns'],
                             'comment': entry['comment'],
                             'dn': entry['dn'],
                             'tags': entry['tags'],
