@@ -13,6 +13,7 @@ from base64 import b64decode
 from binascii import unhexlify
 
 import impacket
+from impacket.smb3 import SessionError as SessionError_smb3
 from impacket.smbconnection import SessionError, SMBConnection
 from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from impacket.smb import SMB_DIALECT
@@ -220,7 +221,7 @@ class SMBScan:
                 self.smbv1 = False
 
             return True
-        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout) as e:
+        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout, SessionError_smb3) as e:
             if self.prefered_dialect == SMB_DIALECT:
                 # SMBv1 didn't work, try SMBv2
                 self.prefered_dialect = SMB2_DIALECT_21

@@ -580,7 +580,8 @@ def export_domain_hosts(session, output_dir):
     for item in res:
         source = item['_source']
 
-        domain_host_file.write('%s\n' % source['dns'])
+        if 'dns' in source:
+            domain_host_file.write('%s\n' % source['dns'])
         c += 1
 
     domain_host_file.close()
