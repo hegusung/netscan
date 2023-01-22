@@ -642,7 +642,6 @@ class SMBScan:
                 write = False
 
                 if share_name != 'IPC$':
-                    print("YA")
                     try:
                         self.conn.listPath(share_name, '\\*')
                         read = True
