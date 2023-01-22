@@ -4,7 +4,7 @@ import sys
 import argparse
 import shutil
 
-from utils.process_inputs import process_inputs, str_comma, str_ports
+from utils.process_inputs import process_inputs, str_comma, str_ports, port_file
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.portscan.portscan import portscan_worker, top_ports
@@ -18,6 +18,7 @@ def main():
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default=None, dest='port')
     parser.add_argument('--top-ports', metavar='top-N', nargs='?', type=top_ports, help='top n ports', default=None, dest='top_ports')
+    parser.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
     parser.add_argument('-p-', action='store_true', help='Scan all ports', dest='all_ports')
     parser.add_argument('-sV', action='store_true', help='Service scan (nmap)', dest='service_scan')
     parser.add_argument('--script', metavar='nmap scripts', type=str, nargs='?', help='Execute nmap scripts or specific script categories (requires -sV enabled)', const='default', default=None, dest='scripts')
@@ -58,6 +59,8 @@ def main():
             static_inputs['port'] += args.port
         if args.top_ports:
             static_inputs['port'] += args.top_ports
+        if args.port_file:
+            static_inputs['port'] += args.port_file
         static_inputs['port'] = list(set(static_inputs['port']))
 
     actions = {}
