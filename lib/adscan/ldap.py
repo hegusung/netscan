@@ -1514,12 +1514,17 @@ class LDAPScan:
 
                 attr = to_dict(item)
 
-                b = bytes(attr['schemaIDGUID'])
-                guid = b[0:4][::-1].hex() + '-'
-                guid += b[4:6][::-1].hex() + '-'
-                guid += b[6:8][::-1].hex() + '-'
-                guid += b[8:10].hex() + '-'
-                guid += b[10:16].hex()
+                if 'rightsGuid' in attr:
+                    guid = str(attr['rightsGuid'])
+                elif 'schemaIDGUID' in attr:
+                    b = bytes(attr['schemaIDGUID'])
+                    guid = b[0:4][::-1].hex() + '-'
+                    guid += b[4:6][::-1].hex() + '-'
+                    guid += b[6:8][::-1].hex() + '-'
+                    guid += b[8:10].hex() + '-'
+                    guid += b[10:16].hex()
+                else:
+                    continue
 
                 guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
 
