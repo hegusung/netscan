@@ -49,16 +49,11 @@ def export_bloodhound_domains(session, output_dir):
             'distinguishedname': source['dn'].upper(),
             'domainsid': source['sid'],
             'highvalue': True,
+            'functionallevel': source['functionallevel'],
         }
 
-        gpo_changes = {
-            "LocalAdmins": [],
-            "RemoteDesktopUsers": [],
-            "DcomUsers": [],
-            "PSRemoteUsers": [],
-            "AffectedComputers": source['affected_computers'],
-        }
-
+        gpo_changes = source['gpo_effect']
+        gpo_changes["AffectedComputers"] = source['affected_computers']
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
@@ -128,6 +123,9 @@ def export_bloodhound_users(session, output_dir, domains):
 
         #if 'Interdomain trust account' in source['tags']:
         #    continue
+
+        if not 'tags' in source:
+            source['tags'] = []
 
         allowed_to_delegate = [] # TODO Not sure why, but sharphound doesn't seem to set this value (msDS-AllowedToDelegateTo)
         object_identifier = source['sid']
@@ -229,6 +227,9 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers):
     c = 0
     for item in res:
         source = item['_source']
+
+        if not 'tags' in source:
+            source['tags'] = []
 
         # Properties
         object_identifier = source['sid']
@@ -394,6 +395,9 @@ def export_bloodhound_computers(session, output_dir):
             # not dumpped from a AD
             continue
 
+        if not 'tags' in source:
+            source['tags'] = []
+
         allowed_to_delegate = [] # TODO Not sure why, but sharphound doesn't seem to set this value (msDS-AllowedToDelegateTo)
         allowed_to_act = [] # TODO 
         object_identifier = source['sid']
@@ -532,14 +536,8 @@ def export_bloodhound_ous(session, output_dir):
             'domainsid': source['domain_sid'],
         }
 
-        gpo_changes = {
-            "LocalAdmins": [],
-            "RemoteDesktopUsers": [],
-            "DcomUsers": [],
-            "PSRemoteUsers": [],
-            "AffectedComputers": source['affected_computers'],
-        }
-
+        gpo_changes = source['gpo_effect']
+        gpo_changes["AffectedComputers"] = source['affected_computers']
 
         acl_info = source['aces']
 

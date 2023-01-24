@@ -84,6 +84,7 @@ def main():
     misc_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     misc_group.add_argument("--no-ssl", action='store_true', help="Perform a LDAP connection instead of LDAPS", dest='no_ssl')
+    misc_group.add_argument('--ldap-protocol', choices={"ldaps", "ldap", "gc"}, default=None, help="Way to connect to the ldap service (default: ldaps)", dest='ldap_protocol')
     # Dispatcher arguments
     misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # DB arguments
@@ -217,7 +218,7 @@ def main():
         actions['modules'] = {'modules': args.modules, 'args': module_args}
 
 
-    adscan(targets, static_inputs, args.workers, actions, creds, args.no_ssl, args.timeout)
+    adscan(targets, static_inputs, args.workers, actions, creds, args.ldap_protocol, args.timeout)
 
     DB.stop_worker()
     Output.stop()

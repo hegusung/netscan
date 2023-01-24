@@ -87,7 +87,7 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
 
     res = {}
 
-    res['is_acl_protected'] = (int(sd['Control']) & 3) == 0
+    res['is_acl_protected'] = (int(sd['Control']) & 3) != 0
 
     sid = process_sid(domain_name, parse_sid(sd['OwnerSid']))
     res['aces'] = [{"PrincipalSID": parse_sid(sd['OwnerSid']), "RightName": "Owns", "IsInherited": False}]

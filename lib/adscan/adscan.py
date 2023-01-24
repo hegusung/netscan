@@ -25,7 +25,7 @@ ad_modules = ModuleManager('lib/adscan/modules')
 
 windows_build = re.compile("Windows \S+ Build (\d+)")
 
-def adscan_worker(target, actions, creds, no_ssl, timeout):
+def adscan_worker(target, actions, creds, ldap_protocol, timeout):
     # Process creds
     if 'username' in creds and '\\' in creds['username']:
         creds['domain'] = creds['username'].split('\\')[0]
@@ -197,50 +197,23 @@ def adscan_worker(target, actions, creds, no_ssl, timeout):
             dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
             success = False
-            ldap_protocols = ["gc", "ldaps", "ldap"]
-            #ldap_ports = [(3269, True), (636, True), (3268, False), (389, False)]
-            #ldap_ports = [(636, True), (389, False)]
-            #ldap_port = 389
-            #ldaps_port = 636
-            #gc_port = 3268
-            if no_ssl:
-                for ldap_protocol in ["ldap"]:
+            if ldap_protocol:
+                ldap_protocols = [ldap_protocol]
+            else:
+                ldap_protocols = ['ldaps', 'ldap', 'gc']
+
+            for ldap_protocol in ldap_protocols:
+                success = False
+                try:
                     ldapscan = LDAPScan(target['hostname'], timeout, protocol=ldap_protocol)
                     success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
 
                     if success:
                         break
-                else:
-                    Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAP (no ssl)'})
-
-            else:
-                for ldap_protocol in ldap_protocols:
-                    success = False
-                    try:
-                        ldapscan = LDAPScan(target['hostname'], timeout, protocol=ldap_protocol)
-                        success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
-
-                        if success:
-                            break
-                    except OpenSSL.SSL.SysCallError as e:
-                        pass
-                else:
-                    Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAP'})
-
-                """
-                try:
-                    ldapscan = LDAPScan(target['hostname'], ldaps_port, timeout, ssl=True)
-                    success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
                 except OpenSSL.SSL.SysCallError as e:
-                    Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
-                    ldapscan = LDAPScan(target['hostname'], ldap_port, timeout, ssl=False)
-                    success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
-                else:
-                    if smb_authenticated and not success:
-                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAPS, trying to use LDAP'})
-                        ldapscan = LDAPScan(target['hostname'], ldap_port, timeout, ssl=False)
-                        success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
-                """
+                    pass
+            else:
+                Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAP'})
 
             if success:
                 ldap_available = True
@@ -324,8 +297,10 @@ def adscan_worker(target, actions, creds, no_ssl, timeout):
                             'parameters': entry['parameters'],
                             'sid': entry['sid'],
                             'dn': entry['dn'],
+                            'functionallevel': entry['functionallevel'],
                             # For bloodhound
                             'affected_computers': entry['affected_computers'],
+                            'gpo_effect': entry['gpo_effect'],
                             'child_objects': entry['child_objects'],
                             'trusts': entry['trusts'],
                             'links': entry['links'],
@@ -364,16 +339,17 @@ def adscan_worker(target, actions, creds, no_ssl, timeout):
                                 'guid': entry['guid'],
                                 # For bloodhound
                                 'affected_computers': entry['affected_computers'],
+                                'gpo_effect': entry['gpo_effect'],
                                 'child_objects': entry['child_objects'],
                                 'links': entry['links'],
                                 'aces': entry['aces'],
                             })
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
 
-                        ldapscan.list_ous(domain, domain_sid, callback_ous)
+                        ldapscan.list_ous(smbscan, domain, domain_sid, callback_ous)
 
 
-                    ldapscan.list_domains(callback)
+                    ldapscan.list_domains(smbscan, callback)
                 else:
                     raise NotImplementedError('Dumping domains through SMB')
 

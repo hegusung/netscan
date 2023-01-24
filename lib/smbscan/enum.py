@@ -84,6 +84,7 @@ class Enum:
         rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
 
         for entry in self.__fetchGroupList(rpctransport):
+            print(entry)
             (domain, groupname, uid, group, members) = entry
             if self.__host_domain != domain:
                 domain = "WORKGROUP"
