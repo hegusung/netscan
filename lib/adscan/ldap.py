@@ -21,6 +21,7 @@ from pyasn1.type.univ import Sequence, OctetString, Integer, SetOf
 from ldap3.protocol.controls import build_control
 from impacket.ldap.ldaptypes import LDAP_SID
 from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
+from impacket.ldap.ldap import LDAPSearchError
 
 from lib.adscan.accesscontrol import parse_accesscontrol
 
@@ -593,7 +594,11 @@ class LDAPScan:
 
         sc = ldap.SimplePagedResultsControl(size=100)
         attributes = ['distinguishedName']
-        self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
+        try:
+            self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
+        except LDAPSearchError:
+            # This DC doesn't have DNS
+            pass
 
     def list_trusts(self, callback):
 

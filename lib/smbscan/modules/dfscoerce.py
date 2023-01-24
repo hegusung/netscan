@@ -20,7 +20,7 @@ from impacket.uuid import uuidtup_to_bin
 
 class Module:
     name = 'DFSCoerce'
-    description = 'Generate an auth with DFSCoerce'
+    description = 'Generate an auth with DFSCoerce (Authentication required)'
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
@@ -34,6 +34,10 @@ class Module:
         do_kerberos = creds['kerberos'] if 'kerberos' in creds else False
         dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
         listener_ip = args[0]
+
+        if user == None:
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'DFSCoerce module requires valid credentials'})
+            return
 
         check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, do_kerberos, dc_ip, timeout)
 
@@ -117,14 +121,14 @@ class TriggerAuth():
             dce.connect()
         except Exception as e:
             #print("Something went wrong, check error status => %s" % str(e))
-            traceback.print_exc()
+            #traceback.print_exc()
             return "Something went wrong, check error status => %s" % str(e)
 
         try:
             dce.bind(uuidtup_to_bin(('4FC742E0-4A10-11CF-8273-00AA004AE673', '3.0')))
         except Exception as e:
             #print("Something went wrong, check error status => %s" % str(e))
-            traceback.print_exc()
+            #traceback.print_exc()
             return "Something went wrong, check error status => %s" % str(e)
         #print("[+] Successfully bound!")
         return dce
