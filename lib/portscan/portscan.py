@@ -91,7 +91,10 @@ class PortScan:
             result = sock.connect_ex((self.hostname, self.port))
             #print("%s:%s => %s" % (self.hostname, self.port, result))
 
-            sock.close()
+            try:
+                sock.close()
+            except OSError:
+                pass
 
             # Error 11: ressource temporaly unavailable
             if result == 0:
