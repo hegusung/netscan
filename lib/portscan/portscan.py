@@ -85,13 +85,14 @@ class PortScan:
 
         retry = 0
         while True:
-            sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(self.timeout)
-
-            result = sock.connect_ex((self.hostname, self.port))
-            #print("%s:%s => %s" % (self.hostname, self.port, result))
-
+            result = 11
             try:
+                sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(self.timeout)
+
+                result = sock.connect_ex((self.hostname, self.port))
+                #print("%s:%s => %s" % (self.hostname, self.port, result))
+
                 sock.close()
             except OSError:
                 pass
