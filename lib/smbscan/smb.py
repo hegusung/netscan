@@ -737,7 +737,7 @@ class SMBScan:
         except Exception as e:
             raise e
 
-    def exec(self, command, exec_method=None, get_output=True):
+    def exec(self, command, exec_method=None, get_output=True, code_page='cp850'):
 
         if not exec_method:
             exec_methods = ['wmiexec', 'smbexec', 'mmcexec']
@@ -792,7 +792,7 @@ class SMBScan:
         if exec == None:
             return None
 
-        output = exec.execute(command, get_output)
+        output = exec.execute(command, get_output, code_page)
         if output == None:
             return None
         return output

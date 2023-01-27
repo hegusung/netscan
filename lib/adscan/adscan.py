@@ -38,6 +38,7 @@ def adscan_worker(target, actions, creds, no_ssl, timeout):
 
         try:
             smbscan = SMBScan(target['hostname'], 445, timeout)
+            raise Exception("LOL")
 
             # == SMB check ==
 

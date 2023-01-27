@@ -11,6 +11,10 @@ import xml.etree.ElementTree as ET
 
 nmap_bin = "nmap"
 
+import socks
+#socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 1337)
+#socket.socket = socks.socksocket
+
 def portscan_worker(target, service_scan, actions, timeout):
     try:
         portscan = PortScan(target['hostname'], target['port'], timeout)
@@ -88,6 +92,8 @@ class PortScan:
             result = 11
             try:
                 sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+                #sock = socks.socksocket()
+                #sock.set_proxy(socks.SOCKS5, "127.0.0.1", 1337)
                 sock.settimeout(self.timeout)
 
                 result = sock.connect_ex((self.hostname, self.port))
