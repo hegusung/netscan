@@ -23,14 +23,14 @@ auth_pattern = re.compile(r'''\s*(.*)\s+realm=['"]?([^'"]+)['"]?''', re.IGNORECA
 
 class HTTP:
 
-    def __init__(self, method, hostname, port, useragent, proxy, connect_timeout, headers=None, auth=None, cookies={}):
+    def __init__(self, method, hostname, port, useragent, proxy, connect_timeout, headers=None, auth=None, cookies={}, read_timeout=60):
         self.method = method
         self.hostname = hostname
         self.port = port
         self.connect_timeout = connect_timeout
         self.useragent = useragent
         self.proxy = proxy
-        self.read_timeout = 60
+        self.read_timeout = read_timeout
         self.headers = headers
         self.cookies = cookies
 
