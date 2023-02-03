@@ -245,6 +245,7 @@ class LDAPScan:
 
             callback({
                 'domain': domain,
+                'name': str(attr['name']),
                 'parameters': parameters,
                 'sid': domain_sid,
                 'dn': dn,
@@ -260,7 +261,7 @@ class LDAPScan:
 
         sc = ldap.SimplePagedResultsControl(size=100)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version']
+        attributes = ['distinguishedName', 'name', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version']
         sbase = "%s" % self.defaultdomainnamingcontext
         self.conn.search(searchBase=sbase, searchFilter='(objectCategory=domain)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
 
@@ -1201,7 +1202,6 @@ class LDAPScan:
                 return
 
             attr = self.to_dict(item)
-            print(item)
 
             domain = str(attr['name'])
 
@@ -1323,6 +1323,7 @@ class LDAPScan:
 
             name = str(attr['name'])
             dns = str(attr['dNSHostName'])
+            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
 
             if 'certificateTemplates' in attr:
                 if not type(attr['certificateTemplates']) == SetOf:
@@ -1334,6 +1335,7 @@ class LDAPScan:
 
             output = {
                 'name': name,
+                'domain': domain,
                 'dns': dns, 
                 'templates': templates,
             }
@@ -1980,8 +1982,6 @@ class LDAPScan:
                     ace['target'] = target
                     if 'guid' in ace and ace['guid'] in schema_guid_dict:
                         ace['parameter'] = schema_guid_dict[ace['guid']]
-
-                    print(ace)
 
                     if all:
                         callback(ace)

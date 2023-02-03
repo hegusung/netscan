@@ -378,17 +378,33 @@ def smbscan_worker(target, actions, creds, timeout):
                         else:
                             raise e
                 if 'admins' in actions:
+                    host_info = {
+                        'hostname_ip': target['hostname'],
+                        'os': smb_info['server_os'],
+                        'domain': smb_info['domain'],
+                        'hostname': smb_info['hostname'],
+                    }
+                    new_info = False
+
                     Output.write({'target': smbscan.url(), 'message': 'Administrators:'})
                     try:
-                        entries = smbscan.enum_admins()
-                        for entry in entries:
-                            admin = '%s\\%s' % (entry['domain'], entry['name'])
-                            Output.highlight({'target': smbscan.url(), 'message': '- %s (%s)' % (admin.ljust(30), entry['type'])})
+                        entries = smbscan.dump_admins()
+                        for admin_group in entries:
+                            Output.highlight({'target': smbscan.url(), 'message': '- %s' % (admin_group,)})
+                            for sid in entries[admin_group]:
+                                Output.highlight({'target': smbscan.url(), 'message': '   - %s' % (sid,)})
+
+                            host_info[admin_group] = entries[admin_group]
+                            new_info = True
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
                             Output.error({'target': smbscan.url(), 'message': 'Enum admins: Access denied'})
                         else:
                             raise e
+
+                    if new_info:
+                        DB.insert_domain_host(host_info)
+
                 if 'apps' in actions:
                     output = smbscan.exec("wmic product get name,version,installdate", exec_method=None, get_output=True)
                     if output:
@@ -450,28 +466,82 @@ def smbscan_worker(target, actions, creds, timeout):
                             Output.error({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
                         else:
                             raise e
-                if 'loggedin' in actions:
+                if 'sessions' in actions:
+                    host_info = {
+                        'hostname_ip': target['hostname'],
+                        'os': smb_info['server_os'],
+                        'domain': smb_info['domain'],
+                        'hostname': smb_info['hostname'],
+                    }
+                    new_info = False
+
                     Output.write({'target': smbscan.url(), 'message': 'Logged in users:'})
                     try:
+                        privileged_sessions = []
                         entries = smbscan.enum_loggedin()
                         for entry in entries:
                             Output.highlight({'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
+                            privileged_sessions.append({
+                                'domain': entry['domain'],
+                                'username': entry['username'],
+                            })
+
+                        host_info['privileged_sessions'] = privileged_sessions
+                        new_info = True
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
                             Output.error({'target': smbscan.url(), 'message': 'Enum logged in: Access denied'})
                         else:
                             raise e
-                if 'sessions' in actions:
+
                     Output.write({'target': smbscan.url(), 'message': 'Sessions:'})
                     try:
+                        sessions = []
                         entries = smbscan.enum_sessions()
                         for entry in entries:
                             Output.highlight({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
+
+                            sessions.append({
+                                'username': entry['username'],
+                            })
+
+                        host_info['host_sessions'] = sessions
+                        new_info = True
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
                             Output.error({'target': smbscan.url(), 'message': 'Enum sessions: Access denied'})
                         else:
                             raise e
+
+                    Output.write({'target': smbscan.url(), 'message': 'Registry Sessions:'})
+                    try:
+                        registry_sessions = []
+                        entries = smbscan.dump_registry_sessions()
+                        for entry in entries:
+                            Output.highlight({'target': smbscan.url(), 'message': 'Registry Session: %s' % (entry,)})
+
+                            registry_sessions.append({
+                                'sid': entry,
+                            })
+
+                        host_info['registry_sessions'] = registry_sessions
+                        new_info = True
+                    except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+                        if 'access_denied' in str(e):
+                            Output.error({'target': smbscan.url(), 'message': 'Enum registry sessions: Access denied'})
+                        elif 'STATUS_OBJECT_NAME_NOT_FOUND' in str(e):
+                            Output.error({'target': smbscan.url(), 'message': 'Enum registry sessions: Non existing pipe'})
+                        else:
+                            raise e
+                    except impacket.smbconnection.SessionError as e:
+                        if 'STATUS_OBJECT_NAME_NOT_FOUND' in str(e):
+                            Output.error({'target': smbscan.url(), 'message': 'Enum registry sessions: Non existing pipe'})
+                        else:
+                            raise e
+
+                    if new_info:
+                        DB.insert_domain_host(host_info)
+
                 if 'rid_brute' in actions:
                     Output.write({'target': smbscan.url(), 'message': 'Users discovered via RID bruteforce:'})
                     try:

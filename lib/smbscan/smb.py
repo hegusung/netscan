@@ -1,3 +1,5 @@
+import re
+import time
 import os.path
 import logging
 from time import sleep
@@ -32,6 +34,10 @@ from impacket.krb5.types import Principal, KerberosTime, Ticket
 from impacket.krb5.crypto import Key, _enctype_table, _HMACMD5
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type.univ import noValue
+# DCERPC
+from impacket.dcerpc.v5 import transport, samr, wkst, srvs, lsat, lsad
+from impacket.dcerpc.v5.dtypes import RPC_SID, MAXIMUM_ALLOWED
+from impacket.dcerpc.v5 import rrp
 
 
 from .exec.smbexec import SMBEXEC
@@ -995,8 +1001,13 @@ class SMBScan:
         enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         try:
+            processed = []
             for logged in enum.enumLoggedIn():
-                yield logged
+                u = "%s_%s" % (logged['domain'].upper(), logged['username'].lower())
+                if not logged['username'].endswith('$'):
+                    if not u in processed:
+                        processed.append(u)
+                        yield logged
         except impacket.smbconnection.SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
                 Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
@@ -1018,8 +1029,12 @@ class SMBScan:
         enum = Enum(self.hostname, self.port, domain, username, password, hash, self.conn, do_kerberos)
 
         try:
+            processed = []
             for session in enum.enumSessions():
-                yield session
+                u = "%s_%s" % (session['username'].upper(), session['source_ip'].lower())
+                if not u in processed:
+                    processed.append(u)
+                    yield session
         except impacket.smbconnection.SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
                 Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
@@ -1209,3 +1224,178 @@ class SMBScan:
             NTDS.finish()
 
             return add_ntds_hash.ntds_hashes
+
+    def dump_admins(self):
+        members = {}
+
+        members['Administrators'] = self.dump_group_members(544)
+        members['Remote Desktop Users'] = self.dump_group_members(555)
+        members['Distributed COM Users'] = self.dump_group_members(562)
+        members['Remote Management Users'] = self.dump_group_members(580)
+
+        #print(members)
+        return members
+
+    def dump_group_members(self, group_rid):
+        members_sid = []
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
+
+        if hash is not None:
+        #This checks to see if we didn't provide the LM Hash
+            if hash.find(':') != -1:
+                lmhash, nthash = hash.split(':')
+            else:
+                lmhash = ''
+                nthash = hash
+
+        if password is None:
+            password = ''
+
+        rpctransport = transport.SMBTransport(self.hostname, self.port, r'\samr', username, password, domain, lmhash, nthash, None, doKerberos = do_kerberos)
+   
+        dce = rpctransport.get_dce_rpc()
+        
+        dce.connect()
+        dce.bind(samr.MSRPC_UUID_SAMR)
+        
+        resp = samr.hSamrConnect(dce)
+        serverHandle = resp['ServerHandle']
+
+        """
+        resp = samr.hSamrEnumerateDomainsInSamServer(dce, serverHandle)
+        domains = resp['Buffer']['Buffer']
+
+        # Attempt to get the SID from this computer to filter local accounts later
+        try:
+            resp = samr.hSamrLookupDomainInSamServer(dce, serverHandle, domains[0]['Name'])
+            domain_sid = resp['DomainId'].formatCanonical()
+        # This doesn't always work (for example on DCs)
+        except DCERPCException as e:
+            # Make it a string which is guaranteed not to match a SID
+            domain_sid = 'UNKNOWN'
+
+        print(domain_sid)
+        """
+
+        # Enumerate the domains known to this computer
+        resp = samr.hSamrEnumerateDomainsInSamServer(dce, serverHandle)
+        domains = resp['Buffer']['Buffer']
+
+        # Query the builtin domain (derived from this SID)
+        sid = RPC_SID()
+        sid.fromCanonical('S-1-5-32')
+
+        #print('Opening domain handle')
+        # Open a handle to this domain
+        resp = samr.hSamrOpenDomain(dce,
+                                    serverHandle=serverHandle,
+                                    desiredAccess=samr.DOMAIN_LOOKUP | MAXIMUM_ALLOWED,
+                                    domainId=sid)
+        domainHandle = resp['DomainHandle']
+        try:
+            resp = samr.hSamrOpenAlias(dce,
+                                       domainHandle,
+                                       desiredAccess=samr.ALIAS_LIST_MEMBERS | MAXIMUM_ALLOWED,
+                                       aliasId=group_rid)
+        except samr.DCERPCSessionError as error:
+            # Group does not exist
+            if 'STATUS_NO_SUCH_ALIAS' in str(error):
+                #print('No group with RID %d exists', group_rid)
+                return []
+
+        resp = samr.hSamrGetMembersInAlias(dce, aliasHandle=resp['AliasHandle'])
+        for member in resp['Members']['Sids']:
+            sid_string = member['SidPointer'].formatCanonical()
+
+            #print('Found %d SID: %s' % (group_rid, sid_string))
+            if len(sid_string.split('-')) == 8: # Domain SID
+                # If the sid is known, we can add the admin value directly
+                members_sid.append(sid_string)
+            else:
+                #print('Ignoring local group %s', sid_string)
+                pass
+
+        dce.disconnect()
+
+        return members_sid
+    
+    def dump_registry_sessions(self):
+        sessions = []
+
+        username = self.creds['username'] if 'username' in self.creds else ''
+        domain = self.creds['domain'] if 'domain' in self.creds else ''
+        password = self.creds['password'] if 'password' in self.creds else ''
+        hash = self.creds['hash'] if 'hash' in self.creds else ''
+        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
+
+        if hash is not None:
+        #This checks to see if we didn't provide the LM Hash
+            if hash.find(':') != -1:
+                lmhash, nthash = hash.split(':')
+            else:
+                lmhash = ''
+                nthash = hash
+
+        if password is None:
+            password = ''
+        
+        endpoint = '\winreg'
+        rpctransport = transport.SMBTransport(self.hostname, self.port, endpoint, username, password, domain, lmhash, nthash, None, doKerberos = do_kerberos)
+   
+        dce = rpctransport.get_dce_rpc()
+        
+        binding_attempts = 2
+        binded = False
+        while binding_attempts > 0:
+            try:
+                dce.connect()
+                dce.bind(rrp.MSRPC_UUID_RRP)
+
+                binded = True
+
+                break
+            except SessionError as e:
+                if 'STATUS_PIPE_NOT_AVAILABLE' in str(e):
+                    time.sleep(1)
+                else:
+                    raise e
+            binding_attempts -= 1
+
+        if not binded:
+            return []
+
+        resp = rrp.hOpenUsers(dce)
+
+        # Once we have a handle on the remote HKU hive, we can call 'BaseRegEnumKey' in a loop in
+        # order to enumerate the subkeys which names are the SIDs of the logged in users.
+        key_handle = resp['phKey']
+        index = 1
+        sid_filter = "^S-1-5-21-[0-9]+-[0-9]+-[0-9]+-[0-9]+$"
+        while True:
+            try:
+                resp = rrp.hBaseRegEnumKey(dce, key_handle, index)
+                sid = resp['lpNameOut'].rstrip('\0')
+                if re.match(sid_filter, sid):
+                    #print('User with SID %s is logged in on %s' % (sid, self.hostname))
+                    # Ignore local accounts (best effort, self.sid is only
+                    # populated if we enumerated a group before)
+                    sessions.append(sid)
+                index += 1
+            except impacket.dcerpc.v5.rrp.DCERPCSessionError as e:
+                if 'ERROR_NO_MORE_ITEMS' in str(e):
+                    break
+                else:
+                    raise e
+            except Exception as e:
+                raise e
+
+        rrp.hBaseRegCloseKey(dce, key_handle)
+        dce.disconnect()
+
+        return sessions
+

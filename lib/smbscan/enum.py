@@ -205,7 +205,8 @@ class Enum:
         try:
             resp = srvs.hNetrSessionEnum(dce, '\x00', NULL, 10)
         except Exception as e:
-            print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+            #print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+            raise e
 
         for session in resp['InfoStruct']['SessionInfo']['Level10']['Buffer']:
             username = session['sesi10_username'][:-1]

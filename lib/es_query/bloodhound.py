@@ -24,6 +24,7 @@ def export_bloodhound_domains(session, output_dir):
     }
 
     domains = []
+    domain_fqdn_to_name = {}
 
     filename = os.path.join(output_dir, '%s_bloodhound_domains.txt' % session)
     file = open(filename, 'w')
@@ -41,6 +42,7 @@ def export_bloodhound_domains(session, output_dir):
             'name': source['domain'].upper(),
             'sid': source['sid'],
         })
+        domain_fqdn_to_name[source['domain'].upper()] = source['name'].upper()
 
         object_identifier = source['sid']
         properties = {
@@ -89,11 +91,11 @@ def export_bloodhound_domains(session, output_dir):
 
     file.close()
 
-    return domains
+    return domains, domain_fqdn_to_name
 
 
 
-def export_bloodhound_users(session, output_dir, domains):
+def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name):
 
     query = {
       "query": {
@@ -115,6 +117,8 @@ def export_bloodhound_users(session, output_dir, domains):
     # Create output files in dir if non existant
 
     data = []
+    user_info = []
+    user_sid = []
 
     res = Elasticsearch.search(query)
     c = 0
@@ -165,6 +169,14 @@ def export_bloodhound_users(session, output_dir, domains):
             'IsACLProtected': is_acl_protected,
         })
 
+        user_info.append({
+            'name': source['username'].upper(),
+            'domain_fqdn': source['domain'].upper(),
+            'domain_name': domain_fqdn_to_name[source['domain'].upper()],
+            'sid': source['sid'],
+        })
+        user_sid.append(source['sid'])
+
         c += 1
 
     for domain_info in domains:
@@ -200,6 +212,34 @@ def export_bloodhound_users(session, output_dir, domains):
 
     file.close()
 
+    return user_info, user_sid
+
+def get_group_sid(session):
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "domain_group"        }},
+            { "match": { "session": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    group_sid = []
+
+    res = Elasticsearch.search(query)
+    for item in res:
+        source = item['_source']
+
+        group_sid.append(source['sid'])
+
+    return group_sid
+
+
+
 def export_bloodhound_groups(session, output_dir, domains, domain_controlers):
 
     query = {
@@ -222,6 +262,7 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers):
     # Create output files in dir if non existant
 
     data = []
+    group_sid = []
 
     res = Elasticsearch.search(query)
     c = 0
@@ -361,7 +402,7 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers):
 
     file.close()
 
-def export_bloodhound_computers(session, output_dir):
+def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, group_sid_list):
 
     domain_controlers = {}
 
@@ -435,7 +476,7 @@ def export_bloodhound_computers(session, output_dir):
                     'ObjectType': 'Computer',
                 }]
 
-        data.append({
+        computer_info = {
             'AllowedToDelegate': allowed_to_delegate,
             'AllowedToAct': allowed_to_act,
             'ObjectIdentifier': object_identifier,
@@ -446,6 +487,115 @@ def export_bloodhound_computers(session, output_dir):
             'HasSIDHistory': has_sid_history,
             'IsDeleted': is_deleted,
             'IsACLProtected': is_acl_protected,
+        }
+
+        for admin_group, group_name in [("Administrators", "LocalAdmins"), ("Remote Desktop Users", "RemoteDesktopUsers"), ("Distributed COM Users", "DcomUsers"), ("Remote Management Users", "PSRemoteUsers")]:
+            if admin_group in source:
+                # SID in the list, resolve
+                result = []
+                for sid in source[admin_group]:
+                    if sid in user_sid_list:
+                        object_type = "User"
+                    elif sid in group_sid_list:
+                        object_type = "Group"
+                    else:
+                        object_type = "Base"
+                    result.append({
+                        'ObjectIdentifier': sid,
+                        'ObjectType': object_type,
+                    })
+
+                computer_info[group_name] = {
+                    "Results": result,
+                    "Collected": True,
+                    "FailureReason": None
+                }
+            else:
+                computer_info[group_name] = {
+                    "Results": [],
+                    "Collected": False,
+                    "FailureReason": None
+                }
+
+        # Session
+        if "host_sessions" in source:
+            # SID in the list, resolve
+            result = []
+            for user in source["host_sessions"]:
+                object_type = "User"
+                user_sid = next((item['sid'] for item in user_info if item["name"].upper() == user['username'].upper()), None)
+
+                if user_sid != None:
+                    result.append({
+                        'ObjectIdentifier': user_sid,
+                        'ObjectType': object_type,
+                    })
+
+            computer_info["Sessions"] = {
+                "Results": result,
+                "Collected": True,
+                "FailureReason": None
+            }
+        else:
+            computer_info["Sessions"] = {
+                "Results": [],
+                "Collected": False,
+                "FailureReason": None
+            }
+
+        # Privileged Session
+        if "privileged_sessions" in source:
+            # SID in the list, resolve
+            result = []
+            for user in source["privileged_sessions"]:
+                object_type = "User"
+                user_sid = next((item['sid'] for item in user_info if item["name"].upper() == user['username'].upper() and item["domain_name"].upper() == user['domain'].upper()), None)
+
+                if user_sid != None:
+                    result.append({
+                        'ObjectIdentifier': user_sid,
+                        'ObjectType': object_type,
+                    })
+
+            computer_info["PrivilegedSessions"] = {
+                "Results": result,
+                "Collected": True,
+                "FailureReason": None
+            }
+        else:
+            computer_info["PrivilegedSessions"] = {
+                "Results": [],
+                "Collected": False,
+                "FailureReason": None
+            }
+
+        # Registry Sessions
+        if "registry_sessions" in source:
+            # SID in the list, resolve
+            result = []
+            for user in source["registry_sessions"]:
+                object_type = "User"
+
+                result.append({
+                    'ObjectIdentifier': user['sid'],
+                    'ObjectType': object_type,
+                })
+
+            computer_info["RegistrySessions"] = {
+                "Results": result,
+                "Collected": True,
+                "FailureReason": None
+            }
+        else:
+            computer_info["RegistrySessions"] = {
+                "Results": [],
+                "Collected": False,
+                "FailureReason": None
+            }
+
+
+
+            """
             "Sessions": {
                 "Results": [],
                 "Collected": False,
@@ -461,27 +611,9 @@ def export_bloodhound_computers(session, output_dir):
                 "Collected": False,
                 "FailureReason": None
             },
-            "LocalAdmins": {
-                "Results": [],
-                "Collected": False,
-                "FailureReason": None
-            },
-            "RemoteDesktopUsers": {
-                "Results": [],
-                "Collected": False,
-                "FailureReason": None
-            },
-            "DcomUsers": {
-                "Results": [],
-                "Collected": False,
-                "FailureReason": None
-            },
-            "PSRemoteUsers": {
-                "Results": [],
-                "Collected": False,
-                "FailureReason": None
-            },
-        })
+            """
+
+        data.append(computer_info)
 
         c += 1
 

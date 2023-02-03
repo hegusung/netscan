@@ -294,6 +294,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
 
                         DB.insert_domain_domain({
                             'domain': entry['domain'],
+                            'name': entry['name'],
                             'parameters': entry['parameters'],
                             'sid': entry['sid'],
                             'dn': entry['dn'],
