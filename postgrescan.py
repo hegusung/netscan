@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Actions
     parser.add_argument("--dbs", action='store_true', help='List databases')
+    parser.add_argument("--hashes", action='store_true', help='Dump database hashes')
     parser.add_argument('--cmd', metavar='command', type=str, nargs='?', help='Execute a command via PostgreSQL RCE techniques', default=None, dest='cmd')
     # Bruteforce
     parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
@@ -57,6 +58,8 @@ def main():
     actions = {}
     if args.dbs:
         actions['list_dbs'] = {}
+    if args.hashes:
+        actions['list_hashes'] = {}
     if args.cmd:
         actions['cmd'] = {'command': args.cmd}
     if args.bruteforce:

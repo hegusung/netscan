@@ -71,6 +71,14 @@ def postgrescan_worker(target, actions, creds, timeout):
                             DB.insert_database(db_info)
 
                     Output.highlight({'target': postgresql.url(), 'message': output})
+                if 'list_hashes' in actions:
+                    hashes = postgresql.list_hashes()
+                    output = "Hashes:\n"
+                    for account in hashes:
+                        output += " "*60+"- %s   %s\n" % (account['user'], account['hash'])
+
+                    Output.highlight({'target': postgresql.url(), 'message': output})
+
                 if 'cmd' in actions:
                     output = "Command result:\n"
                     output += postgresql.execute_cmd(actions['cmd']['command'])

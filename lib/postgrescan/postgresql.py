@@ -71,6 +71,20 @@ class PostgreSQL:
 
         return databases
 
+    def list_hashes(self):
+        hashes = []
+        c = self.conn.cursor()
+        c.execute("SELECT usename, passwd FROM pg_shadow;")
+        res = c.fetchall()
+
+        for account in res:
+            account_info = {'user': account[0], 'hash': account[1]}
+
+            hashes.append(account_info)
+
+        return hashes
+
+
     def execute_cmd(self, cmd):
         output = self.execute_method1(cmd)
 
