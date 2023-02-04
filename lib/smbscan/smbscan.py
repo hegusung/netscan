@@ -75,6 +75,33 @@ def smbscan_worker(target, actions, creds, timeout):
                 'hostname': smb_info['hostname'],
             })
 
+            ip = target['hostname']
+            if smb_info['signing'] == False:
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMB protocol is not signed, vulnerable to relay attacks'})
+
+                vuln_info = {
+                    'hostname': ip,
+                    'port': 445,
+                    'service': 'smb',
+                    'url': 'smb://%s' % (ip,),
+                    'name': 'SMB Signing disabled',
+                    'description': 'Server smb://%s SMB signature is not enabled, vulnerable to relay attacks' % (ip,),
+                }
+                DB.insert_vulnerability(vuln_info)
+
+            if smb_info['smbv1'] == True:
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMBv1 protocol is deprecated'})
+
+                vuln_info = {
+                    'hostname': ip,
+                    'port': 445,
+                    'service': 'smb',
+                    'url': 'smb://%s' % (ip,),
+                    'name': 'SMBv1 enabled',
+                    'description': 'Server smb://%s SMBv1 protocol is enabled, prone to vulnerabilities' % (ip,),
+                }
+                DB.insert_vulnerability(vuln_info)
+
             smbscan.disconnect()
 
             # Start new connection
@@ -284,7 +311,7 @@ def smbscan_worker(target, actions, creds, timeout):
                         else:
                             raise e
                 if 'command' in actions:
-                    output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True)
+                    output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True, code_page=actions['command']['code_page'])
                     if output:
                         Output.highlight({'target': smbscan.url(), 'message': 'Executed command \'%s\':\n%s' % (actions['command']['command'], output)})
                     else:

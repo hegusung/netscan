@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import argparse
 
-from utils.process_inputs import process_inputs, str_comma, str_ports
+from utils.process_inputs import process_inputs, str_comma, str_ports, port_file
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.postgrescan.postgrescan import postgrescan_worker
@@ -14,6 +14,7 @@ def main():
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='5432', dest='port')
+    parser.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
@@ -48,6 +49,8 @@ def main():
     static_inputs = {}
     if args.port:
         static_inputs['port'] = args.port
+    if args.port_file:
+        static_inputs['port'] += args.port_file
 
     creds = {}
     if args.username:

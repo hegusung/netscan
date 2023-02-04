@@ -20,7 +20,7 @@ from impacket.structure import Structure
 
 class Module:
     name = 'PrintNightmare'
-    description = 'Check PrintNightmare vulnerability (CVE-2021-1675)'
+    description = 'Check PrintNightmare vulnerability (CVE-2021-1675) (argument: IP for check or \'\\\\IP\\SHARE\\path\\to\\dll.dll\' for exploit)'
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:

@@ -7,6 +7,7 @@ from .portmap import Portmap
 from .mount import Mount, MountAccessError
 from .nfs import NFS, NFSAccessError
 from .utils import parse_rpc_names
+from .rpc import RPCProtocolError
 
 from utils.output import Output
 from utils.dispatch import dispatch
@@ -139,6 +140,8 @@ def rpcscan_worker(target, actions, timeout):
         pass
     except ConnectionRefusedError:
         pass
+    except RPCProtocolError as e:
+        Output.error({'target': 'rpc://%s:%d' % (target['hostname'], 111), 'message': '%s' % (str(e),)})
     except Exception as e:
         Output.write({'target': 'rpc://%s:%d' % (target['hostname'], 111), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:

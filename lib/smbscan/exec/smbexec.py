@@ -66,22 +66,22 @@ class SMBEXEC:
 
         self.transferClient = self.__rpctransport.get_smb_connection()
 
-    def execute(self, command, output=False):
+    def execute(self, command, output=False, code_page='cp850'):
             self.__retOutput = output
             try:
                 if self.__retOutput:
-                    self.cd()
+                    self.cd(code_page)
 
-                self.execute_remote(command)
+                self.execute_remote(command, code_page)
                 self.finish()
                 return self.__outputBuffer
             except Exception as e:
                 traceback.print_exc()
 
-    def cd(self):
-        self.execute_remote('cd ')
+    def cd(self, code_page):
+        self.execute_remote('cd ', code_page)
 
-    def execute_remote(self, data):
+    def execute_remote(self, data, code_page):
         self.__output = '\\Windows\\Temp\\' + gen_random_string()
         self.__batchFile = gen_random_string(6) + '.bat'
 
@@ -118,13 +118,13 @@ class SMBEXEC:
         #logging.debug('Remote service {} deleted.'.format(self.__serviceName))
         scmr.hRDeleteService(self.__scmr, service)
         scmr.hRCloseServiceHandle(self.__scmr, service)
-        self.get_output()
+        self.get_output(code_page)
 
-    def get_output(self):
+    def get_output(self, code_page):
         if not self.__retOutput: return
 
         def output_callback(data):
-            self.__outputBuffer += data.decode('utf-8', "backslashreplace")
+            self.__outputBuffer += data.decode(code_page, "backslashreplace")
 
         while True:
             try:

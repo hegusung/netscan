@@ -39,6 +39,7 @@ def main():
     cmd_group.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
     cmd_group.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
     cmd_group.add_argument("--list-payloads", action='store_true', help='List payloads', dest='list_payloads')
+    cmd_group.add_argument("--code-page", metavar="CODEPAGE", help='System code page', default="cp850", dest='code_page')
     # Dump secrets
     secrets_group = parser.add_argument_group("Secrets dumping (admin rights required)")
     secrets_group.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
@@ -140,10 +141,10 @@ def main():
     if args.shares:
         actions['list_shares'] = {}
     if args.command:
-        actions['command'] = {'command': args.command, 'method': args.exec_method}
+        actions['command'] = {'command': args.command, 'method': args.exec_method, 'code_page': args.code_page}
     if args.payload:
         cmd = PayloadManager.generate_payload(args.payload[0], args.payload[1:])
-        actions['command'] = {'command': cmd, 'method': args.exec_method}
+        actions['command'] = {'command': cmd, 'method': args.exec_method, 'code_page': args.code_page}
     if args.lsa:
         actions['lsa'] = {}
     if args.sam:

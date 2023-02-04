@@ -21,6 +21,7 @@ from pyasn1.type.univ import Sequence, OctetString, Integer, SetOf
 from ldap3.protocol.controls import build_control
 from impacket.ldap.ldaptypes import LDAP_SID
 from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
+from impacket.ldap.ldap import LDAPSearchError
 
 from lib.adscan.accesscontrol import parse_accesscontrol
 
@@ -60,7 +61,6 @@ class LDAPScan:
             url += ":%d" % self.port
         if not self.ssl and not self.port == 389:
             url += ":%d" % self.port
-        print(url)
         url = "gc://%s" % self.hostname
         return url
 
@@ -318,6 +318,8 @@ class LDAPScan:
         elif name.startswith('S-'):
             search_filter="(objectsid=%s)" % name
         elif name.startswith('CN='):
+            name = name.replace('(', '\\28')
+            name = name.replace(')', '\\29')
             search_filter="(distinguishedName=%s)" % name
         else:
             search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
@@ -365,7 +367,10 @@ class LDAPScan:
                     last_logon_date = datetime.fromtimestamp(getUnixTime(int(str(attr['lastLogon']))))
                 except KeyError:
                     last_logon_date = None
-                last_password_change_date = datetime.fromtimestamp(getUnixTime(int(str(attr['pwdLastSet']))))
+                try:
+                    last_password_change_date = datetime.fromtimestamp(getUnixTime(int(str(attr['pwdLastSet']))))
+                except KeyError:
+                    last_password_change_date = None
 
                 tags = []
                 if 'userAccountControl' in attr:
@@ -589,7 +594,11 @@ class LDAPScan:
 
         sc = ldap.SimplePagedResultsControl(size=100)
         attributes = ['distinguishedName']
-        self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
+        try:
+            self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
+        except LDAPSearchError:
+            # This DC doesn't have DNS
+            pass
 
     def list_trusts(self, callback):
 
@@ -1510,12 +1519,17 @@ class LDAPScan:
 
                 attr = to_dict(item)
 
-                b = bytes(attr['schemaIDGUID'])
-                guid = b[0:4][::-1].hex() + '-'
-                guid += b[4:6][::-1].hex() + '-'
-                guid += b[6:8][::-1].hex() + '-'
-                guid += b[8:10].hex() + '-'
-                guid += b[10:16].hex()
+                if 'rightsGuid' in attr:
+                    guid = str(attr['rightsGuid'])
+                elif 'schemaIDGUID' in attr:
+                    b = bytes(attr['schemaIDGUID'])
+                    guid = b[0:4][::-1].hex() + '-'
+                    guid += b[4:6][::-1].hex() + '-'
+                    guid += b[6:8][::-1].hex() + '-'
+                    guid += b[8:10].hex() + '-'
+                    guid += b[10:16].hex()
+                else:
+                    continue
 
                 guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
 

@@ -40,6 +40,9 @@ def bruteforce_worker(target, timeout):
 
         except AuthFailure as e:
             pass
+        except Exception as e:
+            # Another error, stop it
+            stop = True
 
         try:
             mysqlscan.disconnect()

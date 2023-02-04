@@ -44,14 +44,14 @@ class WMIEXEC:
 
         self.__win32Process,_ = iWbemServices.GetObject('Win32_Process')
 
-    def execute(self, command, output=False):
+    def execute(self, command, output=False, code_page='cp850'):
         self.__retOutput = output
         try:
             if self.__retOutput:
                 self.__smbconnection.setTimeout(100000)
-                self.cd('\\')
+                self.cd('\\', code_page)
 
-            self.execute_remote(command)
+            self.execute_remote(command, code_page)
             self.__dcom.disconnect()
             return self.__outputBuffer
         except Exception as e:
@@ -59,33 +59,33 @@ class WMIEXEC:
             self.__dcom.disconnect()
 
 
-    def cd(self, s):
-        self.execute_remote('cd ' + s)
+    def cd(self, s, code_page):
+        self.execute_remote('cd ' + s, code_page)
         if len(self.__outputBuffer.strip('\r\n')) > 0:
             print(self.__outputBuffer)
             self.__outputBuffer = ''
         else:
             self.__pwd = ntpath.normpath(ntpath.join(self.__pwd, s))
-            self.execute_remote('cd ')
+            self.execute_remote('cd ', code_page)
             self.__pwd = self.__outputBuffer.strip('\r\n')
             self.prompt = self.__pwd + '>'
             self.__outputBuffer = ''
 
-    def execute_remote(self, data):
+    def execute_remote(self, data, code_page):
         command = self.__shell + data
         if self.__retOutput:
             command += ' 1> ' + '\\\\127.0.0.1\\%s' % self.__share + self.__output  + ' 2>&1'
         self.__win32Process.Create(command, self.__pwd, None)
-        self.get_output()
+        self.get_output(code_page)
 
-    def get_output(self):
+    def get_output(self, code_page):
 
         if self.__retOutput is False:
             self.__outputBuffer = ''
             return
 
         def output_callback(data):
-            self.__outputBuffer += data.decode('utf-8', "backslashreplace")
+            self.__outputBuffer += data.decode(code_page, "backslashreplace")
 
         while True:
             try:

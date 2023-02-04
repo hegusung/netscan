@@ -1,4 +1,5 @@
 import copy
+import time
 from .ftp import FTPScan
 from utils.output import Output
 from utils.utils import AuthFailure
@@ -13,31 +14,47 @@ def bruteforce_worker(target, timeout):
         success = False
         stop = False
 
-        success = ftpscan.auth(username, password)
-        if success:
-            Output.success({'target': ftpscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
-            cred_info = {
-                'hostname': target['hostname'],
-                'port': target['port'],
-                'service': 'ftp',
-                'url': ftpscan.url(),
-                'type': 'password',
-                'username': username,
-                'password': password,
-            }
-            DB.insert_credential(cred_info)
+        retry = 0
 
-            vuln_info = {
-                'hostname': target['hostname'],
-                'port': target['port'],
-                'service': 'ftp',
-                'url': ftpscan.url(),
-                'name': 'Default or predictable credentials on FTP service',
-                'description': 'Service %s possess the following default or weak credentials: %s:%s' % (ftpscan.url(), username, password),
-            }
-            DB.insert_vulnerability(vuln_info)
+        try:
+            success = ftpscan.auth(username, password)
+            if success:
+                Output.success({'target': ftpscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
+                cred_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'ftp',
+                    'url': ftpscan.url(),
+                    'type': 'password',
+                    'username': username,
+                    'password': password,
+                }
+                DB.insert_credential(cred_info)
 
-            stop = True
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'ftp',
+                    'url': ftpscan.url(),
+                    'name': 'Default or predictable credentials on FTP service',
+                    'description': 'Service %s possess the following default or weak credentials: %s:%s' % (ftpscan.url(), username, password),
+                }
+                DB.insert_vulnerability(vuln_info)
+
+                stop = True
+        except TimeoutError:
+            # Slow down
+            Output.minor({'target': ftpscan.url(), 'message': 'Timeout error'})
+            time.sleep(1)
+        except ConnectionResetError:
+            # Slow down
+            Output.minor({'target': ftpscan.url(), 'message': 'ConnectionResetError error'})
+            time.sleep(1)
+        except EOFError:
+            # Slow down
+            Output.minor({'target': ftpscan.url(), 'message': 'EOFError error'})
+            time.sleep(1)
+
 
         try:
             ftpscan.disconnect()

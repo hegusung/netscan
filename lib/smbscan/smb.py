@@ -13,6 +13,7 @@ from base64 import b64decode
 from binascii import unhexlify
 
 import impacket
+from impacket.smb3 import SessionError as SessionError_smb3
 from impacket.smbconnection import SessionError, SMBConnection
 from impacket.nmb import NetBIOSTimeout, NetBIOSError
 from impacket.smb import SMB_DIALECT
@@ -220,7 +221,7 @@ class SMBScan:
                 self.smbv1 = False
 
             return True
-        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout) as e:
+        except (NetBIOSError, socket.error, struct.error, ConnectionResetError, TypeError, impacket.nmb.NetBIOSTimeout, SessionError_smb3) as e:
             if self.prefered_dialect == SMB_DIALECT:
                 # SMBv1 didn't work, try SMBv2
                 self.prefered_dialect = SMB2_DIALECT_21
@@ -672,6 +673,8 @@ class SMBScan:
     def list_content(self, path="\\", share=None, recurse=3):
         if not share:
             return
+        if share == 'IPC$':
+            return
         try:
             has_content = False
 
@@ -734,7 +737,7 @@ class SMBScan:
         except Exception as e:
             raise e
 
-    def exec(self, command, exec_method=None, get_output=True):
+    def exec(self, command, exec_method=None, get_output=True, code_page='cp850'):
 
         if not exec_method:
             exec_methods = ['wmiexec', 'smbexec', 'mmcexec']
@@ -789,7 +792,7 @@ class SMBScan:
         if exec == None:
             return None
 
-        output = exec.execute(command, get_output)
+        output = exec.execute(command, get_output, code_page)
         if output == None:
             return None
         return output
