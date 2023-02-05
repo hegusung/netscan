@@ -7,6 +7,7 @@ from colorama import init, Fore, Style, Back
 from utils.db import DB
 from utils.db import Elasticsearch
 from utils.output import Output
+from lib.es_query.bloodhound import *
 
 output = []
 
@@ -555,6 +556,25 @@ def export_local_hashes(session, output_dir):
 
         output.append((format, hashfile_filename, count,  "hashes written"))
 
+def export_bloodhound(session, output_dir):
+
+    domains, domain_fqdn_to_name = export_bloodhound_domains(session, output_dir)
+
+    user_info, user_sid = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name)
+
+    group_sid = get_group_sid(session)
+
+    domain_controlers = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid)
+
+    export_bloodhound_groups(session, output_dir, domains, domain_controlers)
+    
+    export_bloodhound_containers(session, output_dir)
+
+    export_bloodhound_ous(session, output_dir)
+
+    export_bloodhound_gpos(session, output_dir)
+
+
 def export_domain_hosts(session, output_dir):
        
     query = {
@@ -592,7 +612,6 @@ def export_domain_hosts(session, output_dir):
         count += 1
       
     output.append(("domain_hosts", domain_host_filename, count,  "Domain hosts written"))
-
 
 def dump(session, output_file):
     if not session:

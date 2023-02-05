@@ -84,6 +84,7 @@ class Enum:
         rpctransport = transport.SMBTransport(self.__addr, self.__port, r'\samr', self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash, self.__aesKey, doKerberos = self.__doKerberos)
 
         for entry in self.__fetchGroupList(rpctransport):
+            print(entry)
             (domain, groupname, uid, group, members) = entry
             if self.__host_domain != domain:
                 domain = "WORKGROUP"
@@ -204,7 +205,8 @@ class Enum:
         try:
             resp = srvs.hNetrSessionEnum(dce, '\x00', NULL, 10)
         except Exception as e:
-            print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+            #print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
+            raise e
 
         for session in resp['InfoStruct']['SessionInfo']['Level10']['Buffer']:
             username = session['sesi10_username'][:-1]

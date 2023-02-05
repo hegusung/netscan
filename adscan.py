@@ -28,22 +28,24 @@ def main():
     auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
     # Enum
     user_group = parser.add_argument_group("Domain user enumeration")
-    user_group.add_argument("--users", action='store_true', help='dump users from Active Directory, display if the account has one of the following enabled: AdminCount, Account disabled, Password not required, Password never expire, Do not require pre-auth, Trusted to auth for delegation')
+    user_group.add_argument("--domains", action='store_true', help='dump domains, containers and OUs from the Active Directory with some interesting parameters (Bloodhound)')
+    user_group.add_argument("--users", action='store_true', help='dump users from the Active Directory, display if the account has one of the following enabled: AdminCount, Account disabled, Password not required, Password never expire, Do not require pre-auth, Trusted to auth for delegation (Bloodhound)')
     user_group.add_argument("--admins", action='store_true', help='dump users with administrative privileges from Active Directory')
     user_group.add_argument("--rdp", action='store_true', help='dump users with rdp rights from Active Directory')
-    user_group.add_argument("--groups", action='store_true', help='dump groups from Active Directory')
-    user_group.add_argument("--hosts", action='store_true', help='dump hosts from Active Directory, list if it has trusted for delegation enabled')
-    user_group.add_argument("--dns", action='store_true', help='dump DNS entries from Active Directory')
+    user_group.add_argument("--groups", action='store_true', help='dump groups from the Active Directory (Bloodhound)')
+    user_group.add_argument("--hosts", action='store_true', help='dump hosts from the Active Directory, list if it has trusted for delegation enabled (Bloodhound)')
+    user_group.add_argument("--dns", action='store_true', help='dump DNS entries from the Active Directory')
     user_group.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
-    user_group.add_argument("--spns", action='store_true', help='dump SPNS from Active Directory')
-    user_group.add_argument("--passpol", action='store_true', help='dump password policy from Active Directory')
-    user_group.add_argument("--trusts", action='store_true', help='dump trusts from Active Directory')
+    user_group.add_argument("--spns", action='store_true', help='dump SPNS from the Active Directory')
+    user_group.add_argument("--passpol", action='store_true', help='dump password policy from the Active Directory')
+    user_group.add_argument("--trusts", action='store_true', help='dump trusts from the Active Directory')
+    user_group.add_argument("--gpos", action='store_true', help='dump GPOs from the Active Directory (Bloodhound)', dest='gpos')
     user_group.add_argument("--list-groups", metavar='username', type=str, nargs='?', help='List groups of a specific user / group', default=None, const='', dest='list_groups')
     user_group.add_argument("--list-users", metavar='groupname', type=str, nargs='?', help='List users of a specific group', default=None, dest='list_users')
     user_group.add_argument("--constrained-delegation", action='store_true', help='List constrained delegations', dest='constrained_delegation')
 
     acls_group = parser.add_argument_group("Enumerate ACLs/ACEs")
-    acls_group.add_argument("--gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory')
+    acls_group.add_argument("--vuln-gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory', dest='vuln_gpos')
     acls_group.add_argument("--acls", metavar='username', type=str, nargs='?', help='Extract interesting ACEs/ACLs of a user from the Active Directory', default=None, const='', dest='acls')
     acls_group.add_argument("--all-acls", metavar='username', type=str, nargs='?', help='Extract all ACEs/ACLs of a user from the Active Directory', default=None, const='', dest='acls_all')
     acls_group.add_argument("--object-acl", metavar='object', type=str, nargs='?', help='List the interesting ACLs of a specific object (LDAP DN, name or sid)', default=None, dest='object_acl')
@@ -82,6 +84,7 @@ def main():
     misc_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     misc_group.add_argument("--no-ssl", action='store_true', help="Perform a LDAP connection instead of LDAPS", dest='no_ssl')
+    misc_group.add_argument('--ldap-protocol', choices={"ldaps", "ldap", "gc"}, default=None, help="Way to connect to the ldap service (default: ldaps)", dest='ldap_protocol')
     # Dispatcher arguments
     misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
     # DB arguments
@@ -139,6 +142,8 @@ def main():
         creds['dc_ip'] = args.dc_ip
 
     actions = {}
+    if args.domains:
+        actions['domains'] = {}
     if args.users:
         actions['users'] = {}
     if args.admins:
@@ -159,6 +164,8 @@ def main():
         actions['passpol'] = {}
     if args.trusts:
         actions['trusts'] = {}
+    if args.gpos:
+        actions['gpos'] = {}
 
     if args.adcs:
         actions['casrv'] = {}
@@ -175,8 +182,8 @@ def main():
     if args.esc4 != None:
         actions['esc4'] = {'user': args.esc4}
 
-    if args.gpos:
-        actions['gpos'] = {}
+    if args.vuln_gpos:
+        actions['vuln_gpos'] = {}
     if args.acls != None:
         actions['acls'] = {'user': args.acls}
     if args.acls_all != None:
@@ -211,7 +218,7 @@ def main():
         actions['modules'] = {'modules': args.modules, 'args': module_args}
 
 
-    adscan(targets, static_inputs, args.workers, actions, creds, args.no_ssl, args.timeout)
+    adscan(targets, static_inputs, args.workers, actions, creds, args.ldap_protocol, args.timeout)
 
     DB.stop_worker()
     Output.stop()
