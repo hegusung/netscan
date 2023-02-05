@@ -135,10 +135,10 @@ class MMCEXEC:
                       oxid=objRef['std']['oxid'], oid=objRef['std']['oxid'],
                       target=interface.get_target()))
 
-    def execute(self, command, output=False):
+    def execute(self, command, output=False, code_page='cp850'):
         try:
             self.__retOutput = output
-            self.execute_remote(command)
+            self.execute_remote(command, code_page)
             self.exit()
             return self.__outputBuffer
         except TypeError:
@@ -155,7 +155,7 @@ class MMCEXEC:
                                              0, [], [])
         return True
 
-    def execute_remote(self, data):
+    def execute_remote(self, data, code_page):
         self.__output = "\\" + gen_random_string(6)
 
         command = '/Q /c ' + data
@@ -196,7 +196,7 @@ class MMCEXEC:
 
         self.__executeShellCommand[0].Invoke(self.__executeShellCommand[1], 0x409, DISPATCH_METHOD, dispParams,
                                              0, [], [])
-        self.get_output()
+        self.get_output(code_page)
 
     def output_callback(self, data):
         self.__outputBuffer += data
@@ -213,13 +213,13 @@ class MMCEXEC:
             except IOError:
                 sleep(2)
 
-    def get_output(self):
+    def get_output(self, code_page):
         if self.__retOutput is False:
             self.__outputBuffer = ''
             return
 
         def output_callback(data):
-            self.__outputBuffer += data.decode('utf-8', "backslashreplace")
+            self.__outputBuffer += data.decode(code_page, "backslashreplace")
 
         while True:
             try:

@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from utils.process_inputs import process_inputs, str_comma, str_ports
+from utils.process_inputs import process_inputs, str_comma, str_ports, port_file
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.rdpscan.rdpscan import rdpscan_worker
@@ -18,6 +18,7 @@ def main():
     parser.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default='WORKGROUP', dest='domain')
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='3389', dest='port')
+    parser.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
@@ -59,6 +60,8 @@ def main():
     static_inputs = {}
     if args.port:
         static_inputs['port'] = args.port
+    if args.port_file:
+        static_inputs['port'] += args.port_file
 
     creds = {}
     if args.domain:

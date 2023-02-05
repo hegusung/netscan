@@ -1193,7 +1193,11 @@ class LDAPScan:
 
         sc = ldap.SimplePagedResultsControl(size=100)
         attributes = ['distinguishedName']
-        self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
+        try:
+            self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
+        except LDAPSearchError:
+            # This DC doesn't have DNS
+            pass
 
     def list_trusts(self, callback):
 
@@ -2115,16 +2119,21 @@ class LDAPScan:
 
                 attr = self.to_dict(item)
 
-                if 'schemaIDGUID' in attr:
+
+                if 'rightsGuid' in attr:
+                    guid = str(attr['rightsGuid'])
+                elif 'schemaIDGUID' in attr:
                     b = bytes(attr['schemaIDGUID'])
                     guid = b[0:4][::-1].hex() + '-'
                     guid += b[4:6][::-1].hex() + '-'
                     guid += b[6:8][::-1].hex() + '-'
                     guid += b[8:10].hex() + '-'
                     guid += b[10:16].hex()
+                else:
+                    continue
 
-                    guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
-                    rev_guid_dict[str(attr['name']).lower()] = guid
+                guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
+                rev_guid_dict[str(attr['name']).lower()] = guid
 
         return guid_dict, rev_guid_dict
 

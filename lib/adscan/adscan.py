@@ -238,7 +238,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                     Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null bind'})
                 elif domain != None:
                     if 'password' in creds:
-                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and password %s' % (domain, username, password)})
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with credentials %s\\%s and password %s' % (domain, username, password)})
 
                         cred_info = {
                             'domain': domain,
@@ -249,7 +249,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         DB.insert_domain_credential(cred_info)
 
                     elif 'hash' in creds:
-                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s\\%s and hash %s' % (domain, username, ntlm)})
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with credentials %s\\%s and hash %s' % (domain, username, ntlm)})
 
                         cred_info = {
                             'domain': domain,
@@ -261,23 +261,23 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         DB.insert_domain_credential(cred_info)
                 else:
                     if 'password' in creds:
-                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s and password %s' % (username, password)})
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with credentials %s and password %s' % (username, password)})
                     elif 'hash' in creds:
-                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with null credentials %s and hash %s' % (username, password)})
+                        Output.success({'target': ldapscan.url(), 'message': 'LDAP: Successful authentication with credentials %s and hash %s' % (username, password)})
 
             else:
                 if username == None:
                     Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null bind'})
                 elif domain != None:
                     if 'password' in creds:
-                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s\\%s and password %s' % (domain, username, password)})
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with credentials %s\\%s and password %s' % (domain, username, password)})
                     elif 'hash' in creds:
-                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s\\%s and hash %s' % (domain, username, password)})
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with credentials %s\\%s and hash %s' % (domain, username, password)})
                 else:
                     if 'password' in creds:
-                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s and password %s' % (username, password)})
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with credentials %s and password %s' % (username, password)})
                     elif 'hash' in creds:
-                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with null credentials %s and hash %s' % (username, password)})
+                        Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Failed authentication with credentials %s and hash %s' % (username, password)})
         except Exception as e:
             print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
 

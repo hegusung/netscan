@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from utils.process_inputs import process_inputs, str_comma, str_ports
+from utils.process_inputs import process_inputs, str_comma, str_ports, port_file
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.sshscan.sshscan import sshscan_worker, ssh_modules
@@ -15,6 +15,7 @@ def main():
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='22', dest='port')
+    parser.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     # Authentication
@@ -61,6 +62,8 @@ def main():
     static_inputs = {}
     if args.port:
         static_inputs['port'] = args.port
+    if args.port_file:
+        static_inputs['port'] += args.port_file
 
     creds = {}
     if args.username:

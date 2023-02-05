@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from utils.process_inputs import process_inputs, str_comma, str_ports
+from utils.process_inputs import process_inputs, str_comma, str_ports, port_file
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.httpscan.httpscan import httpscan_worker, http_modules
@@ -15,6 +15,7 @@ def main():
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='80,443', dest='port')
+    parser.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
     parser.add_argument('--method', metavar='methods', type=str_comma, nargs='?', help='methods to connect', default='http,https', dest='method')
     parser.add_argument('--path', metavar='path', nargs='?', type=str_comma, help='HTTP path', default='/', dest='path')
     parser.add_argument('--useragent', metavar='useragent', nargs='?', type=str, help='User agent', default='Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0', dest='useragent')
@@ -61,6 +62,8 @@ def main():
     static_inputs = {}
     if args.port:
         static_inputs['port'] = args.port
+    if args.port_file:
+        static_inputs['port'] += args.port_file
     if args.method:
         static_inputs['method'] = args.method
     if args.path:

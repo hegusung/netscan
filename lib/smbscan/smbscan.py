@@ -77,7 +77,7 @@ def smbscan_worker(target, actions, creds, timeout):
 
             ip = target['hostname']
             if smb_info['signing'] == False:
-                Output.vuln({'target': 'smb://%s:445' % (ip,), 'message': 'SMB protocol is not signed, vulnerable to relay attacks'})
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMB protocol is not signed, vulnerable to relay attacks'})
 
                 vuln_info = {
                     'hostname': ip,
@@ -90,7 +90,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 DB.insert_vulnerability(vuln_info)
 
             if smb_info['smbv1'] == True:
-                Output.vuln({'target': 'smb://%s:445' % (ip,), 'message': 'SMBv1 protocol is deprecated'})
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMBv1 protocol is deprecated'})
 
                 vuln_info = {
                     'hostname': ip,
@@ -311,7 +311,7 @@ def smbscan_worker(target, actions, creds, timeout):
                         else:
                             raise e
                 if 'command' in actions:
-                    output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True)
+                    output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True, code_page=actions['command']['code_page'])
                     if output:
                         Output.highlight({'target': smbscan.url(), 'message': 'Executed command \'%s\':\n%s' % (actions['command']['command'], output)})
                     else:

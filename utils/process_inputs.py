@@ -37,6 +37,25 @@ def str_ports(input_str):
 
     return list(set(ports))
 
+def port_file(input_file):
+    if input_file == None:
+        return None
+
+    ports = []
+    f = open(input_file)
+    for line in f:
+        line = line.split('#')[0]
+        line = line.strip()
+        if len(line) == 0:
+            continue
+
+        ports += str_ports(line)
+
+    f.close()
+
+    return list(set(ports))
+
+
 """
 Creates a generator with inputs
 """

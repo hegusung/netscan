@@ -17,7 +17,7 @@ class Module:
         for uri in ["dump", "trace", "logfile", "shutdown", "mappings", "env", "actuator", "heapdump"]:
             response = http.get(os.path.join(target['path'], uri))
 
-            if response['code'] == 200 and response['content-type'] == 'application/json':
+            if response != None and response['code'] == 200 and response['content-type'] == 'application/json':
                 data = json.loads(response['html'])
 
                 Output.highlight({'target': http.url(os.path.join(target['path'], uri)), 'message': 'Actuator endpoint'})
