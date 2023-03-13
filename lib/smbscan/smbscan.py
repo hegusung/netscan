@@ -310,6 +310,56 @@ def smbscan_worker(target, actions, creds, timeout):
                             Output.error({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
                         else:
                             raise e
+                """
+                if 'search' in actions:
+                    try:
+                        if 'path' in target:
+                            share_name = target['path'].split('/')[1]
+                            share_list = [share_name]
+                        elif 'share' in actions['list']:
+                            share_list = [actions['list']['share']]
+                        else:
+                            if len(share_list) == 0:
+                                for share_info in smbscan.list_shares():
+                                    share_list.append(share_info['name'])
+
+                        for share in share_list:
+                            contents = "Files containing pattern %s in share %s:\n" % (actions['search'], share)
+                            for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
+                                # Size: content['size']
+                                # Ext:
+                                if '.' in content['name']:
+                                    ext = content['name'].split('.')[-1]
+                                else:
+                                    ext = None
+
+                                if 'size' in content:
+                                    contents += " "*60+"- %s     %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
+                                else:
+                                    contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
+
+                                    
+                                print(
+                                db_info = {
+                                    'hostname': target['hostname'],
+                                    'port': 445,
+                                    'url': smbscan.url("/%s" % share),
+                                    'share': share,
+                                    'service': 'smb',
+                                    'path': content['name'].replace('\\', '/'),
+                                    'account': "%s\\%s" % (creds['domain'], creds['username']),
+                                }
+                                if 'size' in content:
+                                    db_info['size'] = content['size']
+                                DB.insert_content(db_info)
+                            Output.highlight({'target': smbscan.url(), 'message': contents})
+                    except impacket.smbconnection.SessionError as e:
+                        if 'STATUS_ACCESS_DENIED' in str(e):
+                            Output.error({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
+                        else:
+                            raise e
+                """
+
                 if 'command' in actions:
                     output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True, code_page=actions['command']['code_page'])
                     if output:

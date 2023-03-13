@@ -33,6 +33,7 @@ def main():
     share_group.add_argument('--shares', action='store_true', help='List shares', dest='shares')
     share_group.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
     share_group.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
+    #share_group.add_argument('--search', metavar='SEARCH', type=str, nargs='?', help='Search pattern', default=None, dest='search')
     # Execution-related
     cmd_group = parser.add_argument_group("Command execution (admin rights required)")
     cmd_group.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
@@ -140,6 +141,8 @@ def main():
             actions['list']['share'] = args.list
     if args.shares:
         actions['list_shares'] = {}
+    #if args.search:
+    #    actions['search'] = {}
     if args.command:
         actions['command'] = {'command': args.command, 'method': args.exec_method, 'code_page': args.code_page}
     if args.payload:
