@@ -1,6 +1,5 @@
-![](./images/logo.png)
-
 <p align="center">
+  <img src="./images/logo.png" style="margin:auto" />
   Network scanner made for large-scope pentesting
   <br>
   <a href="https://twitter.com/intent/follow?screen_name=hegusung" title="Follow"><img src="https://img.shields.io/twitter/follow/hegusung?label=hegusung&style=social"></a>
