@@ -31,6 +31,7 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -56,7 +57,6 @@ def main():
     if args.command:
         actions['command'] ={'command': args.command}
 
-    Output.setup()
 
     winrmscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 

@@ -35,6 +35,8 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
+
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -62,7 +64,6 @@ def main():
     if args.bruteforce:
         actions['bruteforce'] ={'username_file': args.username_file, 'password_file': args.password_file, 'workers': args.bruteforce_workers}
 
-    Output.setup()
 
     ftpscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 

@@ -140,9 +140,9 @@ class HTTP:
                 if not 'auth_type' in res:
                     return res
 
-                if res['auth_type'] == 'basic':
+                if res['auth_type'].lower() == 'basic':
                     r_auth = HTTPBasicAuth(auth[0], auth[1])
-                elif res['auth_type'] == 'digest':
+                elif res['auth_type'].lower() == 'digest':
                     r_auth = HTTPDigestAuth(auth[0], auth[1])
                 else:
                     raise Exception('Unknown auth method: %s' % res['auth_type'])

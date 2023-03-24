@@ -29,6 +29,7 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -50,7 +51,6 @@ def main():
     if args.screenshot:
         actions['screenshot'] = {}
 
-    Output.setup()
 
     rtspscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 

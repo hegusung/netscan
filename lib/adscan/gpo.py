@@ -78,7 +78,10 @@ class GPO:
                 file_data = None
 
             if file_data != None:
-                file_data = file_data.decode('utf-16')
+                try:
+                    file_data = file_data.decode('utf-8')
+                except UnicodeDecodeError as e:
+                    file_data = file_data.decode('utf-16')
 
                 #print("================\n%s\n================" % file_data)
 

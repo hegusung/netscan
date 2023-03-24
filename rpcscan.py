@@ -31,6 +31,7 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -50,7 +51,6 @@ def main():
     if args.list:
         actions['list'] = {'recurse': args.recurse, 'uid': args.uid, 'gid': args.gid}
 
-    Output.setup()
 
     rpcscan(targets, static_inputs, args.workers, actions, args.timeout, args.delay, args.resume)
 

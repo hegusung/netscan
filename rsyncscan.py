@@ -27,6 +27,7 @@ def main():
 
     args = parser.parse_args()
 
+    Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -42,7 +43,6 @@ def main():
     if args.port_file:
         static_inputs['port'] += args.port_file
 
-    Output.setup()
 
     rsyncscan(targets, static_inputs, args.workers, args.timeout, args.delay, args.resume)
 

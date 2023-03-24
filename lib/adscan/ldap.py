@@ -259,7 +259,7 @@ class LDAPScan:
             })
 
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['distinguishedName', 'name', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version']
         sbase = "%s" % self.defaultdomainnamingcontext
@@ -306,7 +306,7 @@ class LDAPScan:
             })
 
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['name', 'distinguishedName', 'nTSecurityDescriptor', 'objectGUID']
         sbase = "%s" % self.defaultdomainnamingcontext
@@ -356,7 +356,7 @@ class LDAPScan:
         search_filter = "(|(name=%s)(sAMAccountName=%s))" % (name, name)
         search_base = ",".join(["DC=%s" % dc for dc in domain.split('.')])
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'objectSid']
         res = self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -384,12 +384,16 @@ class LDAPScan:
         # Child object
         search_filter = "(|(cn=*)(ou=*))"
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'objectClass', 'objectGUID', 'objectSid']
         try:
             res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes, scope=Scope('singleLevel'))
-        except LDAPSearchError:
-            res = self.conn.search(searchBase=searchBase.encode('latin1').decode(), searchFilter=search_filter, searchControls=[sc], attributes=attributes, scope=Scope('singleLevel'))
+        except LDAPSearchError as e:
+            try:
+                res = self.conn.search(searchBase=searchBase.encode('latin1').decode(), searchFilter=search_filter, searchControls=[sc], attributes=attributes, scope=Scope('singleLevel'))
+            except LDAPSearchError as e:
+                Output.error("Unable to query childs: %s: %s" % (searchBase, str(e)))
+                res = []
 
         #print("==============================================================")
         #print(searchBase)
@@ -402,7 +406,10 @@ class LDAPScan:
             attr = self.to_dict(item)
 
             #print(attr['distinguishedName'])
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+            try:
+                domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+            except KeyError:
+                continue
 
             class_list = [] 
             if 'objectClass' in attr:
@@ -448,7 +455,7 @@ class LDAPScan:
         # Child object
         search_filter = "(objectClass=trustedDomain)"
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'name', 'trustDirection', 'trustType', 'trustAttributes', 'securityIdentifier']
         res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -503,12 +510,16 @@ class LDAPScan:
         # Computers
         search_filter = "(samaccounttype=805306369)"
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'objectSid']
         try:
             res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
         except LDAPSearchError:
-            res = self.conn.search(searchBase=searchBase.encode('latin1').decode(), searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+            try:
+                res = self.conn.search(searchBase=searchBase.encode('latin1').decode(), searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+            except LDAPSearchError as e:
+                Output.error("Unable to query computers: %s: %s" % (searchBase, str(e)))
+                res = []
 
 
         domain = None
@@ -517,6 +528,9 @@ class LDAPScan:
                 continue
 
             attr = self.to_dict(item)
+
+            if not 'objectSid' in attr:
+                continue
 
             sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
 
@@ -533,9 +547,13 @@ class LDAPScan:
         if len(links_dn_list) != 0:
             search_filter = "(|%s)" % "".join(["(distinguishedName=%s)" % dn for dn in links_dn_list])
 
-            sc = ldap.SimplePagedResultsControl(size=100)
+            sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['distinguishedName', 'objectGUID', 'gPCFileSysPath']
-            res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+            try:
+                res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+            except impacket.ldap.ldap.LDAPSearchError as e:
+                Output.error("Unable to query: %s: %s" % (search_filter, str(e)))
+                return links_dict
 
             domain = None
             for item in res:
@@ -543,6 +561,11 @@ class LDAPScan:
                     continue
 
                 attr = self.to_dict(item)
+
+                if not 'objectGUID' in attr:
+                    continue
+                if not 'gPCFileSysPath' in attr:
+                    continue
 
                 b = bytes(attr['objectGUID'])
                 guid = b[0:4][::-1].hex() + '-'
@@ -580,7 +603,7 @@ class LDAPScan:
 
             search_filter = "(|%s)" % "".join(["(objectSid=%s)" % sid for sid in to_process])
 
-            sc = ldap.SimplePagedResultsControl(size=100)
+            sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['objectSid', 'objectClass']
             res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -590,6 +613,9 @@ class LDAPScan:
                     continue
 
                 attr = self.to_dict(item)
+
+                if not 'objectSid' in attr:
+                    continue
 
                 sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
 
@@ -794,7 +820,8 @@ class LDAPScan:
             })
 
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        print("YEAH")
+        sc = ldap.SimplePagedResultsControl(size=10, criticality=False)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName']
         sbase = "%s" % self.defaultdomainnamingcontext
@@ -860,7 +887,7 @@ class LDAPScan:
         else:
             search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'objectClass', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'member']
         res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -874,7 +901,10 @@ class LDAPScan:
             sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
 
             domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            name = str(attr['sAMAccountName'])
+            try:
+                name = str(attr['sAMAccountName'])
+            except KeyError:
+                continue
 
             if 'user' in str(attr['objectClass']):
                 domain_username = "%s\\%s" % (domain, name)
@@ -993,9 +1023,9 @@ class LDAPScan:
 
         if len(to_resolve) != 0:
             
-            search_filter = "(|%s)" % "".join(["(distinguishedName=%s)" % dn for dn in to_resolve])
+            search_filter = "(|%s)" % "".join(["(distinguishedName=%s)" % dn.replace('(', '\\28').replace(')', '\\29') for dn in to_resolve])
 
-            sc = ldap.SimplePagedResultsControl(size=100)
+            sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['distinguishedName', 'objectSid']
             try:
                 res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
@@ -1081,7 +1111,7 @@ class LDAPScan:
                 'aces': aces,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['distinguishedName', 'sAMAccountname', 'description', 'objectSid', 'primaryGroupID', 'adminCount', 'member', 'nTSecurityDescriptor']
         #self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=group)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
@@ -1173,7 +1203,7 @@ class LDAPScan:
                 'spns': spns,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName']
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=computer)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
@@ -1191,7 +1221,7 @@ class LDAPScan:
             if not '.in-addr.arpa' in dns_entry:
                 callback(dns_entry)
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName']
         try:
             self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
@@ -1255,7 +1285,7 @@ class LDAPScan:
                 'tags': tags,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'name', 'trustDirection', 'trustType', 'trustAttributes']
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectClass=trustedDomain)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
 
@@ -1272,7 +1302,7 @@ class LDAPScan:
 
             callback({"name": name, "hostname": dns})
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'name', 'dNSHostName']
         self.conn.search(searchBase="CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s" % self.defaultdomainnamingcontext, searchFilter="(objectClass=pKIEnrollmentService)", searchControls=[sc], perRecordCallback=process, attributes=attributes)
 
@@ -1307,7 +1337,7 @@ class LDAPScan:
                     'common_names': common_names,
                 })
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'cACertificate']
         self.conn.search(searchBase='CN=NTAuthCertificates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(cn=*)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
 
@@ -1360,7 +1390,7 @@ class LDAPScan:
 
             callback(output)
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['distinguishedName', 'name', 'dNSHostName', 'certificateTemplates', 'nTSecurityDescriptor']
         self.conn.search(searchBase='CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=pKIEnrollmentService)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
@@ -1541,7 +1571,7 @@ class LDAPScan:
                 'privileges': privileges,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['distinguishedName', 'name', 'pKIExtendedKeyUsage', 'msPKI-Certificate-Name-Flag', 'msPKI-Enrollment-Flag', 'msPKI-RA-Signature', 'nTSecurityDescriptor']
         self.conn.search(searchBase='CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=pKICertificateTemplate)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
@@ -1773,7 +1803,7 @@ class LDAPScan:
                     })
 
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['distinguishedName', 'gPCFileSysPath', 'displayName']
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectCategory=groupPolicyContainer)", searchControls=[sc], perRecordCallback=process, attributes=attributes)
 
@@ -1846,7 +1876,7 @@ class LDAPScan:
                             callback(ace)
 
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(|(objectClass=user)(objectClass=group)(objectClass=computer))", attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership'], searchControls=[sc, sc2], perRecordCallback=process )
 
@@ -1880,7 +1910,7 @@ class LDAPScan:
                         if 'parameter' in ace:
                             callback(ace)
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectClass=group)", attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor'], searchControls=[sc, sc2], perRecordCallback=process )
 
@@ -1913,7 +1943,7 @@ class LDAPScan:
                         if 'parameter' in ace:
                             callback(ace)
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectClass=computer)", attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor'], searchControls=[sc, sc2], perRecordCallback=process )
         """
@@ -1937,7 +1967,7 @@ class LDAPScan:
             })
 
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(msDS-AllowedToDelegateTo=*)", searchControls=[sc], perRecordCallback=process)
 
 
@@ -2025,7 +2055,7 @@ class LDAPScan:
         else:
             searchBase = self.defaultdomainnamingcontext
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         self.conn.search(searchBase=searchBase, searchFilter=search_filter, attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'name', 'msDS-GroupMSAMembership'], searchControls=[sc, sc2], perRecordCallback=process )
 
@@ -2056,7 +2086,7 @@ class LDAPScan:
             search_filter = "(objectCategory=CN=Attribute-Schema,CN=Schema,CN=Configuration,%s)" % self.defaultdomainnamingcontext
             searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
 
-            sc = ldap.SimplePagedResultsControl(size=100)
+            sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['schemaIDGUID', 'rightsGuid', 'name']
             res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -2081,7 +2111,7 @@ class LDAPScan:
             search_filter = "(objectCategory=CN=Control-Access-Right,CN=Schema,CN=Configuration,%s)" % self.defaultdomainnamingcontext
             searchBase = "CN=Configuration,%s" % self.defaultdomainnamingcontext
 
-            sc = ldap.SimplePagedResultsControl(size=100)
+            sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['schemaIDGUID', 'rightsGuid', 'name']
             res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -2109,7 +2139,7 @@ class LDAPScan:
             searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
             search_filter = "(|%s)" % "".join(["(name=%s)" % s for s in parameters])
 
-            sc = ldap.SimplePagedResultsControl(size=100)
+            sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['name', 'schemaIDGUID']
             res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -2147,7 +2177,7 @@ class LDAPScan:
         search_filter = "(schemaIDGUID=%s)" % guid_ldap
         searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=['name'])
 
         for item in res:
@@ -2187,7 +2217,7 @@ class LDAPScan:
         # First, get all related groups
         new_groups = []
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         attributes = ['objectSid', 'distinguishedName', 'sAMAccountName', 'objectClass', 'primaryGroupID', 'memberOf']
         res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
 
@@ -2261,7 +2291,7 @@ class LDAPScan:
                 'password': passwd,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectClass=msDS-GroupManagedServiceAccount)", searchControls=[sc], attributes=['distinguishedName', 'sAMAccountName','msDS-ManagedPassword'], perRecordCallback=process)
 
     # Taken from https://github.com/n00py/LAPSDumper/blob/main/laps.py
@@ -2287,7 +2317,7 @@ class LDAPScan:
 
             callback(data)
              
-        sc = ldap.SimplePagedResultsControl(size=100)
+        sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(&(objectCategory=computer)(ms-Mcs-AdmPwdExpirationTime=*))", searchControls=[sc, sc2], attributes=['distinguishedName', 'dNSHostName', 'sAMAccountName', 'ms-Mcs-AdmPwd', 'Set-AdmPwdReadPasswordPermission'], perRecordCallback=process)
 

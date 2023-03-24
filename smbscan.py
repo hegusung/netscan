@@ -92,10 +92,9 @@ def main():
             print('- %s %s' % (payload.name, ' '.join(payload.args)))
         sys.exit()
 
+    Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
-
-    Output.setup()
 
     targets = {}
     if args.targets:

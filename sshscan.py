@@ -50,6 +50,8 @@ def main():
             print('- %s   %s' % (module['name'].ljust(15), module['description']))
         sys.exit()
 
+    Output.setup()
+
     Config.load_config()
     DB.start_worker(args.nodb)
 
@@ -86,7 +88,6 @@ def main():
     if args.modules:
         actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
-    Output.setup()
 
     sshscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
