@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import argparse
 
 from utils.process_inputs import process_inputs, str_comma, str_ports, port_file

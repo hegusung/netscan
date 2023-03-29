@@ -4,8 +4,12 @@ services:
   netscan-tool:
     build: .
     container_name: netscan-tool
-    hostname: netscan_by_hegusung
+    hostname: netscan
     tty: true
+    volumes:
+      - ./docker_shared:/app/docker_shared
+      - ./logs:/app/logs
+      - ./server/files:/app/server/files
 
   netscan_elasticsearch_kibana:
     container_name: netscan-elasticsearch-kibana

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import time
 import traceback
 from server.rsh_listener.listener import Listener

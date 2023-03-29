@@ -5,6 +5,7 @@ beautifulsoup4
 pymongo
 pyOpenSSL
 ldap3
+msldap
 mysqlclient
 mysql-connector
 pycryptodome
@@ -23,3 +24,5 @@ twisted
 ldaptor
 opencv-python
 socks
+psutil
+colorama

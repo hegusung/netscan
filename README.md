@@ -48,6 +48,8 @@ $> bash run-netscan.sh
    ```
 2. Run command from docker
    ```bash
+   $> ./docker_run.sh
+   or
    $> docker exec -it netscan-tool bash
    or
    $> docker exec -it netscan-tool python smbscan.py $SUBNET -w 100
