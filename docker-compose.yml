@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  netscan-tool:
+    build: .
+    container_name: netscan-tool
+    hostname: netscan_by_hegusung
+    tty: true
+
+  netscan_elasticsearch_kibana:
+    container_name: netscan-elasticsearch-kibana
+    hostname: elasticsearch-kibana
+    image: nshou/elasticsearch-kibana
+    volumes:
+      - ES_LOCAL_DATA:/usr/share/elasticsearch/data
+      - ./config-elasticsearch.yml:/home/elasticsearch/elasticsearch-7.16.2/config/elasticsearch.yml
+    ports:
+      - 127.0.0.1:9200:9200
+      - 127.0.0.1:5601:5601
+
+volumes:
+  ES_LOCAL_DATA:
+    driver: local

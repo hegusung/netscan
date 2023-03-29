@@ -22,3 +22,4 @@ gevent
 twisted
 ldaptor
 opencv-python
+socks

@@ -1,0 +1,51 @@
+[Global]
+session = Unknown
+
+[Elasticsearch]
+enabled = true
+index = pentest
+host = netscan_elasticsearch_kibana
+port = 9200
+ssl = false
+username = 
+password = 
+enable_file_storage = false
+document_storage_file = /tmp/es_file_storage.txt
+
+[Server]
+bind_ip = 0.0.0.0
+enable_http = true
+http_port = 8000
+enable_smb = true
+enable_ldap = true
+ldap_port = 3890
+
+[ReverseshellListener]
+bind_ip = 0.0.0.0
+bind_port = 4444
+
+[Logging]
+enabled = false
+folder = logs/
+
+[Format]
+time = %Y/%m/%d %H:%M:%S
+default    = [{time}]     {color}{message}{reset}
+target     = [{time}]     {color}{target:50} {message}{reset}
+http       = [{time}]     {color}{target:50} {code} ({content-type})  {server:40} {title}{reset}
+dns        = [{time}]     {color}{target:50} {query_type:5}   {resolved}{reset}
+dns_dc     = [{time}]     {color}Domain Controler:  {hostname:50} {domain:30} {ips}{reset}
+port       = [{time}]     {color}{target:50} {service:30} {version}{reset}
+smb        = [{time}]     {color}{target:30} {domain:30} {hostname:30} {server_os:30} Signed:{signing} SMBv1:{smbv1}{reset}
+mssql      = [{time}]     {color}{target:50} {version}{reset}
+mysql      = [{time}]     {color}{target:50} {version}{reset}
+postgresql = [{time}]     {color}{target:50} {version}{reset}
+
+[Color]
+vuln = red
+major = red
+highlight = yellow
+minor = blue
+success = green
+error = bold red
+normal = white
