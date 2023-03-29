@@ -389,7 +389,12 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                 if ldap_authenticated:
                     for entry in ldapscan.list_admins():
                         user = '%s\\%s' % (entry['details']['domain'], entry['details']['username'])
-                        """
+
+                        tags = entry['details']['tags']
+                        for g in entry['groups']:
+                            groupname = g.split('\\')[-1]
+                            tags.append("group:%s" % groupname)
+
                         DB.insert_domain_user({
                             'domain': entry['details']['domain'],
                             'username': entry['details']['username'],
@@ -402,10 +407,9 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                             'sid': entry['details']['sid'],
                             'rid': entry['details']['rid'],
                             'dn': entry['details']['dn'],
-                            'tags': entry['details']['tags'],
                             'group': entry['groups'],
+                            'tags': tags,
                         })
-                        """
 
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['user'].ljust(30), '; '.join(entry['groups']))})
                 else:
@@ -990,12 +994,13 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                     #domain = actions['list_groups']['user'].split('\\')[0]
                     username = actions['list_groups']['user'].split('\\')[-1]
 
-                Output.highlight({'target': ldapscan.url(), 'message': 'Account %s groups:' % username})
-                if ldap_authenticated:
-                    def callback(entry):
-                        Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
+                for user in username.split(','):
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Account %s groups:' % user})
+                    if ldap_authenticated:
+                        def callback(entry):
+                            Output.write({'target': ldapscan.url(), 'message': '- %s' % (entry,)})
 
-                    ldapscan.list_user_groups(username, callback)
+                        ldapscan.list_user_groups(user, callback)
 
             if 'list_users' in actions:
 
