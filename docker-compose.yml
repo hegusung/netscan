@@ -22,6 +22,16 @@ services:
       - 127.0.0.1:9200:9200
       - 127.0.0.1:5601:5601
 
+  netscan_neo4j:
+    container_name: netscan-neo4j
+    hostname: neo4j
+    image: neo4j:4.4.19-community
+    volumes:
+      - $HOME/neo4j/data:/data
+    ports:
+      - 127.0.0.1:7474:7474
+      - 127.0.0.1:7687:7687
+
 volumes:
   ES_LOCAL_DATA:
     driver: local

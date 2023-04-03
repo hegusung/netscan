@@ -39,7 +39,7 @@ class LDAPScan:
         #self.port = port
         self.timeout = timeout
         self.protocol = protocol
-        #self.ssl = ssl
+        self.ssl = protocol in ['ldaps']
 
         self.conn = None
 
@@ -1144,6 +1144,18 @@ class LDAPScan:
             dn = str(attr['distinguishedName'])
             primaryGID = int(str(attr["primaryGroupID"]))
 
+            created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+            try:
+                last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
+            except KeyError:
+                last_logon_date = None
+            try:
+                last_password_change_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['pwdLastSet']))))
+            except KeyError:
+                last_password_change_date = None
+
+
+
             tags = []
             if 'userAccountControl' in attr:
                 attr['userAccountControl'] = int(str(attr['userAccountControl']))
@@ -1201,11 +1213,14 @@ class LDAPScan:
                 'comment': str(comment),
                 'aces': aces,
                 'spns': spns,
+                'created_date': created_date,
+                'last_logon': last_logon_date,
+                'last_password_change': last_password_change_date,
             })
 
         sc = ldap.SimplePagedResultsControl(size=10)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName']
+        attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'pwdLastSet']
         self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=computer)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
 
     def list_dns(self, callback):
