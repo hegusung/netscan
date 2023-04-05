@@ -63,6 +63,7 @@ def main():
     bruteforce_group.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
     bruteforce_group.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
     bruteforce_group.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurent workers for the bruteforce', default=5, dest='bruteforce_workers')
+    bruteforce_group.add_argument('--bruteforce-delay', metavar='seconds', nargs='?', type=int, help='Delay between each bruteforce attempt', default=0, dest='bruteforce_delay')
     # Modules
     module_group = parser.add_argument_group("Modules")
     module_group.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
@@ -177,9 +178,9 @@ def main():
 
         actions['rid_brute'] = {'start': start_rid, 'end': end_rid}
     if args.bruteforce:
-        actions['bruteforce'] ={'username_file': args.username_file, 'password_file': args.password_file, 'workers': args.bruteforce_workers}
+        actions['bruteforce'] ={'username_file': args.username_file, 'password_file': args.password_file, 'workers': args.bruteforce_workers, 'delay': args.bruteforce_delay}
     if args.simple_bruteforce:
-        actions['simple_bruteforce'] ={'username_file': args.username_file, 'workers': args.bruteforce_workers}
+        actions['simple_bruteforce'] ={'username_file': args.username_file, 'workers': args.bruteforce_workers, 'delay': args.bruteforce_delay}
     if args.modules:
         actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 

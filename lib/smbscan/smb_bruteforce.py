@@ -1,11 +1,14 @@
 import copy
+import time
 from .smb import SMBScan
 from utils.output import Output
 from utils.utils import AuthFailure
 from utils.db import DB
 
-def bruteforce_worker(target, timeout):
+def bruteforce_worker(target, bruteforce_delay, timeout):
     for password in target['b_password_list']:
+        time.sleep(bruteforce_delay)
+
         domain = target['b_domain']
         username = target['b_username']
 

@@ -139,7 +139,7 @@ services:
     hostname: neo4j
     image: neo4j:4.4.19-community
     volumes:
-      - $HOME/neo4j/data:/data
+      - neo4jdata:/data
     ports:
       - 127.0.0.1:7474:7474
       - 127.0.0.1:7687:7687
@@ -152,6 +152,8 @@ volumes:
   es_data:
     driver: local
   kibanadata:
+    driver: local
+  neo4jdata:
     driver: local
 
 networks:
