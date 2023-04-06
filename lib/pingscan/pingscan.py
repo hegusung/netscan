@@ -66,6 +66,8 @@ class PingScan:
                     break
 
             return True, rtt, os
+        elif process_returncode == 1:
+            pass
         else:
             Output.error({'target': '%s' % self.hostname, 'message': "Error: ping return code: %d" % (process_returncode,)})
 
