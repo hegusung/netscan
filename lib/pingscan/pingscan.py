@@ -38,6 +38,12 @@ class PingScan:
         process.wait()
         process_returncode = process.returncode
 
+        if process_returncode == 2:
+            process = subprocess.Popen("ping -c 3 -i 0,2 %s -w %d" % (self.hostname, self.timeout), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process_output, _ = process.communicate()
+            process.wait()
+            process_returncode = process.returncode
+
         if process_returncode == 0:
             rtt = None
             os = 'Unknown'
@@ -60,5 +66,7 @@ class PingScan:
                     break
 
             return True, rtt, os
+        else:
+            Output.error({'target': '%s' % target['hostname'], 'message': "Error: ping return code: %d" % (process_returncode,)})
 
         return False, None, None
