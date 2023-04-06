@@ -67,6 +67,6 @@ class PingScan:
 
             return True, rtt, os
         else:
-            Output.error({'target': '%s' % target['hostname'], 'message': "Error: ping return code: %d" % (process_returncode,)})
+            Output.error({'target': '%s' % self.hostname, 'message': "Error: ping return code: %d" % (process_returncode,)})
 
         return False, None, None
