@@ -35,7 +35,7 @@
 
 Run the following command and enjoy immediately..
 ```bash
-$> bash run-netscan.sh
+$> bash docker_run.sh
 ```
 
 ![](images/running.png)

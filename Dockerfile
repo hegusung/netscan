@@ -5,7 +5,7 @@ WORKDIR /app
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-RUN apt update && apt install -y libgl1-mesa-glx nano vim
+RUN apt update && apt install -y libgl1-mesa-glx nano vim iputils-ping nmap ntpdate
 
 COPY config-docker.cfg.sample /app/config.cfg
 RUN sed -i 's/session = Unknown/session = Audit/g' config.cfg
