@@ -820,7 +820,6 @@ class LDAPScan:
             })
 
 
-        print("YEAH")
         sc = ldap.SimplePagedResultsControl(size=10, criticality=False)
         sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
         attributes = ['distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName']
@@ -2209,6 +2208,8 @@ class LDAPScan:
         if name.startswith('S-'):
             search_filter="(objectsid=%s)" % name
         elif name.startswith('CN='):
+            name = name.replace('(', '\\28')
+            name = name.replace(')', '\\29')
             search_filter="(distinguishedName=%s)" % name
         else:
             #search_filter="(&(objectClass=user)(sAMAccountName=%s))" % name
