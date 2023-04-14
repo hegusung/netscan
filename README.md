@@ -97,7 +97,7 @@ On your system or in the docker container,
 
 <hr/>
 
-**Problem**: Elasticsearch has not enough memory-mapped areas to run smoothly.
+**Problem**: Elasticsearch has not enough memory-mapped areas to run smoothly.  
 **Solution** : Run the following command on you system (even for a dockerized environment)
 ```bash
 sudo sysctl -w vm.max_map_count=262144
@@ -106,7 +106,7 @@ sudo sysctl -w vm.max_map_count=262144
 
 <hr/>
 
-**Problem**: ??
+**Problem**: ??  
 **Solution** : Run the following commands on you system (even for a dockerized environment)
 ```bash
 $> curl -X PUT -H "Content-Type: application/json" http://localhost:9200/_all/_settings -d '{"index.blocks.read_only_allow_delete": null}'
