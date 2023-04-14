@@ -1,10 +1,13 @@
 version: "3.9"
 
 services:
-  setup:
+  netscan-setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.7.0
+    container_name: netscan-setup
+    env_file:
+      - docker/docker.env
     volumes:
-      - certs:/usr/share/elasticsearch/config/certs
+      - es_certs:/usr/share/elasticsearch/config/certs
     user: "0"
     command: >
       bash -c '
@@ -39,7 +42,7 @@ services:
         find . -type d -exec chmod 750 \{\} \;;
         find . -type f -exec chmod 640 \{\} \;;
         echo "Waiting for Elasticsearch availability";
-        until curl -s --cacert config/certs/ca/ca.crt https://elasticsearch:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        until curl -s --cacert config/certs/ca/ca.crt https://elasticsearch:9200 | grep -q "missing authentication credentials"; do sleep 10; done;
         echo "Setting kibana_system password";
         until curl -s -X POST --cacert config/certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD} -H "Content-Type: application/json" https://elasticsearch:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
         echo "All done!";
@@ -50,13 +53,13 @@ services:
       timeout: 5s
       retries: 120
     networks:
-      - netscan-elastic
+      - netscan-network
 
   elasticsearch:
-    depends_on:
-      - setup
     image: docker.elastic.co/elasticsearch/elasticsearch:8.7.0
     container_name: netscan-elasticsearch
+    env_file:
+      - docker/docker.env    
     environment:
       - node.name=elasticsearch
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
@@ -75,13 +78,14 @@ services:
       - xpack.security.transport.ssl.verification_mode=certificate
       - cluster.routing.allocation.disk.threshold_enabled=false
     volumes:
-      - certs:/usr/share/elasticsearch/config/certs
+      - es_certs:/usr/share/elasticsearch/config/certs
       - es_data:/usr/share/elasticsearch/data
     ports:
-      - target: 9200
-        published: 9200
+      - 9200:9200
     networks:
-      - netscan-elastic
+      - netscan-network
+    depends_on:
+      - netscan-setup
     healthcheck:
       test:
         [
@@ -92,19 +96,20 @@ services:
       timeout: 10s
       retries: 120
 
-  kibana:
+  netscan-kibana:
     depends_on:
       - elasticsearch
     image: docker.elastic.co/kibana/kibana:8.7.0
+    env_file:
+      - docker/docker.env    
     volumes:
-      - certs:/usr/share/kibana/config/certs
-      - kibanadata:/usr/share/kibana/data
+      - es_certs:/usr/share/kibana/config/certs
+      - kb_data:/usr/share/kibana/data
     container_name: netscan-kibana
     ports:
-      - target: 5601
-        published: 5601
+      - 5601:5601
     networks:
-      - netscan-elastic
+      - netscan-network
     environment:
       - SERVERNAME=kibana
       - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
@@ -122,44 +127,48 @@ services:
       retries: 120
 
   netscan-tool:
-    build: .
+    build:
+      context: ./
+      dockerfile: ./docker/Dockerfile
     container_name: netscan-tool
+    env_file:
+      - docker/docker.env    
     hostname: netscan
     tty: true
     volumes:
-      - ./docker_shared:/app/docker_shared
-      - ./logs:/app/logs
-      - ./server/files:/app/server/files
+      - ../docker_shared:/app/docker_shared
+      - ../logs:/app/logs
+      - ../server/files:/app/server/files
     ports:
       - 127.0.0.1:445:445
       - 127.0.0.1:3890:3890
       - 127.0.0.1:8000:8000
     networks:
-      - netscan-elastic
+      - netscan-network
 
-  netscan_neo4j:
+  netscan-neo4j:
     container_name: netscan-neo4j
     hostname: neo4j
     image: neo4j:4.4.19-community
     volumes:
-      - neo4jdata:/data
+      - neo4j_data:/data
     ports:
       - 127.0.0.1:7474:7474
       - 127.0.0.1:7687:7687
     networks:
-      - netscan-elastic
+      - netscan-network
 
 volumes:
-  certs:
+  es_certs:
     driver: local
   es_data:
     driver: local
-  kibanadata:
+  kb_data:
     driver: local
-  neo4jdata:
+  neo4j_data:
     driver: local
 
 networks:
-  netscan-elastic:
-    name: netscan-elastic
+  netscan-network:
+    name: netscan-network
     driver: bridge
