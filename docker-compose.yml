@@ -42,7 +42,6 @@ services:
         until curl -s --cacert config/certs/ca/ca.crt https://elasticsearch:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
         echo "Setting kibana_system password";
         until curl -s -X POST --cacert config/certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD} -H "Content-Type: application/json" https://elasticsearch:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
-        curl -s -X PUT --cacert config/certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD} -H "Content-Type: application/json" "https://elasticsearch:9200/_cluster/settings" -d "{\"persistent\": {\"cluster.routing.allocation.disk.threshold_enabled\": false}}"
         echo "All done!";
       '
     healthcheck:
@@ -74,6 +73,7 @@ services:
       - xpack.security.transport.ssl.certificate=certs/elasticsearch/elasticsearch.crt
       - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
       - xpack.security.transport.ssl.verification_mode=certificate
+      - cluster.routing.allocation.disk.threshold_enabled=false
     volumes:
       - certs:/usr/share/elasticsearch/config/certs
       - es_data:/usr/share/elasticsearch/data
