@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 *.sh
+!docker_run.sh
 config.cfg
 __pycache__/
 **.py[cod]
@@ -22,3 +23,5 @@ server/ressources/*
 !server/ressources/Invoke-Mimikatz.ps1
 *.pfx
 !lib/sshscan/linpeas.sh
+docker_shared/**
+!docker_shared/.gitkeep

@@ -17,6 +17,8 @@ from OpenSSL import SSL
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 
+from utils.process_inputs import process_targets
+
 urllib3.disable_warnings()
 
 auth_pattern = re.compile(r'''\s*(.*)\s+realm=['"]?([^'"]+)['"]?''', re.IGNORECASE)
@@ -175,6 +177,20 @@ class HTTP:
                 )
                 response_data = self.parse_response(session, res)
 
+                # meta Refresh in HTML, follow it
+                if 'refresh' in response_data:
+                    try:
+                        target = next(process_targets(response_data['refresh']))
+
+                        http = HTTP(target['method'], target['hostname'], target['port'], self.useragent, self.proxy, self.connect_timeout, headers=self.headers, auth=self.auth, cookies=self.cookies) 
+                        resp = http.get(target['path'], params=target['params'] if 'params' in target else None)
+
+                        if resp != None:
+                            response_data = resp
+
+                    except Exception as e:
+                        print("%s: %s" % (type(e), e))
+
         except requests.exceptions.ConnectTimeout:
             response_data = None
         except requests.exceptions.ConnectionError as e:
@@ -272,6 +288,9 @@ class HTTP:
 
         forms = self.parse_forms(html)
 
+        # Check for meta refresh
+        refresh_url = self.parse_meta_refresh(html)
+
         out = {
             'code': code,
             'server': server,
@@ -289,6 +308,8 @@ class HTTP:
             out['content-type'] = None
         if auth_type != None:
             out['auth_type'] = auth_type
+        if refresh_url:
+            out['refresh'] = urljoin(res.url, refresh_url)
 
         return out
 
@@ -341,6 +362,17 @@ class HTTP:
             forms.append(form)
 
         return forms
+
+    def parse_meta_refresh(self, html):
+        soup = BeautifulSoup(html, 'html.parser')
+
+        result=soup.find("meta",attrs={"http-equiv":"Refresh"})
+        if result:
+            wait,text=result["content"].split(";")
+            if text.strip().lower().startswith("url="):
+                url=text.strip()[4:]
+                return url
+        return None
 
 class SSLAdapter(HTTPAdapter):
     '''An HTTPS Transport Adapter that uses an arbitrary SSL version.'''

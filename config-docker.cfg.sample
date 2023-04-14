@@ -4,11 +4,11 @@ session = Unknown
 [Elasticsearch]
 enabled = true
 index = pentest
-host = netscan_elasticsearch_kibana
+host = elasticsearch
 port = 9200
-ssl = false
-username = 
-password = 
+ssl = true
+username = elastic 
+password = netscan
 enable_file_storage = false
 document_storage_file = /tmp/es_file_storage.txt
 

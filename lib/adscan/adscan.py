@@ -481,6 +481,9 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                             'primary_gid': entry['primary_gid'],
                             'aces': entry['aces'],
                             'spns': entry['spns'],
+                            'created_date': entry['created_date'],
+                            'last_logon': entry['last_logon'],
+                            'last_password_change': entry['last_password_change'],
                         })
 
                         host = '%s\\%s' % (entry['domain'], entry['hostname'])

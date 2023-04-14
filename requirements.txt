@@ -5,6 +5,7 @@ beautifulsoup4
 pymongo
 pyOpenSSL
 ldap3
+msldap
 mysqlclient
 mysql-connector
 pycryptodome
@@ -12,7 +13,8 @@ netaddr
 paramiko
 tqdm
 elasticsearch
-impacket
+#impacket
+git+https://github.com/fortra/impacket
 pillow
 psycopg2-binary
 redis
@@ -23,3 +25,5 @@ twisted
 ldaptor
 opencv-python
 socks
+psutil
+colorama
