@@ -3,8 +3,7 @@ FROM python:latest
 WORKDIR /app
 
 # System requirements
-RUN apt update
-RUN apt install -y libgl1-mesa-glx nano vim iputils-ping nmap ntpdate
+RUN apt update && apt install -y libgl1-mesa-glx nano vim iputils-ping nmap ntpdate
 RUN wget https://github.com/lsd-rs/lsd/releases/download/0.23.1/lsd_0.23.1_amd64.deb -O /tmp/lsd.deb
 RUN dpkg -i /tmp/lsd.deb >/dev/null 2>&1 && rm -f /tmp/lsd.deb
 
