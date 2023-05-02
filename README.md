@@ -53,12 +53,21 @@ Display the result in a way-to-cool interface!
 
 ### 1.0 Automagic installation (with docker)
 
-Run the following command and enjoy immediately..
+> Run the following command and enjoy immediately..
+
 ```bash
-$> bash docker_run.sh
+~/netscan$> ./init_docker_framework.sh
 ```
 
+The previous command will build and/or start all the framework docker containers used by netscan.
+It will create and configure : 
+* an elasticsearch container
+* a kibana container
+* a neo4j container
+
 ![](images/running.png)
+
+When everything is up and running, you can use the ` netscan ` command and enjoy.
 
 ### 1.1 Manual installation (without Docker)
 
@@ -70,7 +79,7 @@ $> bash docker_run.sh
   ```bash
   $> cp config.cfg.sample config.cfg
   ```
-3. Deploy `Elasticsearch` and `Kibana` on your system
+3. If needed, deploy `Elasticsearch` and `Kibana` on your systema.
 
 ## 2. Configuration
 > **Note**:  

@@ -146,7 +146,7 @@ class Output:
                     now = datetime.now()
                     message['time'] = now.strftime(Config.config.get('Format', 'time'))
 
-                # Select the correct formating
+                # Select the correct formatting
                 try:
                     output_format = Config.config.get('Format', message['message_type'])
                 except KeyError:

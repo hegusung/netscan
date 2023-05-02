@@ -10,6 +10,8 @@ from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 from impacket.krb5.types import KerberosTime, Principal
 from impacket.dcerpc.v5.samr import UF_ACCOUNTDISABLE, UF_DONT_REQUIRE_PREAUTH
 
+from scripts.utils.utils import open_file
+
 # Mostly taken from: https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetNPUsers.py
 
 class Kerberos:

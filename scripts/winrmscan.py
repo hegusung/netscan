@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import argparse
 
-from utils.process_inputs import process_inputs, str_comma, str_ports
+import argparse
+from utils.utils import normalize_path
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.winrmscan.winrmscan import winrmscan_worker
@@ -15,6 +15,7 @@ def main():
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
+    
     # Authentication
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
     parser.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default=None, dest='domain')
@@ -23,9 +24,11 @@ def main():
     parser.add_argument('--cmd', metavar='command', type=str, nargs='?', help='Execute a command', default=None, dest='command')
 
     # Dispatcher arguments
-    parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
+    
     # Resume
     parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
+    
     # DB arguments
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
@@ -39,7 +42,7 @@ def main():
     if args.targets:
         targets['targets'] = args.targets
     if args.target_file:
-        targets['target_file'] = args.target_file
+        targets['target_file'] = normalize_path(args.target_file)
 
     static_inputs = {}
 
@@ -64,11 +67,11 @@ def main():
     DB.stop_worker()
     Output.stop()
 
+
 def winrmscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-
     args = (actions, creds, timeout)
-
     dispatch_targets(input_targets, static_inputs, winrmscan_worker, args, workers=workers, delay=delay, resume=resume)
+
 
 if __name__ == '__main__':
     main()

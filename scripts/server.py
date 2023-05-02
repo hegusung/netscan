@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
+
 import psutil
 import argparse
 import threading
-
 from utils.db import DB
 from utils.config import Config
 from utils.output import Output

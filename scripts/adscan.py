@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
+
 import argparse
 import sys
 import os
-
-from utils.process_inputs import process_inputs, str_comma, str_ports
+from utils.utils import normalize_path
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.adscan.adscan import adscan_worker, ad_modules
-
 from utils.db import DB
 from utils.config import Config
+
 
 def main():
     parser = argparse.ArgumentParser(description='ADScan')
     target_group = parser.add_argument_group("Targets")
     target_group.add_argument('targets', type=str, nargs='?')
     target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
+    
     # Authentication
     auth_group = parser.add_argument_group("Authentication")
     auth_group.add_argument('--null', action='store_true', help='NULL bind', dest='null')
@@ -24,8 +25,9 @@ def main():
     auth_group.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default=None, dest='domain')
     auth_group.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     auth_group.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NT or NTLM hash', default=None, dest='hash')
-    auth_group.add_argument('-k', metavar='ticket', type=str, nargs='?', help='Kerberos authentication (uses KRB5CCNAME environement variable if not parameter is defined)', default=None, const='', dest='kerberos')
+    auth_group.add_argument('-k', metavar='ticket', type=str, nargs='?', help='Kerberos authentication (uses KRB5CCNAME environment variable if not parameter is defined)', default=None, const='', dest='kerberos')
     auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
+    
     # Enum
     user_group = parser.add_argument_group("Domain user enumeration")
     user_group.add_argument("--domains", action='store_true', help='dump domains, containers and OUs from the Active Directory with some interesting parameters (Bloodhound)')
@@ -59,10 +61,10 @@ def main():
     adcs_group.add_argument("--adcs", action='store_true', help='Discover the domain root Certificate Authority')
     adcs_group.add_argument("--ca-certs", action='store_true', help='List CA certificates from Active Directory', dest='ca_certs')
     adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory', dest='cert_templates')
-    adcs_group.add_argument("--esc1", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC1)', default=None, const='', dest='esc1')
-    adcs_group.add_argument("--esc2", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC2)', default=None, const='', dest='esc2')
-    adcs_group.add_argument("--esc3", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC3)', default=None, const='', dest='esc3')
-    adcs_group.add_argument("--esc4", metavar='username', type=str, nargs='?', help='List misconfigures certificate templates (ESC4)', default=None, const='', dest='esc4')
+    adcs_group.add_argument("--esc1", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC1)', default=None, const='', dest='esc1')
+    adcs_group.add_argument("--esc2", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC2)', default=None, const='', dest='esc2')
+    adcs_group.add_argument("--esc3", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC3)', default=None, const='', dest='esc3')
+    adcs_group.add_argument("--esc4", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC4)', default=None, const='', dest='esc4')
 
     # Dump
     admin_group = parser.add_argument_group("Domain admin actions")
@@ -85,8 +87,10 @@ def main():
     misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     misc_group.add_argument("--no-ssl", action='store_true', help="Perform a LDAP connection instead of LDAPS", dest='no_ssl')
     misc_group.add_argument('--ldap-protocol', choices={"ldaps", "ldap", "gc"}, default=None, help="Way to connect to the ldap service (default: ldaps)", dest='ldap_protocol')
+    
     # Dispatcher arguments
-    misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
+    
     # DB arguments
     misc_group.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
@@ -107,7 +111,7 @@ def main():
     if args.targets:
         targets['targets'] = args.targets
     if args.target_file:
-        targets['target_file'] = args.target_file
+        targets['target_file'] = normalize_path(args.target_file)
 
     static_inputs = {}
 
@@ -223,11 +227,11 @@ def main():
     DB.stop_worker()
     Output.stop()
 
+
 def adscan(input_targets, static_inputs, workers, actions, creds, no_ssl, timeout):
-
     args = (actions, creds, no_ssl, timeout)
-
     dispatch_targets(input_targets, static_inputs, adscan_worker, args, workers=workers)
+
 
 if __name__ == '__main__':
     main()

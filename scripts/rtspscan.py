@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-import argparse
 
-from utils.process_inputs import process_inputs, str_comma, str_ports, port_file
+import argparse
+from utils.utils import normalize_path
+from utils.process_inputs import str_ports, port_file
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.rtspscan.rtspscan import rtspscan_worker
-
 from utils.db import DB
 from utils.config import Config
+
 
 def main():
     parser = argparse.ArgumentParser(description='RTSPScan')
@@ -21,7 +22,7 @@ def main():
     parser.add_argument("--screenshot", action='store_true', help='Take a screenshot')
     # Bruteforce
     # Dispatcher arguments
-    parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurent workers', default=10, dest='workers')
+    parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
     # Resume
     parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
     # DB arguments
@@ -37,13 +38,13 @@ def main():
     if args.targets:
         targets['targets'] = args.targets
     if args.target_file:
-        targets['target_file'] = args.target_file
+        targets['target_file'] = normalize_path(args.target_file)
 
     static_inputs = {}
     if args.port:
         static_inputs['port'] = args.port
     if args.port_file:
-        static_inputs['port'] += args.port_file
+        static_inputs['port'] += normalize_path(args.port_file)
 
     creds = {}
 
@@ -54,15 +55,14 @@ def main():
 
     rtspscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
-
     DB.stop_worker()
     Output.stop()
 
+
 def rtspscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-
     args = (actions, creds, timeout)
-
     dispatch_targets(input_targets, static_inputs, rtspscan_worker, args, workers=workers, delay=delay, resume=resume)
+
 
 if __name__ == '__main__':
     main()

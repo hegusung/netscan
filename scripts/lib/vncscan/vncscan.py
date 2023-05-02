@@ -77,7 +77,7 @@ def vncscan_worker(target, actions, creds, timeout):
                 img = vnc.screenshot()
                 now = datetime.now()
                 screenshot_name = "vnc_%s_%d_%s.jpg" % (target['hostname'], target['port'], now.strftime('%Y%m%d_%H%M%S'))
-                screenshot_path = os.path.join(os.path.dirname(sys.argv[0]),"screenshots", screenshot_name)
+                screenshot_path = os.path.join(os.path.dirname(sys.argv[0]),"../screenshots", screenshot_name)
                 screenshot_path = os.path.abspath(screenshot_path)
                 img.save(screenshot_path)
                 Output.highlight({'target': vnc.url(), 'message': 'Screenshot saved at: %s' % screenshot_path})

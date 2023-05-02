@@ -4,10 +4,9 @@ import sys
 import os.path
 import json
 import queue
-import time
 import traceback
 from datetime import datetime
-from multiprocessing import Queue, Manager
+from multiprocessing import Manager
 from threading import Thread
 import dns
 from dns import resolver
@@ -15,6 +14,7 @@ from copy import copy
 from utils.utils import check_ip
 from utils.config import Config
 from utils.output import Output
+from utils.utils import normalize_path
 import urllib3
 urllib3.disable_warnings()
 
@@ -170,7 +170,7 @@ class DB:
                         error = Elasticsearch.insert_bulk(inserts)
                         if error and not self.es_file_storage_enabled:
                             # Backup in the file
-                            f = open(self.es_file_storage, 'a')
+                            f = open(normalize_path(self.es_file_storage), 'a')
                             for insert in inserts:
                                 append = insert[2]
                                 insert = insert[1]
@@ -189,7 +189,7 @@ class DB:
                     continue
 
                 if self.es_file_storage_enabled:
-                    f = open(self.es_file_storage, 'a')
+                    f = open(normalize_path(self.es_file_storage), 'a')
                     insert_file = json.dumps(insert)
                     f.write("%s\n" % insert_file)
                     f.close()
@@ -207,7 +207,7 @@ class DB:
                         error = Elasticsearch.insert_bulk(inserts)
                         if error and not self.es_file_storage_enabled:
                             # Backup in the file
-                            f = open(self.es_file_storage, 'a')
+                            f = open(normalize_path(self.es_file_storage), 'a')
                             for insert in inserts:
                                 append = insert[2]
                                 insert = insert[1]
@@ -223,7 +223,7 @@ class DB:
                     error = Elasticsearch.insert_bulk(inserts)
                     if error and not self.es_file_storage_enabled:
                         # Backup in the file
-                        f = open(self.es_file_storage, 'a')
+                        f = open(normalize_path(self.es_file_storage), 'a')
                         for insert in inserts:
                             append = insert[2]
                             insert = insert[1]

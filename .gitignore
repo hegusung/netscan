@@ -23,5 +23,4 @@ server/ressources/*
 !server/ressources/Invoke-Mimikatz.ps1
 *.pfx
 !lib/sshscan/linpeas.sh
-docker_shared/**
-!docker_shared/.gitkeep
+.vscode/

@@ -61,7 +61,7 @@ def rtspscan_worker(target, actions, creds, timeout):
                         if not screenshot_taken:
                             now = datetime.now()
                             screenshot_name = "rtsp_%s_%d_%s_%s.jpg" % (target['hostname'], target['port'], line.replace('/', '_'), now.strftime('%Y%m%d_%H%M%S'))
-                            screenshot_path = os.path.join(os.path.dirname(sys.argv[0]),"screenshots", screenshot_name)
+                            screenshot_path = os.path.join(os.path.dirname(sys.argv[0]),"../screenshots", screenshot_name)
                             screenshot_path = os.path.abspath(screenshot_path)
 
                             success = rtsp.screenshot(line, screenshot_path)

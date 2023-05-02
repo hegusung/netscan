@@ -1,14 +1,14 @@
 from utils.process_inputs import process_inputs, count_process_inputs
 from utils.config import Config
 import sys
-from multiprocessing import Process, Queue, Manager
+from multiprocessing import Process, Manager
 import queue
 import time
 import os
 import multiprocessing
 
 import traceback
-from threading import Thread, Lock
+from threading import Thread
 from tqdm import tqdm
 import json
 

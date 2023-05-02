@@ -13,7 +13,7 @@ SCRIPTS_DIR="./scripts"
 #########################
 usage(){ 
     echo -e "Usage: $0 <module> [options]\n" 
-    echo -e "Modules available : \n\t$(ls $SCRIPTS_DIR/*.py | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed ':a;N;$!ba;s/\n/,/g' | sed 's/,$//g' | sed -e "s/.\{119\}/&\n\t/g")"
+    echo -e "Modules available : \n\t$(find $SCRIPTS_DIR -maxdepth 1 -type f | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed ':a;N;$!ba;s/\n/,/g' | sed 's/,$//g' | sed -e "s/.\{109\}/&\n\t/g"),shell"
     echo -e "\nOptions :"
     echo -e "\t-h : Display help" 
     echo ""
@@ -47,6 +47,11 @@ if [ $# -gt 0 ]; then
     MODULE=$1
     shift
 
+    if [ $MODULE == "shell" ]; then
+        /bin/bash
+        exit 0
+    fi
+
     if [ ! -f "$SCRIPTS_DIR/$MODULE.py" ]; then
         echo -e "${RED}[!] Module \"$MODULE\" not found.${ENDCOLOR}\n"
         usage 1
@@ -68,4 +73,4 @@ fi
 ###       MAIN        ###
 #########################
 #echo "Let's run  : python ./${MODULE}.py $@"
-python $SCRIPTS_DIR/${MODULE}.py $@
+python3 $SCRIPTS_DIR/${MODULE}.py $@
