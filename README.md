@@ -1,6 +1,5 @@
-<div style="text-align:center"><img src="./images/logo.png"/></div>
 <p align="center">
-  Network scanner made for large-scope pentesting
+  <img src="./images/logo.png">
   <br>
   <a href="https://twitter.com/intent/follow?screen_name=hegusung" title="Follow"><img src="https://img.shields.io/twitter/follow/hegusung?label=hegusung&style=social"></a>
   <br>
@@ -8,11 +7,15 @@
 
 # NetScan
 
+> Netscan is a network scanner made for large-scope pentesting. 
+> It lets you scan and do your recon phase on more that 20+ protocols very quickly. All results are store in an elasticsearch database and browsable with the Kibana power.
+> Scan, Filter, Exploit !
+
 ## Features
 
 - [x] FTP scanner
 - [x] MySQL scanner
-- [x] MonDB scanner
+- [x] MongoDB scanner
 - [x] Ping scanner
 - [x] Port scanner
 - [x] Postgres scanner
@@ -29,32 +32,44 @@
 - [X] HTTP scanner
 - [X] DNS scanner
 
+## Screenshots
+
+Display the global help menu
+![](images/netscan-help.png)
+
+Display a specific module help menu
+![](images/netscan-help-module.png)
+
+Run a ping scan to discover devices in the network
+![](images/netscan-pingscan.png)
+
+Run a port scan to get all opened ports with the nmap options
+![](images/netscan-portscan.png)
+
+Display the result in a way-to-cool interface!
+![](images/kibana-screen.png)
+
 ## 1. Installation
 
-### 1.0 Automagic installation
+### 1.0 Automagic installation (with docker)
 
-Run the following command and enjoy immediately..
+> Run the following command and enjoy immediately..
+
 ```bash
-$> bash docker_run.sh
+~/netscan$> ./init_docker_framework.sh
 ```
+
+The previous command will build and/or start all the framework docker containers used by netscan.
+It will create and configure : 
+* an elasticsearch container
+* a kibana container
+* a neo4j container
 
 ![](images/running.png)
 
-### 1.1 Manual installation with Docker
+When everything is up and running, you can use the ` netscan ` command and enjoy.
 
-1. Start containers with `docker-compose`
-   ```bash
-   $> docker-compose up --remove-orphans --build -d
-   ```
-2. Run command from docker
-   ```bash
-   $> ./docker_run.sh
-   or
-   $> docker exec -it netscan-tool bash
-   or
-   $> docker exec -it netscan-tool python smbscan.py $SUBNET -w 100
-   ```
-### 1.2 Manual installation without Docker
+### 1.1 Manual installation (without Docker)
 
 1. Install dependencies
   ```bash
@@ -64,9 +79,12 @@ $> bash docker_run.sh
   ```bash
   $> cp config.cfg.sample config.cfg
   ```
-3. Install `Elasticsearch` and `Kibana`
+3. If needed, deploy `Elasticsearch` and `Kibana` on your systema.
 
 ## 2. Configuration
+> **Note**:  
+> The docker version is already configured with default settings. You're good to go.
+
 On your system or in the docker container, 
 
 1. Edit the `config.cfg` file to set the name of your current pentest session under the `[Global]` section.
@@ -90,7 +108,7 @@ On your system or in the docker container,
    $> curl -X POST 'http://127.0.0.1:5601/api/saved_objects/_import?createNewCopies=true' -H "kbn-xsrf: true" --form "file=@$(pwd)/kibana/kibana_dashboards.ndjson"
    ```
 
-4. The dashboards should now be available within Kibana
+  The dashboards should now be available within Kibana
 
 
 ## 3. Troubleshooting
@@ -98,7 +116,7 @@ On your system or in the docker container,
 <hr/>
 
 **Problem**: Elasticsearch has not enough memory-mapped areas to run smoothly.  
-**Solution** : Run the following command on you system (even for a dockerized environment)
+**Solution** : Run the following command on you system
 ```bash
 sudo sysctl -w vm.max_map_count=262144
 ```
@@ -106,10 +124,9 @@ sudo sysctl -w vm.max_map_count=262144
 
 <hr/>
 
-**Problem**: ??  
-**Solution** : Run the following commands on you system (even for a dockerized environment)
+**Problem**: Elastic needs at least 10% free space of your hard disk (whatever the disk size). 
+**Solution** : You can disable the disk size threshold by running the following commands on you system
 ```bash
-$> curl -X PUT -H "Content-Type: application/json" http://localhost:9200/_all/_settings -d '{"index.blocks.read_only_allow_delete": null}'
 $> curl -X PUT -H "Content-Type: application/json" http://localhost:9200/_cluster/settings -d '{ "transient": { "cluster.routing.allocation.disk.threshold_enabled": false } }'
 ```
 

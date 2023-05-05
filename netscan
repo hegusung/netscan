@@ -1,0 +1,76 @@
+#!/bin/bash
+
+#########################
+###       CONFIG      ###
+#########################
+RED="\e[31m"
+ENDCOLOR="\e[0m"
+
+SCRIPTS_DIR="./scripts"
+
+#########################
+###     FUNCTIONS     ###
+#########################
+usage(){ 
+    echo -e "Usage: $0 <module> [options]\n" 
+    echo -e "Modules available : \n\t$(find $SCRIPTS_DIR -maxdepth 1 -type f | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed ':a;N;$!ba;s/\n/,/g' | sed 's/,$//g' | sed -e "s/.\{109\}/&\n\t/g"),shell"
+    echo -e "\nOptions :"
+    echo -e "\t-h : Display help" 
+    echo ""
+    exit $1
+} 
+
+#########################
+###     ARGS MGMT     ###
+#########################
+MODULE_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help)
+      HELP=YES
+      shift
+      ;;
+    *)
+      MODULE_ARGS+=("$1") # save positional arg
+      shift
+      ;;
+  esac
+done
+
+set -- "${MODULE_ARGS[@]}" # restore positional parameters
+
+#########################
+###       CHECKS      ###
+#########################
+if [ $# -gt 0 ]; then
+    MODULE=$1
+    shift
+
+    if [ $MODULE == "shell" ]; then
+        /bin/bash
+        exit 0
+    fi
+
+    if [ ! -f "$SCRIPTS_DIR/$MODULE.py" ]; then
+        echo -e "${RED}[!] Module \"$MODULE\" not found.${ENDCOLOR}\n"
+        usage 1
+    fi
+else
+    usage 0
+fi
+
+if [ ! -z "$HELP" ]; then
+    if [ ! -z "$MODULE" ]; then
+        python $SCRIPTS_DIR/${MODULE}.py -h
+        exit 0
+    else
+        usage 0
+    fi
+fi
+
+#########################
+###       MAIN        ###
+#########################
+#echo "Let's run  : python ./${MODULE}.py $@"
+python3 $SCRIPTS_DIR/${MODULE}.py $@
