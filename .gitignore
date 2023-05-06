@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 *.sh
+!init_docker_framework.sh
 config.cfg
 __pycache__/
 **.py[cod]
