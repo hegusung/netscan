@@ -68,6 +68,9 @@ def pprint(output_list):
     for log in output_list:
         type, filename, count, text = log
 
+        if filename.startswith('/host/'):
+            filename = filename[5:]
+
         color = Style.BRIGHT + Fore.GREEN if count > 0 else Fore.WHITE
 
         print((color + "|%s|%s|%s|" + Style.RESET_ALL) % (type.center(COLUMN_1_LENGTH), filename.center(COLUMN_2_LENGTH), " ".join([str(count), text]).center(COLUMN_3_LENGTH)))
@@ -557,22 +560,28 @@ def export_local_hashes(session, output_dir):
         output.append((format, hashfile_filename, count,  "hashes written"))
 
 def export_bloodhound(session, output_dir):
+    global output
+    output = []
 
-    domains, domain_fqdn_to_name = export_bloodhound_domains(session, output_dir)
+    #output.append((format, hashfile_filename, count,  "hashes written"))
 
-    user_info, user_sid = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name)
+    domains, domain_fqdn_to_name, output = export_bloodhound_domains(session, output_dir, output)
+
+    user_info, user_sid, output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
 
     group_sid = get_group_sid(session)
 
-    domain_controlers = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid)
+    domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, output)
 
-    export_bloodhound_groups(session, output_dir, domains, domain_controlers)
+    output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, output)
     
-    export_bloodhound_containers(session, output_dir)
+    output = export_bloodhound_containers(session, output_dir, output)
 
-    export_bloodhound_ous(session, output_dir)
+    output = export_bloodhound_ous(session, output_dir, output)
 
-    export_bloodhound_gpos(session, output_dir)
+    output = export_bloodhound_gpos(session, output_dir, output)
+
+    pprint(output)
 
 
 def export_domain_hosts(session, output_dir):

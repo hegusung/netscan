@@ -8,7 +8,7 @@ from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
 
 BLOODHOUND_VERSION = 5
 
-def export_bloodhound_domains(session, output_dir):
+def export_bloodhound_domains(session, output_dir, output):
 
     query = {
       "query": {
@@ -85,17 +85,17 @@ def export_bloodhound_domains(session, output_dir):
         "version": BLOODHOUND_VERSION
     }
 
-    print("%d Domains written to bloodhound file %s" % (c, filename))
+    output.append(("Domains", filename, c,  "Domains written"))
     
     file.write(json.dumps({'data': data, 'meta': meta}))
 
     file.close()
 
-    return domains, domain_fqdn_to_name
+    return domains, domain_fqdn_to_name, output
 
 
 
-def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name):
+def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output):
 
     query = {
       "query": {
@@ -206,13 +206,13 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name):
         "version": BLOODHOUND_VERSION
     }
 
-    print("%d Users written to bloodhound file %s" % (c, filename))
+    output.append(("Users", filename, c,  "Users written"))
     
     file.write(json.dumps({'data': data, 'meta': meta}))
 
     file.close()
 
-    return user_info, user_sid
+    return user_info, user_sid, output
 
 def get_group_sid(session):
     query = {
@@ -240,7 +240,7 @@ def get_group_sid(session):
 
 
 
-def export_bloodhound_groups(session, output_dir, domains, domain_controlers):
+def export_bloodhound_groups(session, output_dir, domains, domain_controlers, output):
 
     query = {
       "query": {
@@ -396,13 +396,15 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers):
         "version": BLOODHOUND_VERSION
     }
 
-    print("%d Groups written to bloodhound file %s" % (c, filename))
+    output.append(("Groups", filename, c,  "Groups written"))
     
     file.write(json.dumps({'data': data, 'meta': meta}))
 
     file.close()
 
-def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, group_sid_list):
+    return output
+
+def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, group_sid_list, output):
 
     domain_controlers = {}
 
@@ -624,16 +626,16 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
         "version": BLOODHOUND_VERSION
     }
 
-    print("%d Computers written to bloodhound file %s" % (c, filename))
+    output.append(("Computers", filename, c,  "Computers written"))
     
     file.write(json.dumps({'data': data, 'meta': meta}))
 
     file.close()
 
-    return domain_controlers
+    return domain_controlers, output
 
 
-def export_bloodhound_ous(session, output_dir):
+def export_bloodhound_ous(session, output_dir, output):
 
     query = {
       "query": {
@@ -697,13 +699,15 @@ def export_bloodhound_ous(session, output_dir):
         "version": BLOODHOUND_VERSION
     }
 
-    print("%d OUs written to bloodhound file %s" % (c, filename))
+    output.append(("OUs", filename, c,  "OUs written"))
     
     file.write(json.dumps({'data': data, 'meta': meta}))
 
     file.close()
 
-def export_bloodhound_containers(session, output_dir):
+    return output
+
+def export_bloodhound_containers(session, output_dir, output):
 
     query = {
       "query": {
@@ -762,13 +766,15 @@ def export_bloodhound_containers(session, output_dir):
         "version": BLOODHOUND_VERSION
     }
 
-    print("%d Containers written to bloodhound file %s" % (c, filename))
+    output.append(("Containers", filename, c,  "Containers written"))
     
     file.write(json.dumps({'data': data, 'meta': meta}))
 
     file.close()
 
-def export_bloodhound_gpos(session, output_dir):
+    return output
+
+def export_bloodhound_gpos(session, output_dir, output):
 
     query = {
       "query": {
@@ -827,9 +833,11 @@ def export_bloodhound_gpos(session, output_dir):
         "version": BLOODHOUND_VERSION
     }
 
-    print("%d GPOs written to bloodhound file %s" % (c, filename))
+    output.append(("GPOs", filename, c,  "GPOs written"))
     
     file.write(json.dumps({'data': data, 'meta': meta}))
 
     file.close()
+
+    return output
 
