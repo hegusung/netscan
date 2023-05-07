@@ -24,7 +24,7 @@ SCAN_THRESHOLD = 0.5
 
 class Module:
     name = 'NoPac'
-    description = 'Check for NoPac (CVE-2021-42278 / CVE-2021-42287)'
+    description = 'Check for NoPac (CVE-2021-42278 / CVE-2021-42287) [authenticated - kerberos not supported]'
 
     def run(self, target, creds, args, timeout):
         if not 'username' in creds:
@@ -49,10 +49,12 @@ class Module:
             lmhash = ''
             nthash = ''
 
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
+
         vulnerable = check(target['hostname'], 445, domain, username, password, lmhash, nthash, timeout)
 
         if vulnerable:
-            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': 'Vulnerable to NoPac (CVE-2021-42278 / CVE-2021-42287)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Vulnerable to NoPac (CVE-2021-42278 / CVE-2021-42287)' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],
@@ -104,7 +106,12 @@ def check(ip, port, domain, user, password, lmhash, nthash, timeout):
         else:
             # Not vulnerable
             return False
+    except impacket.krb5.kerberosv5.KerberosError as e:
+        if 'KRB_AP_ERR_SKEW' in str(e):
+            Output.error({'target': 'smb://%s:%d' % (ip, 445), 'message': '[NoPac] Unable to check the vulnerability, please synchronise your host time with the DC => ntpdate %s' % ip})
+        else:
+            Output.error({'target': 'smb://%s:%d' % (ip, 445), 'message': '[NoPac] %s: %s\n%s' % (type(e), e, traceback.format_exc())})
     except Exception as e:
-        Output.error('%s: %s\n%s' % (type(e), e, traceback.format_exc()))
+        Output.error({'target': 'smb://%s:%d' % (ip, 445), 'message': '[NoPac] %s: %s\n%s' % (type(e), e, traceback.format_exc())})
 
     return False

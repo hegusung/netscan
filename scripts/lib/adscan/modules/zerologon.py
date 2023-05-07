@@ -22,10 +22,13 @@ class Module:
     description = 'Check for ZeroLogon (CVE-2020-1472)'
 
     def run(self, target, creds, args, timeout):
+
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
+
         vulnerable = check(target['hostname'], 445, timeout)
 
         if vulnerable:
-            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': 'Vulnerable to CVE-2020-1472 (ZeroLogon)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Vulnerable to CVE-2020-1472 (ZeroLogon)' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],
@@ -50,8 +53,7 @@ def check(ip, port, timeout):
     except impacket.dcerpc.v5.rpcrt.DCERPCException:
         pass
     except Exception as e:
-        print('%s: %s\n%s' % (type(e), e, traceback.format_exc()))
-
+        Output.error({'target': 'smb://%s:%d' % (ip, 445), 'message': '[ZeroLogon] %s: %s\n%s' % (type(e), e, traceback.format_exc())})
 
     return False
 

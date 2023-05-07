@@ -21,15 +21,15 @@ from lib.smbscan.smb import SMBScan
 
 class Module:
     name = 'LDAP_Security'
-    description = 'Check for LDAP signing and channel binding'
+    description = 'Check for LDAP signing and channel binding [authenticated - kerberos not supported]'
 
     def run(self, target, creds, args, timeout):
         if not 'username' in creds:
-            Output.minor("Please specify a valid account for the LDAP_Security module")
+            Output.minor("[%s] Module requires a valid account" % self.name)
             return
 
         if 'kerberos' in creds:
-            Output.minor("LDAP_Security module requires an user and password/hash authentication")
+            Output.minor("[%s] Module requires an user and password/hash authentication" % self.name)
             return
         
         username = creds['domain'] + '\\' + creds['username']
@@ -45,13 +45,15 @@ class Module:
             password = None
 
         if password == None:
-            Output.minor("LDAP_Security module requires a valid user and password/hash authentication")
+            Output.minor("[%s] Module requires a valid user and password/hash authentication" % self.name)
             return
 
         ldapIsProtected = run_ldap(username, password, target['hostname'])
 
+        Output.minor({'target': 'ldap://%s' % (target['hostname'],), 'message': "[%s] Running module..." % self.name})
+
         if ldapIsProtected == False:
-            Output.vuln({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': 'LDAP signing requirements not enforced'})
+            Output.vuln({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': '[%s] LDAP signing requirements not enforced' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],
@@ -69,7 +71,7 @@ class Module:
             ldapsChannelBindingWhenSupportedCheck = asyncio.run(run_ldaps_withEPA(username, password, target['hostname'], creds['domain'], timeout))
 
             if ldapsChannelBindingAlwaysCheck == False and ldapsChannelBindingWhenSupportedCheck == True:
-                Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': 'LDAPS channel binding set to "when supported"'})
+                Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "when supported"' % self.name})
 
                 vuln_info = {
                     'hostname': target['hostname'],
@@ -77,12 +79,12 @@ class Module:
                     'service': 'ldaps',
                     'url': 'ldaps://%s:%d' % (target['hostname'], 636),
                     'name': 'LDAP channel binding set to \"when supported\"',
-                    'description': 'LDAP Service ldaps://%s:%d channel binding set to "when supported", relaying may be possible depending on teh client\'s support for channel binding' % (target['hostname'], 636),
+                    'description': 'LDAP Service ldaps://%s:%d channel binding set to "when supported", relaying may be possible depending on the client\'s support for channel binding' % (target['hostname'], 636),
                 }
                 DB.insert_vulnerability(vuln_info)
 
             elif ldapsChannelBindingAlwaysCheck == False and ldapsChannelBindingWhenSupportedCheck == False:
-                Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': 'LDAPS channel binding set to "never"'})
+                Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "never"' % self.name})
 
                 vuln_info = {
                     'hostname': target['hostname'],
@@ -98,7 +100,7 @@ class Module:
                 # Not vulnerable
                 pass
             else:
-                Output.error({'target': 'ldap://%s:%d' % (dcIp, 389), 'message': "ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
+                Output.error({'target': 'ldap://%s:%d' % (dcIp, 389), 'message': "[" + self.name + "] ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
 
             
 #Conduct and LDAP bind and determine if server signing
@@ -146,7 +148,7 @@ def DoesLdapsCompleteHandshake(dcIp):
         ssl_sock.close()
         return False
     else:
-        Output.error({'target': 'ldaps://%s:%d' % (dcIp, 636), 'message': "Unexpected error during LDAPS handshake: " + str(e)})
+        Output.error({'target': 'ldaps://%s:%d' % (dcIp, 636), 'message': "[LDAP_Security] Unexpected error during LDAPS handshake: " + str(e)})
     ssl_sock.close()
 
 #Conduct a bind to LDAPS and determine if channel
@@ -167,12 +169,12 @@ def run_ldaps_noEPA(inputUser, inputPassword, dcTarget):
             elif "data 52e" in str(ldapConn.result):
                 return False #channel binding not enforced
             else:
-                Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "UNEXPECTED ERROR: " + str(ldapConn.result)})
+                Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "[LDAP_Security] UNEXPECTED ERROR: " + str(ldapConn.result)})
         else:
             #LDAPS bind successful
             return False #because channel binding is not enforced
     except Exception as e:
-        Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "Ensure DNS is resolving properly, and that you can reach LDAPS on this host"})
+        Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "[LDAP_Security] Ensure DNS is resolving properly, and that you can reach LDAPS on this host"})
 
 #Conduct a bind to LDAPS with channel binding supported
 #but intentionally miscalculated. In the case that and
@@ -198,8 +200,8 @@ async def run_ldaps_withEPA(inputUser, inputPassword, dcTarget, fqdn, timeout):
         elif "data 52e" in str(err):
             return False
         elif err is not None:
-            Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "ERROR while connecting to " + dcTarget + ": " + err})
+            Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "[LDAP_Security] ERROR while connecting to " + dcTarget + ": " + err})
         elif err is None:
             return False
     except Exception as e:
-        Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "something went wrong during ldaps_withEPA bind:" + str(e)})
+        Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "[LDAP_Security] Something went wrong during ldaps_withEPA bind:" + str(e)})
