@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 
 import argparse
-from payload_manager import PayloadManager
-from ressources import get_ressource_md5, list_ressources
+from server.payload_manager import PayloadManager
+from server.ressources import get_ressource_md5, list_ressources
 
 def main():
     parser = argparse.ArgumentParser(description='Generate payload')

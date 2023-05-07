@@ -1,4 +1,5 @@
 import os
+import sys
 import importlib
 
 class PayloadManager:
@@ -7,12 +8,16 @@ class PayloadManager:
     def list_payloads(self, filter=None):
         module_dict = {}
 
-        path = os.path.join(os.path.dirname(__file__), 'payloads')
+        current = os.path.realpath(__file__)
+
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(current))))
+
+        path = os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', 'payloads')
         for module_filename in os.listdir(path):
             if module_filename[-3:] == '.py':
                 p = os.path.join(path, module_filename)
                 try:
-                    mod = importlib.import_module('server.payloads.%s' % module_filename[:-3])
+                    mod = importlib.import_module('server_data.payloads.%s' % module_filename[:-3])
                 except ModuleNotFoundError:
                     mod = importlib.import_module('payloads.%s' % module_filename[:-3])
                 module_class = getattr(mod, "Payload")

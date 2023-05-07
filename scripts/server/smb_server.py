@@ -7,9 +7,9 @@ from server.vulnerability_callback import VulnCallback
 def run_smb_server(ip, port):
     server = SimpleSMBServer(ip,int(port))
     
-    vuln_path = os.path.join(os.path.dirname(__file__), 'empty')
+    vuln_path = os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', 'empty')
 
-    server.addShare("Files", os.path.join(os.path.dirname(__file__), 'files'), "Files")
+    server.addShare("Files", os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', 'files'), "Files")
     server.addShare("Vuln", vuln_path, "Detect vulns", readOnly='yes')
     server.setSMB2Support(True)
 

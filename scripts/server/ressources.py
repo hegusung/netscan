@@ -6,7 +6,7 @@ import hashlib
 def list_ressources():
     ressource_list = []
 
-    for f in os.listdir(os.path.join(os.path.dirname(__file__), 'ressources')):
+    for f in os.listdir(os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', 'ressources')):
         ressource_list.append(f)
 
     return ressource_list
@@ -29,7 +29,7 @@ def powershell_encode_base64(data):
     return powershell_command.decode("ascii")
 
 def get_ressource_md5(filename):
-    path = os.path.join(os.path.dirname(__file__), 'ressources', filename)
+    path = os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', 'ressources', filename)
 
     return md5(path)
 

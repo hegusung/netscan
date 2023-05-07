@@ -53,20 +53,29 @@ else
     
     echo -e "${GREEN}[+] Adding an alias in your personal settings...${ENDCOLOR}"
     
-    netscan_docker_command="docker run -it --rm --name netscan-tool --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/config.cfg:/app/config.cfg\" -h netscan -v \"$(pwd)/logs:/app/logs\" -v \"$(pwd)/server/files:/app/server/files\" -p \"127.0.0.1:445:445\" -p \"127.0.0.1:3890:3890\" -p \"127.0.0.1:8000:8000\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest"
+    netscan_docker_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/config.cfg:/app/config.cfg\" -h netscan -v \"$(pwd)/logs:/app/logs\" -v \"$(pwd)/server/files:/app/server/files\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest"
     netscan_alias_command="alias netscan='${netscan_docker_command}'"
+
+    netscan_docker_server_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/config.cfg:/app/config.cfg\" -h netscan -v \"$(pwd)/logs:/app/logs\" -v \"$(pwd)/server/files:/app/server/files\" -p \"0.0.0.0:445:445\" -p \"0.0.0.0:3890:3890\" -p \"0.0.0.0:8000:8000\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest server"
+    netscan_server_alias_command="alias netscan-server='${netscan_docker_server_command}'"
     
     if [ -f "$HOME/.zshrc" ]; then
-        sed -i '/^alias netscan/d' ~/.zshrc
+        sed -i '/^alias netscan=/d' ~/.zshrc
         echo $netscan_alias_command >> ~/.zshrc
+        sed -i '/^alias netscan-server=/d' ~/.zshrc
+        echo $netscan_server_alias_command >> ~/.zshrc
     fi
     
     if [ -f "$HOME.bash_aliases" ]; then
-        sed -i '/^alias netscan/d' ~/.bash_aliases
+        sed -i '/^alias netscan=/d' ~/.bash_aliases
         echo $netscan_alias_command >> ~/.bash_aliases
+        sed -i '/^alias netscan-server=/d' ~/.bash_aliases
+        echo $netscan_server_alias_command >> ~/.bash_aliases
         elif [ -f "$HOME/.bashrc" ]; then
-        sed -i '/^alias netscan/d' ~/.bashrc
+        sed -i '/^alias netscan=/d' ~/.bashrc
         echo $netscan_alias_command >> ~/.bashrc
+        sed -i '/^alias netscan-server=/d' ~/.bashrc
+        echo $netscan_server_alias_command >> ~/.bashrc
     fi
     
     if [ ! -f "$HOME/.zshrc" ] && [ ! -f "$HOME.bash_aliases" ] && [ ! -f "$HOME/.bashrc" ]; then

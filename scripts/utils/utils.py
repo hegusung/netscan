@@ -96,6 +96,9 @@ def is_docker_env():
 
 
 def normalize_path(dir_path):
+    if dir_path == None:
+        return None
+
     if is_docker_env():
         if not os.path.isabs(dir_path):
             dir_path = os.getenv("HOST_PWD") + "/" + dir_path

@@ -35,7 +35,7 @@ def md5(fname):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-PATH_OFFSET = "/server/files"
+PATH_OFFSET = "/server_data/files"
 
 class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
@@ -64,7 +64,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             f = self.send_ressource_file(file_md5)
         else:
             # Move to file directory
-            self.path = "/server/files" + self.path
+            self.path = "/server_data/files" + self.path
 
             f = self.send_head()
         if f:
@@ -98,7 +98,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 f.close()
             return
         else:
-            self.path = "/server/files" + self.path
+            self.path = "/server_data/files" + self.path
             r, info = self.deal_post_data()
         Output.highlight("%s %s %s" % (info, "by: ", self.client_address[0]))
         f = BytesIO()
