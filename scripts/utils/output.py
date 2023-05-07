@@ -2,6 +2,7 @@ import sys
 import os
 import copy
 from datetime import datetime
+import multiprocessing
 from multiprocessing import Queue, Manager
 from threading import Thread
 from utils.config import Config
@@ -135,7 +136,10 @@ class Output:
     def output_worker(self, output_queue):
         try:
             while True:
-                message = output_queue.get()
+                try:
+                    message = output_queue.get()
+                except multiprocessing.managers.RemoteError:
+                    break
                 if message == None:
                     break
 
