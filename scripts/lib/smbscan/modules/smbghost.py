@@ -20,6 +20,9 @@ class Module:
     description = 'Check for SMBGhost (CVE-2020-0796)'
 
     def run(self, target, args, creds, timeout):
+
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Running module...' % self.name})
+
         # get the build version (via SMBv2)
         smbscan = SMBScan(target['hostname'], target['port'], timeout, use_smbv1=False)
         if not smbscan.connect():
@@ -43,7 +46,7 @@ class Module:
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:
-            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2020-0796 (SMBGhost)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Vulnerable to CVE-2020-0796 (SMBGhost)' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],

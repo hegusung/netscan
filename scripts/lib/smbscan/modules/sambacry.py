@@ -21,10 +21,13 @@ class Module:
     description = 'Check for SambaCry (CVE-2017-7494)'
 
     def run(self, target, args, creds, timeout):
+
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
+
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:
-            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2017-7494 (SambaCry)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Vulnerable to CVE-2017-7494 (SambaCry)' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],
@@ -69,6 +72,6 @@ def check(ip, port, timeout):
                     vulnerable = True
 
     except Exception as e:
-        print('%s: %s\n%s' % (type(e), e, traceback.format_exc()))
+        Output.error({'target': 'smb://%s:%d' % (ip, port), 'message': '[DFSCoerce] Error: %s: %s\n%s' % (type(e), str(e), traceback.format_exc())})
 
     return vulnerable

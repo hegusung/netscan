@@ -19,7 +19,7 @@ from impacket.uuid import uuidtup_to_bin
 
 class Module:
     name = 'PetitPotam'
-    description = 'Check PetitPotam vulnerability (CVE-2021-36942)'
+    description = 'Check PetitPotam vulnerability [authenticated] (CVE-2021-36942) (optional argument: IP)'
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
@@ -34,13 +34,19 @@ class Module:
         do_kerberos = creds['kerberos'] if 'kerberos' in creds else False
         dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
+
         check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, do_kerberos, dc_ip, timeout)
 
 def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerberos, dc_ip, timeout):
 
     pipe = 'lsarpc'
     if len(ntlm_hash) != 0:
-        lmhash, nthash = ntlm_hash.split(':')
+        if not ':' in ntlm_hash:
+            lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+            nthash = ntlm_hash.lower()
+        else:
+            lmhash, nthash = ntlm_hash.split(':')
     else:
         lmhash = ''
         nthash = ''
@@ -52,7 +58,7 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerbe
         vulnerable = plop.EfsRpcOpenFileRaw(dce, listener_ip)
 
         if vulnerable:
-            Output.vuln({'target': 'smb://%s:%d' % (ip, port), 'message': 'Vulnerable to CVE-2021-36942 (PetitPotam)'})
+            Output.vuln({'target': 'smb://%s:%d' % (ip, port), 'message': '[PetitPotam] Vulnerable to CVE-2021-36942 (PetitPotam)'})
 
             vuln_info = {
                 'hostname': ip,

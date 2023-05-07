@@ -22,7 +22,7 @@ from impacket.ntlm import AV_PAIRS, NTLMSSP_AV_TIME, NTLMSSP_AV_FLAGS, NTOWFv2, 
 
 class Module:
     name = 'DropTheMic'
-    description = 'Check for DropTheMic (CVE-2019-1040) (not compatible with kerberos)'
+    description = 'Check for DropTheMic (CVE-2019-1040) [authenticated - not compatible with kerberos]'
 
     def run(self, target, args, creds, timeout):
         domain = creds['domain'] if 'domain' in creds else None
@@ -31,13 +31,15 @@ class Module:
         ntlm_hash = creds['hash'] if 'hash' in creds else ''
 
         if not user:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Module DropTheMic requires valid credentials'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Requires valid credentials' % self.name})
             return
+
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
 
         vulnerable = check(target['hostname'], target['port'], domain, user, password, ntlm_hash)
 
         if vulnerable:
-            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2019-1040 (DropTheMic)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Vulnerable to CVE-2019-1040 (DropTheMic)' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],
@@ -87,7 +89,11 @@ def mod_getNTLMSSPType1(workstation='', domain='', signingRequired = False, use_
 
 def check(remote_host, port, domain, username, password, ntlm_hash):
     if ntlm_hash:
-        lmhash, nthash = ntlm_hash.split(':')
+        if not ':' in ntlm_hash:
+            lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+            nthash = ntlm_hash.lower()
+        else:
+            lmhash, nthash = ntlm_hash.split(':')
     else:
         lmhash = ''
         nthash = ''

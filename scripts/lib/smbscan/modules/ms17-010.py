@@ -16,10 +16,13 @@ class Module:
     description = 'Check for MS17-010 (EternalBlue)'
 
     def run(self, target, args, creds, timeout):
+
+        Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
+
         vulnerable = check(target['hostname'], target['port'], timeout)
 
         if vulnerable:
-            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to MS17-010 (EternalBlue)'})
+            Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Vulnerable to MS17-010 (EternalBlue)' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],
