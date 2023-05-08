@@ -101,6 +101,8 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         for secret in secrets:
             for url in secret['urls']:
                 if 'replace' in secret:

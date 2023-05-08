@@ -80,13 +80,15 @@ headers = [
 
 class Module:
     name = 'Log4J'
-    description = 'Attempt a Log4shell exploit payload [Experimental]'
+    description = 'Attempt a Log4shell exploit payload (CVE-2021-44228) [Experimental]'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         if len(args['args']) != 1:
-            Output.error({'target': http.url(target['path']), 'message': 'Log4J module requires 1 arg: ldap_listener_ip:port'})
+            Output.error({'target': http.url(target['path']), 'message': '[%s] Module requires 1 arg: ldap_listener_ip:port' % self.name})
             return
 
         vuln_info = {

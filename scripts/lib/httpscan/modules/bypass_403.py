@@ -16,6 +16,8 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         res = http.get(target['path'])
 
         if res['code'] == 403:
@@ -80,7 +82,7 @@ def check_bypass(target, http, path, header={}):
 
     if res['code'] in [200, 302]:
         # bypass success !
-        head_message = '403 bypass success using '
+        head_message = '[403] Bypass success using '
         bypasses = []
         if target['path'] != path:
             bypasses.append('bypass path: %s' % http.url(path))

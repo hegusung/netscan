@@ -19,6 +19,8 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         for repo, url in repo_dict.items():
 
             check_url_list = []
@@ -33,7 +35,7 @@ class Module:
 
                 if response and response['code'] in [200] and response['title'] == 'N/A' and response['content-type'] == None:
 
-                    Output.vuln({'target': http.url(check_url), 'message': '%s depot accessible' % repo})
+                    Output.vuln({'target': http.url(check_url), 'message': '[%s] %s depot accessible' % (self.name, repo)})
 
                     vuln_info = {
                         'hostname': target['hostname'],

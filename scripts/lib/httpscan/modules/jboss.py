@@ -49,10 +49,12 @@ auth_7_8_urls = [
 
 class Module:
     name = 'JBoss'
-    description = 'Discover and exploit JBoss (weak/default password, no authentication)'
+    description = 'Discover and exploit JBoss (no authentication, bruteforce, CVE-2017-12149)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
+
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
 
         for url in jboss_urls + auth_5_6_urls + auth_7_8_urls:
             full_url = os.path.join(target['path'], url)
@@ -88,7 +90,7 @@ class Module:
             if url in jboss_urls:
                 # JBoss should be a safe service
                 if safe and res['code'] in [200] and ('apache-coyote' in res['server'].lower() or 'jboss' in res['title'].lower()):
-                    Output.vuln({'target': http.url(full_url), 'message': 'JBoss url accessible without authentication'})
+                    Output.vuln({'target': http.url(full_url), 'message': '[%s] URL accessible without authentication' % self.name})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -100,7 +102,7 @@ class Module:
                     }
                     DB.insert_vulnerability(vuln_info)
                 elif res['code'] in [500] and url == 'invoker/readonly' and 'jboss' in res['title'].lower():
-                    Output.vuln({'target': http.url(full_url), 'message': 'JBoss vulnerable to CVE-2017-12149'})
+                    Output.vuln({'target': http.url(full_url), 'message': '[%s] Vulnerable to CVE-2017-12149' % self.name})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -108,7 +110,7 @@ class Module:
                         'service': 'http',
                         'url': http.url(full_url),
                         'name': 'JBoss vulnerable to CVE-2017-12149',
-                        'description': 'Jboss interface %s is vulnerable to CVE-2019-12149' % http.url(full_url),
+                        'description': 'Jboss interface %s is vulnerable to CVE-2017-12149' % http.url(full_url),
                     }
                     DB.insert_vulnerability(vuln_info)
                 elif res['code'] in [401] and ('apache-coyote' in res['server'].lower() or 'jboss' in res['title'].lower()):
@@ -116,14 +118,14 @@ class Module:
                         auth_type = res['auth_type']
 
                         if args['bruteforce']:
-                            Output.highlight({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
+                            Output.highlight({'target': http.url(full_url), 'message': '[%s] Starting bruteforce...' % self.name})
                             for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                                 username, password = cred.split(':')
 
                                 res = http.get(full_url, auth=(auth_type, username, password))
 
                                 if res['code'] in [200]:
-                                    Output.success({'target': http.url(full_url), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                                    Output.success({'target': http.url(full_url), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                                     cred_info = {
                                         'hostname': target['hostname'],
@@ -141,7 +143,7 @@ class Module:
                         pass
             elif url in auth_5_6_urls:
                 if res['code'] in [200] and 'jboss' in res['title'].lower():
-                    Output.highlight({'target': http.url(full_url), 'message': 'JBoss interface'})
+                    Output.highlight({'target': http.url(full_url), 'message': '[%s] JBoss interface' % self.name})
 
                     form = None
                     for f in res['forms']:
@@ -153,10 +155,10 @@ class Module:
                             break
 
                     if not form:
-                        Output.error({'target': http.url(full_url), 'message': 'Unable to find JBoss authentication form'})
+                        Output.error({'target': http.url(full_url), 'message': '[%s] Unable to find JBoss authentication form' % self.name})
                     else:
                         if args['bruteforce']:
-                            Output.highlight({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
+                            Output.highlight({'target': http.url(full_url), 'message': '[%s] Starting bruteforce...' % self.name})
                             for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                                 username, password = cred.split(':')
 
@@ -198,7 +200,7 @@ class Module:
                                 if after_auth_form != None:
                                     continue
 
-                                Output.success({'target': http.url(full_url), 'message': 'Authentication success to PhpMyAdmin with login %s and password %s' % (username, password)})
+                                Output.success({'target': http.url(full_url), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                                 cred_info = {
                                     'hostname': target['hostname'],
@@ -232,20 +234,20 @@ class Module:
 
                     if res_management['code'] in [401]:
 
-                        Output.write({'target': http.url(target['path']), 'message': 'JBoss interface'})
+                        Output.write({'target': http.url(target['path']), 'message': '[%s] JBoss interface' % self.name})
 
                         try:
                             auth_type = res_management['auth_type']
 
                             if args['bruteforce']:
-                                Output.highlight({'target': http.url(full_url), 'message': 'Starting bruteforce...'})
+                                Output.highlight({'target': http.url(full_url), 'message': '[%s] Starting bruteforce...' % self.name})
                                 for cred in gen_bruteforce_creds(args['bruteforce'], creds):
                                     username, password = cred.split(':')
 
                                     res_management = http.get(management_url, auth=(auth_type, username, password))
 
                                     if res_management['code'] in [200]:
-                                        Output.success({'target': http.url(full_url), 'message': 'Authentication success with login %s and password %s' % (username, password)})
+                                        Output.success({'target': http.url(full_url), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                                         cred_info = {
                                             'hostname': target['hostname'],

@@ -15,13 +15,15 @@ Taken from: https://gist.github.com/sh1n0b1/10100394
 
 class Module:
     name = 'Heartbleed'
-    description = 'Check if server is vulnerable to heartbleed'
+    description = 'Check if server is vulnerable to OpenSSL Heartbleed (CVE-2014-0160)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         if target['method'] != 'https':
             pass
 
         url = 'https://%s:%d/' % (target['hostname'], target['port'])
+
+        Output.minor({'target': url, 'message': '[%s] Running module...' % self.name})
 
         try:
             sock = socket.socket()
@@ -39,7 +41,7 @@ class Module:
             sock.send(hb)
 
             if hit_hb(sock):
-                Output.vuln({'target': url, 'message': 'Vulnerable to heartbleed'})
+                Output.vuln({'target': url, 'message': '[%s] Vulnerable to OpenSSL Heartbleed (CVE-2014-0160)' % self.name})
 
                 vuln_info = {
                     'hostname': target['hostname'],
@@ -47,7 +49,7 @@ class Module:
                     'service': 'http',
                     'url': url,
                     'name': 'Heartbleed',
-                    'description': 'Server %s is vulnerable to Heartbleed' % url,
+                    'description': 'Server %s is vulnerable to OpenSSL Heartbleed (CVE-2014-0160)' % url,
                 }
                 DB.insert_vulnerability(vuln_info)
 

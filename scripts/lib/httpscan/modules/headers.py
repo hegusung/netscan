@@ -13,12 +13,14 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         res = http.get(target['path'])
         
         headers = res['headers']
 
         headers_vuln = []
-        headers_txt = "Security headers:\n"
+        headers_txt = "[%s] Security headers:\n" % self.name
 
         # Check Strict-Transport-Security
         header_content = check_header("Strict-Transport-Security", headers, res['html'])

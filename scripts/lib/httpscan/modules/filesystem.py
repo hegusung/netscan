@@ -16,6 +16,8 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         self.search_filesystem(target, http, target['path'])
 
     def search_filesystem(self, target, http, path, recurse=3):
@@ -30,7 +32,7 @@ class Module:
             soup = BeautifulSoup(data["html"], "html.parser")
 
             if target['path'] == path:
-                Output.highlight({'target': http.url(path), 'message': 'HTTP server sharing its filesystem found, enumerating to db...'})
+                Output.highlight({'target': http.url(path), 'message': '[%s] HTTP server sharing its filesystem found, enumerating to db...' % self.name})
 
                 # Add to database
                 content_info = {

@@ -12,6 +12,8 @@ class Module:
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
 
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
+
         random_str = gen_random_string()
         payload = 'PUT check: %s' % random_str
 
@@ -20,7 +22,7 @@ class Module:
             response = http.get(os.path.join(target['path'], '%s.txt' % random_str))
 
             if response and payload in response['html']:
-                Output.vuln({'target': http.url(target['path']), 'message': 'Vulnerable to PUT file upload'})
+                Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to PUT file upload' % self.name})
 
                 vuln_info = {
                     'hostname': target['hostname'],

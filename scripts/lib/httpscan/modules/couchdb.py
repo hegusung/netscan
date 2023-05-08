@@ -9,10 +9,12 @@ from lib.httpscan.http import HTTP
 
 class Module:
     name = 'CouchDB'
-    description = 'Search for couchdb databases'
+    description = 'Search for couchdb databases (no authentication)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
+
+        Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
 
         response = http.get('/')
 
@@ -20,14 +22,14 @@ class Module:
             data = json.loads(response['html'])
 
             if 'couchdb' in data:
-                Output.highlight({'target': http.url('/'), 'message': 'CouchDB database version %s' % data["version"]})
+                Output.highlight({'target': http.url('/'), 'message': '[%s] CouchDB database version %s' % (self.name, data["version"])})
 
                 databases = []
                 response = http.get('/_all_dbs')
                 if response['code'] == 200 and response['content-type'] == 'application/json':
                     databases = json.loads(response['html'])
 
-                    Output.vuln({'target': http.url("/_all_dbs"), 'message': 'CouchDB accessible without authentication'})
+                    Output.vuln({'target': http.url("/_all_dbs"), 'message': '[%s] CouchDB accessible without authentication' % self.name})
 
                     vuln_info = {
                         'hostname': target['hostname'],
@@ -40,7 +42,7 @@ class Module:
                     DB.insert_vulnerability(vuln_info)
 
 
-                    text = "CouchDB database\n"
+                    text = "[%s] Database\n" % self.name
                     for db in databases:
                         uri = "/%s/_all_docs" % db
                         resp = http.get(uri)
