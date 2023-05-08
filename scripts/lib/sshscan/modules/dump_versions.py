@@ -6,11 +6,13 @@ from utils.db import DB
 
 class Module:
     name = 'DumpVersions'
-    description = 'Get kernel and packages versions'
+    description = 'Get kernel and packages versions [authenticated]'
 
     def run(self, target, args, creds, timeout):
         user = creds['username'] if 'username' in creds else None
         password = creds['password'] if 'password' in creds else None
+
+        Output.minor({'target': 'ssh://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Running module...' % self.name})
 
         check(target['hostname'], target['port'], user, password, timeout)
 
@@ -33,7 +35,7 @@ def check(hostname, port, user, password, timeout):
             host = result.strip()
         else:
             # Unable to retreive hostname
-            Output.minor({'target': 'ssh://%s:%d' % (hostname, port), 'message': 'Unable to retreive hostname, aborting module Dumpversions'})
+            Output.minor({'target': 'ssh://%s:%d' % (hostname, port), 'message': '[DumpVersions] Unable to retrieve hostname, aborting module Dumpversions'})
             return
 
         doc["host"] = host
@@ -52,7 +54,7 @@ def check(hostname, port, user, password, timeout):
         if result != '':
             doc["os"] = result.split(':')[-1].strip()
 
-        Output.highlight({'target': 'ssh://%s:%d' % (hostname, port), 'message': '%s %s %s' % (doc['host'].ljust(30), doc['kernel'].ljust(30), doc['os'])})
+        Output.highlight({'target': 'ssh://%s:%d' % (hostname, port), 'message': '[DumpVersions] %s %s %s' % (doc['host'].ljust(30), doc['kernel'].ljust(30), doc['os'])})
         DB.insert_host_linux(doc)
 
         # Query packages

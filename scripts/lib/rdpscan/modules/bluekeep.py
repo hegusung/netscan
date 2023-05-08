@@ -33,12 +33,15 @@ class Module:
         try:
             hostname = gen_random_string(10)
             username = gen_random_string(5)
+
+            Output.minor({'target': 'rdp://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Running module...' % self.name})
+
             vulnerable = check_host(target['hostname'], target['port'], False)
             
             #print("%s > %s" % (target['hostname'], vulnerable))
 
             if vulnerable == STATUS_VULNERABLE:
-                Output.vuln({'target': 'rdp://%s:%d' % (target['hostname'], target['port']), 'message': 'Vulnerable to CVE-2019-0708 (BlueKeep)'})
+                Output.vuln({'target': 'rdp://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Vulnerable to CVE-2019-0708 (BlueKeep)' % self.name})
 
                 vuln_info = {
                     'hostname': target['hostname'],

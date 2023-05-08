@@ -7,11 +7,13 @@ from utils.db import DB
 
 class Module:
     name = 'DirtyPipe'
-    description = 'Check Dirty Pipe vulnerability (CVE-2022-0847)'
+    description = 'Check Dirty Pipe vulnerability (CVE-2022-0847) [authenticated]'
 
     def run(self, target, args, creds, timeout):
         user = creds['username'] if 'username' in creds else None
         password = creds['password'] if 'password' in creds else None
+
+        Output.minor({'target': 'ssh://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Running module...' % self.name})
 
         check(target['hostname'], target['port'], user, password, timeout)
 
@@ -35,7 +37,7 @@ def check(hostname, port, user, password, timeout):
         result = ssh.execute(command)
         if "Vulnerable" in result:
             # Write in terminal
-            Output.vuln({'target': 'ssh://%s:%d' % (hostname, port), 'message': 'Vulnerable to CVE-2022-0847 (Dirty Pipe)'})
+            Output.vuln({'target': 'ssh://%s:%d' % (hostname, port), 'message': '[DirtyPipe] Vulnerable to CVE-2022-0847 (Dirty Pipe)'})
 
             # Push in ES
             vuln_info = {
