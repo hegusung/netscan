@@ -710,7 +710,10 @@ class LDAPScan:
 
             primaryGID = int(str(attr["primaryGroupID"]))
 
-            created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+            try:
+                created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+            except KeyError:
+                created_date = None
             try:
                 last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
             except KeyError:
@@ -757,7 +760,8 @@ class LDAPScan:
                 if attr['userAccountControl'] & 0x4000000 != 0:
                     tags.append('Partial secrets account')
             else:
-                return
+                pass
+                #return
 
             # Not returned in the Global Catalog
             if 'adminCount' in attr and int(str(attr['adminCount'])) > 0:
@@ -781,8 +785,11 @@ class LDAPScan:
 
                     groups.append("%s\\%s" % (groupdomain, groupname))
 
-            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'user', schema_guid_dict)
-            aces = self._resolve_sid_types(aces, "aces")
+            try:
+                aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'user', schema_guid_dict)
+                aces = self._resolve_sid_types(aces, "aces")
+            except KeyError:
+                aces = None
 
             if 'msDS-GroupMSAMembership' in attr:
                 aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), domain.upper(), 'user', schema_guid_dict)
@@ -927,7 +934,10 @@ class LDAPScan:
 
                 primaryGID = int(str(attr["primaryGroupID"]))
 
-                created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+                try:
+                    created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+                except KeyError:
+                    created_date = None
                 try:
                     last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
                 except KeyError:
@@ -1143,7 +1153,10 @@ class LDAPScan:
             dn = str(attr['distinguishedName'])
             primaryGID = int(str(attr["primaryGroupID"]))
 
-            created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+            try:
+                created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+            except KeyError:
+                created_date = None
             try:
                 last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
             except KeyError:

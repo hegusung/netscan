@@ -164,7 +164,7 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
                     res['aces'].append({"PrincipalSID": sid, "RightName": "AddSelf", "IsInherited": ace['inherited']})
 
             if 'ReadProperty' in ace['rights']:
-                if object_type in ['computer'] and 'OBJECT_TYPE_PRESENT' in ace['flags'] and ace['guid'] == schema_guid_dict['ms-mcs-admpwd']:  
+                if object_type in ['computer'] and 'OBJECT_TYPE_PRESENT' in ace['flags'] and 'ms-mcs-admpwd' in schema_guid_dict and ace['guid'] == schema_guid_dict['ms-mcs-admpwd']:
                     res['aces'].append({"PrincipalSID": sid, "RightName": "ReadLAPSPassword", "IsInherited": ace['inherited']})
 
             if 'ControlAccess' in ace['rights']:

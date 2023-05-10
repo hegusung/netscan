@@ -38,7 +38,9 @@ else
     curl -u elastic:${ELASTIC_PASSWORD} -s -X POST 'http://127.0.0.1:5601/api/saved_objects/_import?createNewCopies=true' -H "kbn-xsrf: true" --form "file=@$(pwd)/kibana/kibana_dashboards.ndjson" > /dev/null
 
     echo -e "${GREEN}[+] Configuring Netscan...${ENDCOLOR}"
-    cp docker/config-docker.cfg.sample config.cfg
+    if [ ! -f "config.cfg" ]; then
+    	cp docker/config-docker.cfg.sample config.cfg
+    fi
 fi
 
 echo -e "${GREEN}[+] Checking that everything is ok...${ENDCOLOR}"
@@ -53,10 +55,10 @@ else
     
     echo -e "${GREEN}[+] Adding an alias in your personal settings...${ENDCOLOR}"
     
-    netscan_docker_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/config.cfg:/app/config.cfg\" -h netscan -v \"$(pwd)/logs:/app/logs\" -v \"$(pwd)/server/files:/app/server/files\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest"
+    netscan_docker_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/:/app/\" -h netscan -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest"
     netscan_alias_command="alias netscan='${netscan_docker_command}'"
 
-    netscan_docker_server_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/config.cfg:/app/config.cfg\" -h netscan -v \"$(pwd)/logs:/app/logs\" -v \"$(pwd)/server/files:/app/server/files\" -p \"0.0.0.0:445:445\" -p \"0.0.0.0:3890:3890\" -p \"0.0.0.0:8000:8000\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest server"
+    netscan_docker_server_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/config.cfg:/app/config.cfg\" -h netscan -p \"0.0.0.0:3890:3890\" -p \"0.0.0.0:8000:8000\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest server"
     netscan_server_alias_command="alias netscan-server='${netscan_docker_server_command}'"
     
     if [ -f "$HOME/.zshrc" ]; then

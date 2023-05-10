@@ -59,8 +59,8 @@ def main():
     enum_group.add_argument("--apps", action='store_true', help='dump applications list from target systems')
     enum_group.add_argument("--processes", action='store_true', help='dump processes list from target systems')
     enum_group.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
-    enum_group.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
-    enum_group.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
+    enum_group.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems (Bloodhound)')
+    enum_group.add_argument("--sessions", action='store_true', help='dump sessions from target systems (Bloodhound)')
     enum_group.add_argument("--rid-brute", metavar="range", help='RID bruteforce', type=str, default=None, dest='rid_brute')
     
     # Bruteforce

@@ -2,6 +2,7 @@ import ftplib
 import socket
 import os.path
 import traceback
+from utils.output import Output
 
 class FTPScan:
 
@@ -28,7 +29,7 @@ class FTPScan:
             if len(banner_parts) < 2:
                 return None, None
 
-            ftp_code = int(banner_parts[0])
+            ftp_code = int(banner_parts[0].split('-')[0])
             version = banner_parts[1]
 
         except socket.timeout:
