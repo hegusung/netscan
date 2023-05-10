@@ -17,7 +17,12 @@ class OU:
 
         schema_guid_dict = ldap_obj._get_schema_guid_dict(['Organizational-Unit', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink']
+        sbase = "%s" % ldap_obj.defaultdomainnamingcontext
+        resp = ldap_obj.conn.search(searchBase=sbase, searchFilter='(objectCategory=organizationalUnit)', searchControls=[sc], attributes=attributes, sizeLimit=0)
+
+        for item in resp: 
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -93,12 +98,4 @@ class OU:
                 'gpo_effect': gpo_effect,
                 'aces': aces,
             })
-
-
-        sc = ldap.SimplePagedResultsControl(size=100)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink']
-        sbase = "%s" % ldap_obj.defaultdomainnamingcontext
-        ldap_obj.conn.search(searchBase=sbase, searchFilter='(objectCategory=organizationalUnit)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
-
 

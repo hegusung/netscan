@@ -165,7 +165,12 @@ class LDAPScan:
 
         schema_guid_dict = self._get_schema_guid_dict(['domain', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['distinguishedName', 'name', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version']
+        sbase = "%s" % self.defaultdomainnamingcontext
+        resp = self.conn.search(searchBase=sbase, searchFilter='(objectCategory=domain)', searchControls=[sc], attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -259,17 +264,16 @@ class LDAPScan:
             })
 
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'name', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version']
-        sbase = "%s" % self.defaultdomainnamingcontext
-        self.conn.search(searchBase=sbase, searchFilter='(objectCategory=domain)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
-
     def list_containers(self, domain, callback):
 
         schema_guid_dict = self._get_schema_guid_dict(['container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['name', 'distinguishedName', 'nTSecurityDescriptor', 'objectGUID']
+        sbase = "%s" % self.defaultdomainnamingcontext
+        resp = self.conn.search(searchBase=sbase, searchFilter='(objectCategory=container)', searchControls=[sc], attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -305,12 +309,6 @@ class LDAPScan:
                 'aces': aces,
             })
 
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['name', 'distinguishedName', 'nTSecurityDescriptor', 'objectGUID']
-        sbase = "%s" % self.defaultdomainnamingcontext
-        self.conn.search(searchBase=sbase, searchFilter='(objectCategory=container)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
 
 
     def _get_schema_guid_dict(self, parameters):
@@ -681,7 +679,13 @@ class LDAPScan:
 
         schema_guid_dict = self._get_schema_guid_dict(['user', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName']
+        sbase = "%s" % self.defaultdomainnamingcontext
+        resp = self.conn.search(searchBase=sbase, searchFilter='(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,CN=Schema,CN=Configuration,DC=main,DC=local))', searchControls=[sc], attributes=attributes, sizeLimit=0)
+        #self.conn.search(searchBase=sbase, searchFilter='(samaccounttype=805306368)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -818,14 +822,6 @@ class LDAPScan:
                 'aces': aces,
                 'spns': spns,
             })
-
-
-        sc = ldap.SimplePagedResultsControl(size=10, criticality=False)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName']
-        sbase = "%s" % self.defaultdomainnamingcontext
-        self.conn.search(searchBase=sbase, searchFilter='(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,CN=Schema,CN=Configuration,DC=main,DC=local))', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
-        #self.conn.search(searchBase=sbase, searchFilter='(samaccounttype=805306368)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
 
     def list_admins(self):
 
@@ -1050,7 +1046,12 @@ class LDAPScan:
 
         schema_guid_dict = self._get_schema_guid_dict(['group', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['distinguishedName', 'sAMAccountname', 'description', 'objectSid', 'primaryGroupID', 'adminCount', 'member', 'nTSecurityDescriptor']
+        #self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=group)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(|(samaccounttype=268435456)(samaccounttype=268435457)(samaccounttype=536870912)(samaccounttype=536870913))', searchControls=[sc], attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1110,17 +1111,15 @@ class LDAPScan:
                 'aces': aces,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'sAMAccountname', 'description', 'objectSid', 'primaryGroupID', 'adminCount', 'member', 'nTSecurityDescriptor']
-        #self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=group)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(|(samaccounttype=268435456)(samaccounttype=268435457)(samaccounttype=536870912)(samaccounttype=536870913))', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
-
     def list_hosts(self, callback):
 
         schema_guid_dict = self._get_schema_guid_dict(['computer', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'pwdLastSet']
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=computer)', searchControls=[sc], attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1217,14 +1216,16 @@ class LDAPScan:
                 'last_password_change': last_password_change_date,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'pwdLastSet']
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectCategory=computer)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
-
     def list_dns(self, callback):
 
-        def process(item):
+        attributes = ['distinguishedName']
+        try:
+            resp = self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', attributes=attributes, sizeLimit=0)
+        except LDAPSearchError:
+            # This DC doesn't have DNS
+            pass
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1235,17 +1236,12 @@ class LDAPScan:
             if not '.in-addr.arpa' in dns_entry:
                 callback(dns_entry)
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        attributes = ['distinguishedName']
-        try:
-            self.conn.search(searchBase='CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=dnsNode)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
-        except LDAPSearchError:
-            # This DC doesn't have DNS
-            pass
-
     def list_trusts(self, callback):
 
-        def process(item):
+        attributes = ['distinguishedName', 'name', 'trustDirection', 'trustType', 'trustAttributes']
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectClass=trustedDomain)', attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1299,13 +1295,12 @@ class LDAPScan:
                 'tags': tags,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        attributes = ['distinguishedName', 'name', 'trustDirection', 'trustType', 'trustAttributes']
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter='(objectClass=trustedDomain)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
-
     def list_casrv(self, callback):
 
-        def process(item):
+        attributes = ['distinguishedName', 'name', 'dNSHostName']
+        resp = self.conn.search(searchBase="CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s" % self.defaultdomainnamingcontext, searchFilter="(objectClass=pKIEnrollmentService)", attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1316,13 +1311,12 @@ class LDAPScan:
 
             callback({"name": name, "hostname": dns})
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        attributes = ['distinguishedName', 'name', 'dNSHostName']
-        self.conn.search(searchBase="CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s" % self.defaultdomainnamingcontext, searchFilter="(objectClass=pKIEnrollmentService)", searchControls=[sc], perRecordCallback=process, attributes=attributes)
-
     def list_cacerts(self, callback):
 
-        def process(item):
+        attributes = ['distinguishedName', 'cACertificate']
+        resp = self.conn.search(searchBase='CN=NTAuthCertificates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(cn=*)', attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1351,10 +1345,6 @@ class LDAPScan:
                     'common_names': common_names,
                 })
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        attributes = ['distinguishedName', 'cACertificate']
-        self.conn.search(searchBase='CN=NTAuthCertificates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(cn=*)', searchControls=[sc], perRecordCallback=process, attributes=attributes)
-
     def list_enrollment_services(self, callback, username=None):
         if username:
             sid_groups = list(self._get_groups_recursive(username).keys())
@@ -1363,7 +1353,11 @@ class LDAPScan:
         else:
             sid_groups = None
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['distinguishedName', 'name', 'dNSHostName', 'certificateTemplates', 'nTSecurityDescriptor']
+        resp = self.conn.search(searchBase='CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=pKIEnrollmentService)', searchControls=[sc], attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1403,11 +1397,6 @@ class LDAPScan:
                         output['can_enroll'] = True
 
             callback(output)
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'name', 'dNSHostName', 'certificateTemplates', 'nTSecurityDescriptor']
-        self.conn.search(searchBase='CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=pKIEnrollmentService)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
 
     def list_cert_templates(self, callback):
 
@@ -1519,7 +1508,11 @@ class LDAPScan:
 
         schema_guid_dict = self.generate_guid_dict(all=False)
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        attributes = ['distinguishedName', 'name', 'pKIExtendedKeyUsage', 'msPKI-Certificate-Name-Flag', 'msPKI-Enrollment-Flag', 'msPKI-RA-Signature', 'nTSecurityDescriptor']
+        resp = self.conn.search(searchBase='CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=pKICertificateTemplate)', searchControls=[sc], attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1584,11 +1577,6 @@ class LDAPScan:
                 'authorized_signature_required': authorized_signature_required,
                 'privileges': privileges,
             })
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'name', 'pKIExtendedKeyUsage', 'msPKI-Certificate-Name-Flag', 'msPKI-Enrollment-Flag', 'msPKI-RA-Signature', 'nTSecurityDescriptor']
-        self.conn.search(searchBase='CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext, searchFilter='(objectClass=pKICertificateTemplate)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
 
 
     def check_esc1(self, username, callback):
@@ -1785,7 +1773,10 @@ class LDAPScan:
     """
     def list_writable_GPOs(self, smbscan, callback):
 
-        def process(item):
+        attributes = ['distinguishedName', 'gPCFileSysPath', 'displayName']
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectCategory=groupPolicyContainer)", attributes=attributes, sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1817,10 +1808,6 @@ class LDAPScan:
                     })
 
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        attributes = ['distinguishedName', 'gPCFileSysPath', 'displayName']
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectCategory=groupPolicyContainer)", searchControls=[sc], perRecordCallback=process, attributes=attributes)
-
     def list_acls(self, username, callback, all=False):
 
         # First, get all related groups
@@ -1843,7 +1830,10 @@ class LDAPScan:
             controls = [build_control('1.2.840.113556.1.4.801', True, sdcontrol)]
             return controls
 
-        def process(item):
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(|(objectClass=user)(objectClass=group)(objectClass=computer))", attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership'], searchControls=[sc], sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1889,10 +1879,6 @@ class LDAPScan:
                         if 'parameter' in ace:
                             callback(ace)
 
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(|(objectClass=user)(objectClass=group)(objectClass=computer))", attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership'], searchControls=[sc, sc2], perRecordCallback=process )
 
         """
         def process(item):
@@ -1964,7 +1950,9 @@ class LDAPScan:
 
     def list_constrained_delegations(self, callback):
 
-        def process(item):
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(msDS-AllowedToDelegateTo=*)", attributes=['distinguishedName', 'sAMAccountName', 'msDS-AllowedToDelegateTo'], sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -1980,9 +1968,6 @@ class LDAPScan:
                 'spn': spn,
             })
 
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(msDS-AllowedToDelegateTo=*)", searchControls=[sc], perRecordCallback=process)
 
 
     def list_object_acl(self, object_acl, callback, all=False):
@@ -2010,7 +1995,21 @@ class LDAPScan:
 
         schema_guid_dict = self.generate_guid_dict(all=all)
 
-        def process(item):
+        if "cn=schema,cn=configuration,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
+            searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
+        elif "cn=configuration,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
+            searchBase = "CN=Configuration,%s" % self.defaultdomainnamingcontext
+        elif "dc=domaindnszones,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
+            searchBase = "DC=DomainDnsZones,%s" % self.defaultdomainnamingcontext
+        elif "dc=forestdnszones,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
+            searchBase = "DC=ForestDnsZones,%s" % self.defaultdomainnamingcontext
+        else:
+            searchBase = self.defaultdomainnamingcontext
+
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        resp = self.conn.search(searchBase=searchBase, searchFilter=search_filter, attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'name', 'msDS-GroupMSAMembership'], searchControls=[sc], sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -2057,21 +2056,6 @@ class LDAPScan:
                         if 'parameter' in ace:
                             callback(ace)
 
-
-        if "cn=schema,cn=configuration,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
-            searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
-        elif "cn=configuration,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
-            searchBase = "CN=Configuration,%s" % self.defaultdomainnamingcontext
-        elif "dc=domaindnszones,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
-            searchBase = "DC=DomainDnsZones,%s" % self.defaultdomainnamingcontext
-        elif "dc=forestdnszones,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
-            searchBase = "DC=ForestDnsZones,%s" % self.defaultdomainnamingcontext
-        else:
-            searchBase = self.defaultdomainnamingcontext
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        self.conn.search(searchBase=searchBase, searchFilter=search_filter, attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'name', 'msDS-GroupMSAMembership'], searchControls=[sc, sc2], perRecordCallback=process )
 
     def generate_guid_dict(self, all=False, parameters=['ms-Mcs-AdmPwd', 'msDS-ManagedPassword']):
 
@@ -2195,15 +2179,10 @@ class LDAPScan:
         res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=['name'])
 
         for item in res:
-            print(type(item))
-            print(item)
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 continue
 
             attr = self.to_dict(item)
-            print(attr.keys())
-
-            print(str(attr['name']))
 
     def list_user_groups(self, username, callback):
 
@@ -2281,7 +2260,9 @@ class LDAPScan:
     # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
     def dump_gMSA(self, callback):
 
-        def process(item):
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectClass=msDS-GroupManagedServiceAccount)", attributes=['distinguishedName', 'sAMAccountName','msDS-ManagedPassword'], sizeLimit=0)
+
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -2307,13 +2288,13 @@ class LDAPScan:
                 'password': passwd,
             })
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectClass=msDS-GroupManagedServiceAccount)", searchControls=[sc], attributes=['distinguishedName', 'sAMAccountName','msDS-ManagedPassword'], perRecordCallback=process)
-
     # Taken from https://github.com/n00py/LAPSDumper/blob/main/laps.py
     def dump_LAPS(self, callback):
+        
+        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
+        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(&(objectCategory=computer)(ms-Mcs-AdmPwdExpirationTime=*))", searchControls=[sc], attributes=['distinguishedName', 'dNSHostName', 'sAMAccountName', 'ms-Mcs-AdmPwd', 'Set-AdmPwdReadPasswordPermission'], sizeLimit=0)
 
-        def process(item):
+        for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
@@ -2332,11 +2313,7 @@ class LDAPScan:
                 data['password'] = str(attr['ms-Mcs-AdmPwd'])
 
             callback(data)
-             
-        sc = ldap.SimplePagedResultsControl(size=10)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(&(objectCategory=computer)(ms-Mcs-AdmPwdExpirationTime=*))", searchControls=[sc, sc2], attributes=['distinguishedName', 'dNSHostName', 'sAMAccountName', 'ms-Mcs-AdmPwd', 'Set-AdmPwdReadPasswordPermission'], perRecordCallback=process)
-
+     
 # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
 
 class MSDS_MANAGEDPASSWORD_BLOB(Structure):
