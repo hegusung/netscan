@@ -34,27 +34,42 @@
 
 ## Screenshots
 
+Display the global help menu
+![](images/netscan-help.png)
+
+Display a specific module help menu
+![](images/netscan-help-module.png)
+
 Run a ping scan to discover devices in the network
-![](images/pingscan-screen.png)
+![](images/netscan-pingscan.png)
 
 Run a port scan to get all opened ports with the nmap options
-![](images/portscan-screen.png)
+![](images/netscan-portscan.png)
 
-Display the result a way-to-cool interface!
+Display the result in a way-to-cool interface!
 ![](images/kibana-screen.png)
 
 ## 1. Installation
 
 ### 1.0 Automagic installation (with docker)
 
-Run the following command and enjoy immediately..
+> Run the following command and enjoy immediately..
+
 ```bash
-$> bash docker_run.sh
+~/netscan$> ./init_docker_framework.sh
 ```
+
+The previous command will build and/or start all the framework docker containers used by netscan.
+It will create and configure : 
+* an elasticsearch container
+* a kibana container
+* a neo4j container
 
 ![](images/running.png)
 
-### 1.1 Manual installation without Docker
+When everything is up and running, you can use the ` netscan ` command and enjoy.
+
+### 1.1 Manual installation (without Docker)
 
 1. Install dependencies
   ```bash
@@ -64,7 +79,7 @@ $> bash docker_run.sh
   ```bash
   $> cp config.cfg.sample config.cfg
   ```
-3. Deploy `Elasticsearch` and `Kibana` on your system
+3. If needed, deploy `Elasticsearch` and `Kibana` on your systema.
 
 ## 2. Configuration
 > **Note**:  

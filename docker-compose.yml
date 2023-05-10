@@ -126,26 +126,6 @@ services:
       timeout: 10s
       retries: 120
 
-  netscan-tool:
-    build:
-      context: ./
-      dockerfile: ./docker/Dockerfile
-    container_name: netscan-tool
-    env_file:
-      - docker/docker.env    
-    hostname: netscan
-    tty: true
-    volumes:
-      - ./docker_shared:/app/docker_shared
-      - ./logs:/app/logs
-      - ./server/files:/app/server/files
-    ports:
-      - 127.0.0.1:445:445
-      - 127.0.0.1:3890:3890
-      - 127.0.0.1:8000:8000
-    networks:
-      - netscan-network
-
   netscan-neo4j:
     container_name: netscan-neo4j
     hostname: neo4j
