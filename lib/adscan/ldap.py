@@ -717,7 +717,7 @@ class LDAPScan:
 
             attr = item['raw_attributes']
 
-            if not 'sAMAccountName' in attr:
+            if not 'sAMAccountName' in attr or len(attr['sAMAccountName']) == 0:
                 continue
 
             domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName'][0].decode()).split(',') if item.split("=",1)[0].lower() == "dc"])
