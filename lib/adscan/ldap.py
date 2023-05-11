@@ -680,23 +680,50 @@ class LDAPScan:
         schema_guid_dict = self._get_schema_guid_dict(['user', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
         sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName']
+        attributes = ['distinguishedName', 'sAMAccountName', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName']
         sbase = "%s" % self.defaultdomainnamingcontext
-        resp = self.conn.search(searchBase=sbase, searchFilter='(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,CN=Schema,CN=Configuration,DC=main,DC=local))', searchControls=[sc], attributes=attributes, sizeLimit=0)
+        search_filter = '(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,CN=Schema,CN=Configuration,DC=main,DC=local))'
+        #resp = self.conn.search(searchBase=sbase, searchFilter='(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,CN=Schema,CN=Configuration,DC=main,DC=local))', searchControls=[sc], attributes=attributes, sizeLimit=0)
         #self.conn.search(searchBase=sbase, searchFilter='(samaccounttype=805306368)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
 
-        for item in resp:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
+        from ldap3 import Server, Connection, SUBTREE, ALL
+        from ldap3.protocol.microsoft import security_descriptor_control
+        s = Server(self.hostname, port=636, use_ssl=True, get_info=ALL)  # define an unsecure LDAP server, requesting info on DSE and schema
+        user = "%s@%s" % (self.username, self.domain)
+        c = Connection(s, user=user, password=self.password)
 
-            attr = self.to_dict(item)
+        if not c.bind():
+            Output.error("bug during bind")
+            return
+
+        controls = security_descriptor_control(sdflags=0x05)
+
+        entry_generator = c.extend.standard.paged_search(search_base = sbase,
+                                                 search_filter = search_filter,
+                                                 search_scope = SUBTREE,
+                                                 attributes = attributes,
+                                                 controls=controls,
+                                                 paged_size = 10,
+                                                 generator=True)
+
+        #for item in resp:
+        #    if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+        #        return
+        #    attr = self.to_dict(item)
+
+        for item in entry_generator:
+            if item['type'] != 'searchResEntry':
+                continue
+
+            attr = item['raw_attributes']
 
             if not 'sAMAccountName' in attr:
-                return
+                continue
 
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            username = str(attr['sAMAccountName'])
-            fullname = str(attr['displayName']) if 'displayName' in attr else ""
+            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName'][0].decode()).split(',') if item.split("=",1)[0].lower() == "dc"])
+            print(domain)
+            username = str(attr['sAMAccountName'][0].decode())
+            fullname = str(attr['displayName'][0].decode()) if 'displayName' in attr and len(attr['displayName']) > 0 else ""
 
             if not 'description' in attr:
                 comment = ""
@@ -705,28 +732,32 @@ class LDAPScan:
             else:
                 comment = str(attr['description'])
 
-            sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical() if 'objectSid' in attr else None
+            #sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical() if 'objectSid' in attr else None
+            sid = LDAP_SID(bytes(attr['objectSid'][0])).formatCanonical() if 'objectSid' in attr else None
             if sid:
                 rid = int(sid.split('-')[-1])
             else:
                 rid = None
             dn = str(attr['distinguishedName'])
 
-            primaryGID = int(str(attr["primaryGroupID"]))
+            #primaryGID = int(str(attr["primaryGroupID"]))
+            primaryGID = int( attr["primaryGroupID"][0].decode() )
 
-            created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+            #created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+            created_date = datetime.strptime(str(attr['whenCreated'][0].decode()), '%Y%m%d%H%M%S.0Z') 
             try:
-                last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
+                #last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
+                last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str( attr['lastLogon'][0].decode() ))))
             except KeyError:
                 last_logon_date = None
             try:
-                last_password_change_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['pwdLastSet']))))
+                last_password_change_date = datetime.fromtimestamp(self.getUnixTime(int(str( attr['pwdLastSet'][0].decode() ))))
             except KeyError:
                 last_password_change_date = None
 
             tags = []
             if 'userAccountControl' in attr:
-                attr['userAccountControl'] = int(str(attr['userAccountControl']))
+                attr['userAccountControl'] = int( str(attr['userAccountControl'][0].decode() ) )
 
                 #if attr['userAccountControl'] & 0x0200 == 0:
                 #    # not a user account
@@ -761,10 +792,10 @@ class LDAPScan:
                 if attr['userAccountControl'] & 0x4000000 != 0:
                     tags.append('Partial secrets account')
             else:
-                return
+                continue
 
             # Not returned in the Global Catalog
-            if 'adminCount' in attr and int(str(attr['adminCount'])) > 0:
+            if 'adminCount' in attr and len(attr['adminCount']) != 0 and int(str(attr['adminCount'][0].decode())) > 0:
                 tags.append('adminCount>0')
 
             groups = [] 
@@ -785,11 +816,13 @@ class LDAPScan:
 
                     groups.append("%s\\%s" % (groupdomain, groupname))
 
-            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'user', schema_guid_dict)
+            #aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'user', schema_guid_dict)
+            aces = parse_sd(attr['nTSecurityDescriptor'][0], domain.upper(), 'user', schema_guid_dict)
             aces = self._resolve_sid_types(aces, "aces")
 
-            if 'msDS-GroupMSAMembership' in attr:
-                aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), domain.upper(), 'user', schema_guid_dict)
+            if 'msDS-GroupMSAMembership' in attr and len(attr['msDS-GroupMSAMembership']):
+                #aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), domain.upper(), 'user', schema_guid_dict)
+                aces2 = parse_sd(attr['msDS-GroupMSAMembership'][0], domain.upper(), 'user', schema_guid_dict)
                 aces2 = self._resolve_sid_types(aces2, "aces")
                 for rule in aces2['aces']:
                     if rule['RightName'] == 'GenericAll':
