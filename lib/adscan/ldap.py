@@ -721,7 +721,6 @@ class LDAPScan:
                 continue
 
             domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName'][0].decode()).split(',') if item.split("=",1)[0].lower() == "dc"])
-            print(domain)
             username = str(attr['sAMAccountName'][0].decode())
             fullname = str(attr['displayName'][0].decode()) if 'displayName' in attr and len(attr['displayName']) > 0 else ""
 
@@ -744,7 +743,12 @@ class LDAPScan:
             primaryGID = int( attr["primaryGroupID"][0].decode() )
 
             #created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
-            created_date = datetime.strptime(str(attr['whenCreated'][0].decode()), '%Y%m%d%H%M%S.0Z') 
+            try:
+                created_date = datetime.strptime(str(attr['whenCreated'][0].decode()), '%Y%m%d%H%M%S.0Z') 
+            except KeyError:
+                created_date = None
+            except IndexError:
+                created_date = None
             try:
                 #last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
                 last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str( attr['lastLogon'][0].decode() ))))

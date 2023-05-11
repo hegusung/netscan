@@ -729,7 +729,7 @@ class DB:
         if len(host_doc['domain']) == 0 or host_doc['domain'] == 'workgroup':
             return
 
-        if 'created_date' in host_doc:
+        if 'created_date' in host_doc and host_doc['created_date'] != None:
             host_doc['created_date'] = int(host_doc['created_date'].timestamp()*1000)
         if 'last_logon' in host_doc and host_doc['last_logon'] != None:
             host_doc['last_logon'] = int(host_doc['last_logon'].timestamp()*1000)
@@ -798,7 +798,7 @@ class DB:
         if len(user_doc['domain']) == 0 or user_doc['domain'] == 'workgroup':
             return
 
-        if 'created_date' in user_doc:
+        if 'created_date' in user_doc and user_doc['created_date'] != None:
             user_doc['created_date'] = int(user_doc['created_date'].timestamp()*1000)
         if 'last_logon' in user_doc and user_doc['last_logon'] != None:
             user_doc['last_logon'] = int(user_doc['last_logon'].timestamp()*1000)
