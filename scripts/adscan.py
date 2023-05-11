@@ -87,6 +87,7 @@ def main():
     misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     misc_group.add_argument("--no-ssl", action='store_true', help="Perform a LDAP connection instead of LDAPS", dest='no_ssl')
     misc_group.add_argument('--ldap-protocol', choices={"ldaps", "ldap", "gc"}, default=None, help="Way to connect to the ldap service (default: ldaps)", dest='ldap_protocol')
+    misc_group.add_argument("--python-ldap", action='store_true', help="Use python-ldap3 instead of impacket's ldap library", dest='python_ldap')
     
     # Dispatcher arguments
     misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
@@ -222,14 +223,14 @@ def main():
         actions['modules'] = {'modules': args.modules, 'args': module_args}
 
 
-    adscan(targets, static_inputs, args.workers, actions, creds, args.ldap_protocol, args.timeout)
+    adscan(targets, static_inputs, args.workers, actions, creds, args.ldap_protocol, args.timeout, args.python_ldap)
 
     DB.stop_worker()
     Output.stop()
 
 
-def adscan(input_targets, static_inputs, workers, actions, creds, no_ssl, timeout):
-    args = (actions, creds, no_ssl, timeout)
+def adscan(input_targets, static_inputs, workers, actions, creds, no_ssl, timeout, python_ldap):
+    args = (actions, creds, no_ssl, python_ldap, timeout)
     dispatch_targets(input_targets, static_inputs, adscan_worker, args, workers=workers)
 
 

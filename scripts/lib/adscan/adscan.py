@@ -25,7 +25,7 @@ ad_modules = ModuleManager('lib/adscan/modules')
 
 windows_build = re.compile("Windows \S+ Build (\d+)")
 
-def adscan_worker(target, actions, creds, ldap_protocol, timeout):
+def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
     # Process creds
     if 'username' in creds and '\\' in creds['username']:
         creds['domain'] = creds['username'].split('\\')[0]
@@ -205,7 +205,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
             for ldap_protocol in ldap_protocols:
                 success = False
                 try:
-                    ldapscan = LDAPScan(target['hostname'], timeout, protocol=ldap_protocol)
+                    ldapscan = LDAPScan(target['hostname'], timeout, protocol=ldap_protocol, python_ldap=python_ldap)
                     success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
 
                     if success:

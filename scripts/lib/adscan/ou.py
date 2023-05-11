@@ -17,17 +17,7 @@ class OU:
 
         schema_guid_dict = ldap_obj._get_schema_guid_dict(['Organizational-Unit', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink']
-        sbase = "%s" % ldap_obj.defaultdomainnamingcontext
-        resp = ldap_obj.conn.search(searchBase=sbase, searchFilter='(objectCategory=organizationalUnit)', searchControls=[sc], attributes=attributes, sizeLimit=0)
-
-        for item in resp: 
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
-
-            attr = ldap_obj.to_dict(item)
-
+        def process(attr):
             ou_domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
 
             if ou_domain.lower() != domain.lower():
@@ -98,4 +88,11 @@ class OU:
                 'gpo_effect': gpo_effect,
                 'aces': aces,
             })
+
+        sbase = "%s" % ldap_obj.defaultdomainnamingcontext
+        search_filter='(objectCategory=organizationalUnit)'
+        attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink']
+
+        ldap_obj.query(process, sbase, search_filter, attributes, query_sd=True)
+
 
