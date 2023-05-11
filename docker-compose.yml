@@ -136,9 +136,7 @@ services:
     hostname: netscan
     tty: true
     volumes:
-      - ./docker_shared:/app/docker_shared
-      - ./logs:/app/logs
-      - ./server/files:/app/server/files
+      - .:/app/
     ports:
       - 127.0.0.1:445:445
       - 127.0.0.1:3890:3890

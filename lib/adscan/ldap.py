@@ -750,13 +750,17 @@ class LDAPScan:
                 last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str( attr['lastLogon'][0].decode() ))))
             except KeyError:
                 last_logon_date = None
+            except IndexError:
+                last_logon_date = None
             try:
                 last_password_change_date = datetime.fromtimestamp(self.getUnixTime(int(str( attr['pwdLastSet'][0].decode() ))))
             except KeyError:
                 last_password_change_date = None
+            except IndexError:
+                last_password_change_date = None
 
             tags = []
-            if 'userAccountControl' in attr:
+            if 'userAccountControl' in attr and len(attr['userAccountControl']) > 0:
                 attr['userAccountControl'] = int( str(attr['userAccountControl'][0].decode() ) )
 
                 #if attr['userAccountControl'] & 0x0200 == 0:
