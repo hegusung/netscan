@@ -14,7 +14,7 @@ from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
 
-RTSP_URL_FILE = "lib/rtspscan/rtsp-urls.txt"
+RTSP_URL_FILE = "scripts/lib/rtspscan/rtsp-urls.txt"
 
 import os
 os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;udp'

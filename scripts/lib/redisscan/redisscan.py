@@ -75,7 +75,7 @@ def redisscan_worker(target, actions, creds, timeout):
             version_tuple = tuple([int(i) for i in version.split(".")])
 
             if version_tuple < (2, 8, 21) or version_tuple[0] == 3 and version_tuple < (3, 0, 2):
-                Output.write({'target': redis.url(), 'message': "RCE on Redis (CVE-2015-4335)"})
+                Output.vuln({'target': redis.url(), 'message': "RCE on Redis (CVE-2015-4335)"})
 
         if not auth:
             Output.write({'target': redis.url(), 'message': 'Unknown'})

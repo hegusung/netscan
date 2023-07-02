@@ -64,13 +64,13 @@ class HTTP:
 
         return response_data
 
-    def put(self, path, data, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
-        response_data = self.request('PUT', path, ssl_version=ssl_version, data=data, auth=auth, cookies=cookies, headers=headers)
+    def put(self, path, data, params=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
+        response_data = self.request('PUT', path, params=params, ssl_version=ssl_version, data=data, auth=auth, cookies=cookies, headers=headers)
 
         return response_data
 
-    def post(self, path, data, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
-        response_data = self.request('POST', path, ssl_version=ssl_version, data=data, auth=auth, cookies=cookies, headers=headers)
+    def post(self, path, data, params=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
+        response_data = self.request('POST', path, params=params, ssl_version=ssl_version, data=data, auth=auth, cookies=cookies, headers=headers)
 
         return response_data
 
