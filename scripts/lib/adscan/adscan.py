@@ -937,6 +937,51 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC4) exploitable by user %s:' % username})
                     ldapscan.check_esc4(username, callback)
 
+            if 'esc11' in actions:
+
+                if len(actions['esc11']['user']) == 0:
+                    #domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['esc11']['user']:
+                    #domain = creds['domain']
+                    username = actions['esc11']['user']
+                else:
+                    #domain = actions['esc11']['user'].split('\\')[0]
+                    username = actions['esc11']['user'].split('\\')[-1]
+
+                if ldap_authenticated:
+                    enrollment_services = []
+                    def callback(entry):
+                        enrollment_services.append(entry)
+                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s" % (entry['name'].ljust(30), entry['dns'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    ldapscan.list_enrollment_services(callback)
+
+                    def callback(entry):
+                        enabled = False
+                        enrollment_service = None
+                        for e_s in enrollment_services:
+                            if entry['name'] in e_s['templates']:
+                                enabled = True
+                                enrollment_service = e_s['name']
+                                break
+
+                        if not "WriteDACL" in entry['ace']['rights'] and not 'WriteOwner' in entry['ace']['rights'] and not 'GenericAll' in entry['ace']['rights'] and not 'GenericWrite' in entry['ace']['rights']:
+                            return
+
+                        priv_account = entry['ace']['name'] if 'name' in entry['ace'] else entry['ace']['sid']
+                        status = entry['ace']['type']
+
+                        if enabled:
+                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)\n\tCA:                         %s\n\tPrivilege:          (%s)  [%s]  %s" % (entry['name'].ljust(30), enrollment_service, status, ','.join(entry['ace']['rights']), priv_account)})
+                        else:
+                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)\n\tCA:                         %s\n\tPrivilege:          (%s)  [%s]  %s" % (entry['name'].ljust(30), enrollment_service, status, ','.join(entry['ace']['rights']), priv_account)})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC4) exploitable by user %s:' % username})
+                    ldapscan.check_esc11(username, callback)
+
+
 
             if 'vuln_gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Vulnerable GPOs:'})

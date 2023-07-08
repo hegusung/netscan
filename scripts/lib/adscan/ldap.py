@@ -135,6 +135,8 @@ class LDAPScan:
             if self.domain_sid == None:
                 Output.error({"target": self.url(), "message": "Unable to discover domain SID"})
 
+            self.root_namingcontext = self._get_root_namingcontext()
+
             return True, {'default_domain_naming_context': self.defaultdomainnamingcontext, 'domain_sid': self.domain_sid}
         except impacket.ldap.ldap.LDAPSessionError as e:
             return False, None
@@ -145,6 +147,28 @@ class LDAPScan:
         except Exception as e:
             print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
             return False, None
+
+    def _get_root_namingcontext(self):
+        root_namingcontext = self.defaultdomainnamingcontext
+
+        search_filter = "(cn=account)"
+
+        while ',' in root_namingcontext:
+            search_base = "CN=Schema,CN=Configuration,%s" % root_namingcontext
+
+            try:
+                sc = ldap.SimplePagedResultsControl(size=1)
+                attributes = ['distinguishedName']
+                res = self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+                for item in res:
+                    pass
+
+                return root_namingcontext
+            except impacket.ldap.ldap.LDAPSearchError:
+                root_namingcontext = ','.join(root_namingcontext.split(',')[1:])
+
+        return None
 
     def disconnect(self):
         #if self.conn.bind():
@@ -480,6 +504,7 @@ class LDAPScan:
                 break
 
         return return_sid
+
 
     def list_gpos(self, callback):
 
@@ -931,7 +956,7 @@ class LDAPScan:
 
 
         sbase = "%s" % self.defaultdomainnamingcontext
-        search_filter = '(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,CN=Schema,CN=Configuration,DC=main,DC=local))'
+        search_filter = '(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,CN=Schema,CN=Configuration,%s))' % self.root_namingcontext
         attributes = ['distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName']
 
         self.query(process, sbase, search_filter, attributes, query_sd=True)
@@ -1419,7 +1444,7 @@ class LDAPScan:
 
             callback({"name": name, "hostname": dns})
 
-        sbase = "CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s" % self.defaultdomainnamingcontext
+        sbase = "CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s" % self.root_namingcontext
         search_filter="(objectClass=pKIEnrollmentService)"
         attributes = ['distinguishedName', 'name', 'dNSHostName']
         self.query(process, sbase, search_filter, attributes, query_sd=False)
@@ -1452,7 +1477,7 @@ class LDAPScan:
                     'common_names': common_names,
                 })
 
-        sbase = 'CN=NTAuthCertificates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext
+        sbase = 'CN=NTAuthCertificates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.root_namingcontext
         search_filter = '(cn=*)'
         attributes = ['distinguishedName', 'cACertificate']
         self.query(process, sbase, search_filter, attributes, query_sd=False)
@@ -1502,7 +1527,7 @@ class LDAPScan:
 
             callback(output)
 
-        sbase = 'CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext
+        sbase = 'CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.root_namingcontext
         search_filter = '(objectClass=pKIEnrollmentService)'
         attributes = ['distinguishedName', 'name', 'dNSHostName', 'certificateTemplates', 'nTSecurityDescriptor']
         self.query(process, sbase, search_filter, attributes, query_sd=False)
@@ -1679,7 +1704,7 @@ class LDAPScan:
                 'privileges': privileges,
             })
 
-        sbase = 'CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.defaultdomainnamingcontext
+        sbase = 'CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,%s' % self.root_namingcontext
         search_filter = '(objectClass=pKICertificateTemplate)'
         attributes = ['distinguishedName', 'name', 'pKIExtendedKeyUsage', 'msPKI-Certificate-Name-Flag', 'msPKI-Enrollment-Flag', 'msPKI-RA-Signature', 'nTSecurityDescriptor']
         self.query(process, sbase, search_filter, attributes, query_sd=False)
@@ -1826,6 +1851,18 @@ class LDAPScan:
                     callback(entry)
 
         self.list_cert_templates(process)
+
+    def check_esc11(self, username, callback):
+        sid_groups = list(self._get_groups_recursive(username).keys())
+        sid_groups.append('S-1-1-0')
+        sid_groups.append('S-1-5-11')
+
+        def process(entry):
+            print(entry['enrollment_flag'])
+
+        self.list_cert_templates(process)
+
+
 
     """
     def list_cacerts(self):
@@ -2100,14 +2137,14 @@ class LDAPScan:
 
         schema_guid_dict = self.generate_guid_dict(all=all)
 
-        if "cn=schema,cn=configuration,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
-            searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
-        elif "cn=configuration,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
-            searchBase = "CN=Configuration,%s" % self.defaultdomainnamingcontext
+        if "cn=schema,cn=configuration,%s" % self.root_namingcontext.lower() in object_acl.lower():
+            searchBase = "CN=Schema,CN=Configuration,%s" % self.root_namingcontext
+        elif "cn=configuration,%s" % self.root_namingcontext.lower() in object_acl.lower():
+            searchBase = "CN=Configuration,%s" % self.root_namingcontext
         elif "dc=domaindnszones,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
             searchBase = "DC=DomainDnsZones,%s" % self.defaultdomainnamingcontext
-        elif "dc=forestdnszones,%s" % self.defaultdomainnamingcontext.lower() in object_acl.lower():
-            searchBase = "DC=ForestDnsZones,%s" % self.defaultdomainnamingcontext
+        elif "dc=forestdnszones,%s" % self.root_namingcontext.lower() in object_acl.lower():
+            searchBase = "DC=ForestDnsZones,%s" % self.root_namingcontext
         else:
             searchBase = self.defaultdomainnamingcontext
 
@@ -2186,8 +2223,8 @@ class LDAPScan:
                 rev_guid_dict[prop_set] = {'guid': guid, 'type': 'PropertySet'}
 
         if all:
-            search_filter = "(objectCategory=CN=Attribute-Schema,CN=Schema,CN=Configuration,%s)" % self.defaultdomainnamingcontext
-            searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
+            search_filter = "(objectCategory=CN=Attribute-Schema,CN=Schema,CN=Configuration,%s)" % self.root_namingcontext
+            searchBase = "CN=Schema,CN=Configuration,%s" % self.root_namingcontext
 
             sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['schemaIDGUID', 'rightsGuid', 'name']
@@ -2210,9 +2247,9 @@ class LDAPScan:
                     guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
                     rev_guid_dict[str(attr['name'])] = {'guid': guid, 'type': 'attribute'}
 
-            #search_filter = "(objectCategory=CN=Attribute-Schema,CN=Schema,CN=Configuration,%s)" % self.defaultdomainnamingcontext
-            search_filter = "(objectCategory=CN=Control-Access-Right,CN=Schema,CN=Configuration,%s)" % self.defaultdomainnamingcontext
-            searchBase = "CN=Configuration,%s" % self.defaultdomainnamingcontext
+            #search_filter = "(objectCategory=CN=Attribute-Schema,CN=Schema,CN=Configuration,%s)" % self.root_namingcontext
+            search_filter = "(objectCategory=CN=Control-Access-Right,CN=Schema,CN=Configuration,%s)" % self.root_namingcontext
+            searchBase = "CN=Configuration,%s" % self.root_namingcontext
 
             sc = ldap.SimplePagedResultsControl(size=10)
             attributes = ['schemaIDGUID', 'rightsGuid', 'name']
@@ -2239,7 +2276,7 @@ class LDAPScan:
                 rev_guid_dict[str(attr['name']).lower()] = guid
 
         else:
-            searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
+            searchBase = "CN=Schema,CN=Configuration,%s" % self.root_namingcontext
             search_filter = "(|%s)" % "".join(["(name=%s)" % s for s in parameters])
 
             sc = ldap.SimplePagedResultsControl(size=10)
@@ -2277,7 +2314,7 @@ class LDAPScan:
         guid_ldap = ''.join(['\\%s' % guid[i:i+2] for i in range(0, len(guid), 2)])
 
         search_filter = "(schemaIDGUID=%s)" % guid_ldap
-        searchBase = "CN=Schema,CN=Configuration,%s" % self.defaultdomainnamingcontext
+        searchBase = "CN=Schema,CN=Configuration,%s" % self.root_namingcontext
 
         sc = ldap.SimplePagedResultsControl(size=10)
         res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=['name'])

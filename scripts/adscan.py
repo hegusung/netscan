@@ -65,6 +65,7 @@ def main():
     adcs_group.add_argument("--esc2", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC2)', default=None, const='', dest='esc2')
     adcs_group.add_argument("--esc3", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC3)', default=None, const='', dest='esc3')
     adcs_group.add_argument("--esc4", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC4)', default=None, const='', dest='esc4')
+    adcs_group.add_argument("--esc11", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC11)', default=None, const='', dest='esc11')
 
     # Dump
     admin_group = parser.add_argument_group("Domain admin actions")
@@ -186,6 +187,8 @@ def main():
         actions['esc3'] = {'user': args.esc3}
     if args.esc4 != None:
         actions['esc4'] = {'user': args.esc4}
+    if args.esc11 != None:
+        actions['esc11'] = {'user': args.esc11}
 
     if args.vuln_gpos:
         actions['vuln_gpos'] = {}
