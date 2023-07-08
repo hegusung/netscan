@@ -12,8 +12,8 @@ from Cryptodome.Hash import MD4
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from cryptography.hazmat.backends.openssl.rsa import _RSAPublicKey
-from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
-from cryptography.hazmat.backends.openssl.dsa import _DSAPublicKey
+#from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
+#from cryptography.hazmat.backends.openssl.dsa import _DSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePublicKey
 import impacket
@@ -1440,8 +1440,8 @@ class LDAPScan:
                 public_key = cert.public_key()
                 if type(public_key) in [RSAPublicKey, _RSAPublicKey]:
                     cert_algo = "RSA %d" % public_key.key_size
-                elif type(public_key) in [DSAPublicKey, _DSAPublicKey]:
-                    cert_algo = "DSA %d" % public_key.key_size
+                    #elif type(public_key) in [DSAPublicKey, _DSAPublicKey]:
+                    #cert_algo = "DSA %d" % public_key.key_size
                 elif type(public_key) in [EllipticCurvePublicKey, _EllipticCurvePublicKey]:
                     cert_algo = "EC %d" % public_key.key_size
                 else:
