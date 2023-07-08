@@ -35,7 +35,7 @@ else
     sleep 60
     
     echo -e "${GREEN}[+] Configuring Kibana...${ENDCOLOR}"
-    curl -u elastic:${ELASTIC_PASSWORD} -s -X POST 'http://127.0.0.1:5601/api/saved_objects/_import?createNewCopies=true' -H "kbn-xsrf: true" --form "file=@$(pwd)/kibana/kibana_dashboards.ndjson" > /dev/null
+    curl -u elastic:${ELASTIC_PASSWORD} -s -X POST 'http://127.0.0.1:5601/api/saved_objects/_import?createNewCopies=false' -H "kbn-xsrf: true" --form "file=@$(pwd)/kibana/kibana_dashboards.ndjson" > /dev/null
 
     echo -e "${GREEN}[+] Configuring Netscan...${ENDCOLOR}"
     if [ ! -f "config.cfg" ]; then
