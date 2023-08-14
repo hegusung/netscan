@@ -58,7 +58,7 @@ else
     netscan_docker_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/:/app/\" -h netscan -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest"
     netscan_alias_command="alias netscan='${netscan_docker_command}'"
 
-    netscan_docker_server_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/config.cfg:/app/config.cfg\" -h netscan -p \"0.0.0.0:3890:3890\" -p \"0.0.0.0:8000:8000\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest server"
+    netscan_docker_server_command="docker run -it --rm --name netscan-tool-\$RANDOM --env-file $(pwd)/docker/docker.env --network \"netscan-network\" -v \"/:/host\" -v \"$(pwd)/:/app/\" -h netscan -p \"0.0.0.0:3890:3890\" -p \"0.0.0.0:8000:8000\" -p \"0.0.0.0:4450:445\" -e HOST_PWD=\$(pwd) -u \$(id -u \${USER}):\$(id -g \${USER}) netscan:latest server"
     netscan_server_alias_command="alias netscan-server='${netscan_docker_server_command}'"
     
     if [ -f "$HOME/.zshrc" ]; then

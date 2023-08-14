@@ -26,3 +26,4 @@ opencv-python
 socks
 psutil
 colorama
+python-magic

@@ -13,6 +13,7 @@ from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
+from lib.search_secret.search_secret import SearchSecret
 
 """
 Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
@@ -304,6 +305,22 @@ def smbscan_worker(target, actions, creds, timeout):
                                 if 'size' in content:
                                     db_info['size'] = content['size']
                                 DB.insert_content(db_info)
+
+                                if 'search' in actions:
+                                    if db_info['type'] == 'file':
+
+                                        ss = SearchSecret()
+                                        filename = content['name'].replace('\\','/').split('/')[-1]
+                                        to_search = ss.to_check(filename, db_info['size'])
+                                        if to_search:
+
+                                            try:
+                                                data = smbscan.get_file_data(share, content['name'])
+                                                
+                                                ss.search_secret(filename, smbscan.url("/%s" % share) + content['name'].replace('\\', '/'), data)
+                                            except impacket.smbconnection.SessionError as e:
+                                                pass
+
                             Output.highlight({'target': smbscan.url(), 'message': contents})
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):

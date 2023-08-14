@@ -1088,6 +1088,13 @@ class SMBScan:
         for entry in enum.RIDBruteforce(start, end):
             yield entry
 
+    def get_file_data(self, share, path):
+        buf = BytesIO()
+        self.conn.getFile(share, path, buf.write)
+        data = buf.getvalue()
+
+        return data
+
 
     def list_gpps(self):
         sysvol_found = False

@@ -32,6 +32,7 @@ es_ids = {
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
+    'secret': 'secret_{session}_{filepath}_{line}',
     'domain': 'domain_domain_{session}_{domain}',
     'domain_container': 'domain_container_{session}_{domain}_{guid}',
     'domain_ou': 'domain_ou_{session}_{domain}_{guid}',
@@ -651,6 +652,17 @@ class DB:
                 del doc['tags']
                 doc['append'] = append
             self.send(doc)
+
+    @classmethod
+    def insert_secret(self, secret_doc):
+        secret_doc['doc_type'] = 'secret'
+        secret_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        secret_doc = check_entry(secret_doc, ['filepath', 'secret_name', 'line', 'reliability'], [])
+
+        secret_doc['service'] = secret_doc['service']
+        self.send(secret_doc)
+
+
 
     @classmethod
     def insert_domain_domain(self, domain_doc):
