@@ -1176,9 +1176,10 @@ class LDAPScan:
 
                 attr = self.to_dict_impacket(item)
 
-                sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
-                self.dn_to_sid_dict[attr['distinguishedName']] = sid
-                sid_list.append(sid)
+                if 'objectSid' in attr and 'distinguishedName' in attr:
+                    sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
+                    self.dn_to_sid_dict[attr['distinguishedName']] = sid
+                    sid_list.append(sid)
 
         return sid_list
 

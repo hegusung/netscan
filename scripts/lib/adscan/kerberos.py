@@ -30,8 +30,15 @@ class Kerberos:
             f.close()
 
         def ldap_gen(ldap):
-            for entry in ldap.list_users():
-                yield entry['username']
+            username_list = []
+            def yield_user(entry):
+                username_list.append(entry['username'])
+
+            ldap.list_users(callback=yield_user)
+
+            for u in username_list:
+                print(u)
+                yield u
 
         if username_file != 'nofile':
             gen = file_gen(username_file)

@@ -9,6 +9,8 @@ from utils.db import Elasticsearch
 from utils.output import Output
 from lib.es_query.bloodhound import *
 
+from utils.utils import open
+
 output = []
 
 service_filters = {
@@ -670,9 +672,9 @@ def restore(session, input_file):
         print('A session must be defined')
         return
 
-    if not os.path.exists(input_file):
-        print('The input file must exist')
-        return
+    #if not os.path.exists(input_file):
+    #    print('The input file must exist')
+    #    return
     
     Output.write("Counting the number of documents....")
 

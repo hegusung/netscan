@@ -100,7 +100,7 @@ class Module:
                 # Not vulnerable
                 pass
             else:
-                Output.error({'target': 'ldap://%s:%d' % (dcIp, 389), 'message': "[" + self.name + "] ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
+                Output.error({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': "[" + self.name + "] ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
 
             
 #Conduct and LDAP bind and determine if server signing

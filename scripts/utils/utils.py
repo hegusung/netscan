@@ -3,6 +3,8 @@ import os.path
 import string
 import re
 
+normal_open = open
+
 class AuthFailure(Exception):
     pass
 
@@ -88,12 +90,11 @@ def replace_binary(data, pattern, value, size=None):
     return bytes(data)
 
 def open(path):
-    return open(normalize_path(path))
+    return normal_open(normalize_path(path))
 
 
 def is_docker_env():
     return "DOCKER_ENV" in os.environ
-
 
 def normalize_path(dir_path):
     if dir_path == None:
