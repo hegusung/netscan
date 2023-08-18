@@ -56,7 +56,7 @@ Display the result in a way-to-cool interface!
 > Run the following command and enjoy immediately..
 
 ```bash
-~/netscan$> ./init_docker_framework.sh
+~/netscan$> ./configure_docker.sh
 ```
 
 The previous command will build and/or start all the framework docker containers used by netscan.
