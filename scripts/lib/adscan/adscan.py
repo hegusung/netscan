@@ -667,9 +667,14 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
             if 'certipy' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Certipy:'})
                 if ldap_authenticated:
-                    vulns = call_certipy(target['hostname'], creds)
+                    ca_vulns, template_vulns = call_certipy(target['hostname'], creds)
 
-                    for vuln in vulns:
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Certificate Authorities vulnerabilities:'})
+                    for vuln in ca_vulns:
+                        Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['ca']).ljust(20), vuln['vuln_name'], vuln['description'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Certificate Templates vulnerabilities:'})
+                    for vuln in template_vulns:
                         Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['template']).ljust(20), vuln['vuln_name'], vuln['description'])})
 
             if 'cert_templates' in actions:

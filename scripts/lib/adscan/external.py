@@ -36,14 +36,24 @@ def call_certipy(dc_ip, creds):
     certipy_json = json.loads(f.read())
     f.close()
 
-    vulns = []
+    ca_vulns = []
+    for key, cert in certipy_json['Certificate Authorities'].items():
+        if '[!] Vulnerabilities' in cert:
+            for vuln_name, description in cert['[!] Vulnerabilities'].items():
+                ca_vulns.append({
+                    'ca': cert['CA Name'],
+                    'vuln_name': vuln_name,
+                    'description': description,
+                })
+
+    template_vulns = []
     for key, cert in certipy_json['Certificate Templates'].items():
         if '[!] Vulnerabilities' in cert:
             for vuln_name, description in cert['[!] Vulnerabilities'].items():
-                vulns.append({
+                template_vulns.append({
                     'template': cert['Template Name'],
                     'vuln_name': vuln_name,
                     'description': description,
                 })
 
-    return vulns
+    return ca_vulns, template_vulns
