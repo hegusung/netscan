@@ -60,6 +60,7 @@ def main():
     adcs_group = parser.add_argument_group("ADCS")
     adcs_group.add_argument("--adcs", action='store_true', help='Discover the domain root Certificate Authority')
     adcs_group.add_argument("--ca-certs", action='store_true', help='List CA certificates from Active Directory', dest='ca_certs')
+    adcs_group.add_argument("--certipy", action='store_true', help='Execute certipy', dest='certipy')
     adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory', dest='cert_templates')
     adcs_group.add_argument("--esc1", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC1)', default=None, const='', dest='esc1')
     adcs_group.add_argument("--esc2", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC2)', default=None, const='', dest='esc2')
@@ -177,6 +178,8 @@ def main():
         actions['casrv'] = {}
     if args.ca_certs:
         actions['ca_certs'] = {}
+    if args.certipy:
+        actions['certipy'] = {}
     if args.cert_templates:
         actions['cert_templates'] = {}
     if args.esc1 != None:

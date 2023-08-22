@@ -27,3 +27,4 @@ socks
 psutil
 colorama
 python-magic
+certipy-ad

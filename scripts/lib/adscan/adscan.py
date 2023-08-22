@@ -15,6 +15,7 @@ from ldap3.core.exceptions import LDAPSocketSendError
 from lib.smbscan.smb import SMBScan
 from .ldap import LDAPScan
 from .kerberos import Kerberos
+from .external import call_certipy
 
 from utils.output import Output
 from utils.utils import AuthFailure
@@ -662,6 +663,14 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     ldapscan.list_cacerts(callback)
                 else:
                     raise NotImplementedError('Dumping hosts through LDAP')
+
+            if 'certipy' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Certipy:'})
+                if ldap_authenticated:
+                    vulns = call_certipy(target['hostname'], creds)
+
+                    for vuln in vulns:
+                        Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['template']).ljust(20), vuln['vuln_name'], vuln['description'])})
 
             if 'cert_templates' in actions:
                 if ldap_authenticated:

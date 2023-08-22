@@ -94,7 +94,7 @@ class SearchSecret:
                 pattern = self.config[secret_pattern_name]['regex']
 
                 # TODO
-                if re.compile(pattern).search(line):
+                if re.compile(pattern, re.IGNORECASE).search(line):
                     false_positive_string = self.config[secret_pattern_name]['false_positive_string']
                     if len(false_positive_string) > 0:
                         fp_strings = false_positive_string.split(',')
