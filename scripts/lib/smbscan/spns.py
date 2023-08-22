@@ -183,7 +183,7 @@ class GetUserSPNs:
         # In short, we're interested in splitting the checksum and the rest of the encrypted data
         #
         output = None
-        if decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.rc4_hmac.value:
+        if decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.rc4_hmac.value:  # 23
             entry = '$krb5tgs$%d$*%s$%s$%s*$%s$%s' % (
                 constants.EncryptionTypes.rc4_hmac.value, username, decodedTGS['ticket']['realm'], spn.replace(':', '~'),
                 hexlify(decodedTGS['ticket']['enc-part']['cipher'][:16].asOctets()).decode(),
@@ -195,21 +195,9 @@ class GetUserSPNs:
             #new_domain_hash(domain, None, username, entry.strip(), format='Kerberos 5 TGS-REP')
             if fd != None:
                 fd.write(entry+'\n')
-        elif decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:
-            entry = '$krb5tgs$%d$*%s$%s$%s*$%s$%s' % (
-                constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, username, decodedTGS['ticket']['realm'], spn.replace(':', '~'),
-                hexlify(decodedTGS['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(),
-                hexlify(decodedTGS['ticket']['enc-part']['cipher'][:-12:].asOctets()).decode)
-            output = {
-                'format': 'Kerberos 5 TGS-REP',
-                'tgs': entry.strip(),
-            }
-            #new_domain_hash(domain, None, username, entry.strip(), format='Kerberos 5 TGS-REP')
-            if fd != None:
-                fd.write(entry+'\n')
-        elif decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
-            entry = '$krb5tgs$%d$*%s$%s$%s*$%s$%s' % (
-                constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, username, decodedTGS['ticket']['realm'], spn.replace(':', '~'),
+        elif decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value:  # 17
+            entry = '$krb5tgs$%d$%s$%s$%s$%s' % (
+                constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, username, decodedTGS['ticket']['realm'],
                 hexlify(decodedTGS['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(),
                 hexlify(decodedTGS['ticket']['enc-part']['cipher'][:-12:].asOctets()).decode())
             output = {
@@ -219,7 +207,19 @@ class GetUserSPNs:
             #new_domain_hash(domain, None, username, entry.strip(), format='Kerberos 5 TGS-REP')
             if fd != None:
                 fd.write(entry+'\n')
-        elif decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:
+        elif decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:  # 18
+            entry = '$krb5tgs$%d$%s$%s$%s$%s' % (
+                constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, username, decodedTGS['ticket']['realm'],
+                hexlify(decodedTGS['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(),
+                hexlify(decodedTGS['ticket']['enc-part']['cipher'][:-12:].asOctets()).decode())
+            output = {
+                'format': 'Kerberos 5 TGS-REP',
+                'tgs': entry.strip(),
+            }
+            #new_domain_hash(domain, None, username, entry.strip(), format='Kerberos 5 TGS-REP')
+            if fd != None:
+                fd.write(entry+'\n')
+        elif decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:  # 3
             entry = '$krb5tgs$%d$*%s$%s$%s*$%s$%s' % (
                 constants.EncryptionTypes.des_cbc_md5.value, username, decodedTGS['ticket']['realm'], spn.replace(':', '~'),
                 hexlify(decodedTGS['ticket']['enc-part']['cipher'][:16].asOctets()).decode(),

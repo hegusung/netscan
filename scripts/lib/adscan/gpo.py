@@ -24,7 +24,7 @@ class GPO:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 return
 
-            attr = ldap_obj.to_dict(item)
+            attr = ldap_obj.to_dict_impacket(item)
 
             domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
             domain_dn = ",".join(["DC=%s" % p for p in domain.split('.')])
