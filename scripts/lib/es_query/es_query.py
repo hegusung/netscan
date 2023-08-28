@@ -9,7 +9,7 @@ from utils.db import Elasticsearch
 from utils.output import Output
 from lib.es_query.bloodhound import *
 
-from utils.utils import open
+#from utils.utils import open
 
 output = []
 

@@ -38,7 +38,7 @@ def main():
     elif args.dump:
         dump(session, normalize_path(args.dump))
     elif args.restore:
-        restore(session, args.restore)
+        restore(session, normalize_path(args.restore))
 
     DB.stop_worker()
     Output.stop()

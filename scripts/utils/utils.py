@@ -89,9 +89,8 @@ def replace_binary(data, pattern, value, size=None):
 
     return bytes(data)
 
-def open(path):
-    return normal_open(normalize_path(path))
-
+def open(path, open_t='r'):
+    return normal_open(normalize_path(path), open_t)
 
 def is_docker_env():
     return "DOCKER_ENV" in os.environ
