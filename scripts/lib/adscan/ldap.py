@@ -1366,6 +1366,7 @@ class LDAPScan:
             dn = str(attr["distinguishedName"]).split(",CN=MicrosoftDNS,",1)[0]
             dns_entry = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
             if not '.in-addr.arpa' in dns_entry:
+                dns_entry = dns_entry.split('.DomainDnsZones.')[0]
                 callback(dns_entry)
 
         sbase = 'CN=MicrosoftDNS,DC=DomainDnsZones,%s' % self.defaultdomainnamingcontext
