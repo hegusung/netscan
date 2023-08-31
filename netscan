@@ -13,7 +13,10 @@ SCRIPTS_DIR="./scripts"
 #########################
 usage(){ 
     echo -e "Usage: $0 <module> [options]\n" 
-    echo -e "Modules available : \n\t$(find $SCRIPTS_DIR -maxdepth 1 -type f | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed ':a;N;$!ba;s/\n/,/g' | sed 's/,$//g' | sed -e "s/.\{109\}/&\n\t/g"),shell"
+    #echo -e "Modules available : \n\t$(find $SCRIPTS_DIR -maxdepth 1 -type f | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed ':a;N;$!ba;s/\n/,/g' | sed 's/,$//g' | sed -e "s/.\{109\}/&\n\t/g"),shell"
+    echo -e "Modules available :"
+    find $SCRIPTS_DIR -maxdepth 1 -type f | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed 's/^/        - /g'
+    echo -e "        - shell"
     echo -e "\nOptions :"
     echo -e "\t-h : Display help" 
     echo ""
