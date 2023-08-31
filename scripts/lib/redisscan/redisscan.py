@@ -86,6 +86,18 @@ def redisscan_worker(target, actions, creds, timeout):
                 }
                 DB.insert_vulnerability(vuln_info)
 
+            if version_tuple <= (5, 0, 5):
+                Output.vuln({'target': redis.url(), 'message': "Authenticated RCE on Redis, use Redis-Rogue-Server to exploit"})
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'redis',
+                    'url': redis.url(),
+                    'name': 'Authenticated RCE on Redis',
+                    'description': 'Redis version vulnerable to an RCE, use Redis-Rogue-Server to exploit: %s' % redis.url(),
+                }
+                DB.insert_vulnerability(vuln_info)
+
 
         if not auth:
             Output.write({'target': redis.url(), 'message': 'Unknown'})
