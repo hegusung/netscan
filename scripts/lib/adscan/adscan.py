@@ -561,7 +561,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     for entry in smbscan.list_spns(ldapscan.defaultdomainnamingcontext):
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         tgs_hash = entry['tgs']['tgs'] if 'tgs' in entry['tgs'] else 'Unable to retreive TGS hash'
-                        Output.write({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
+                        Output.vuln({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
 
                         # insert domain SPN
                         DB.insert_domain_spn({

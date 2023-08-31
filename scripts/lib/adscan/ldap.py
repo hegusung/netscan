@@ -543,13 +543,10 @@ class LDAPScan:
             except KeyError:
                 continue
 
-            class_list = [] 
-            if 'objectClass' in attr:
-                if type(attr['objectClass']) != SetOf:
-                    attr['objectClass'] = [attr['objectClass']]
-
-                for c in attr['objectClass']:
-                    class_list.append(str(c))
+            if type(attr['objectClass']) in [SetOf, list]:
+                class_list = [str(c) for c in attr['objectClass']]
+            else:
+                class_list = [str(attr['objectClass'])]
 
             if 'user' in class_list:
                 child_class = "User"
@@ -751,13 +748,10 @@ class LDAPScan:
 
                 sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
 
-                class_list = [] 
-                if 'objectClass' in attr:
-                    if type(attr['objectClass']) != SetOf:
-                        attr['objectClass'] = [attr['objectClass']]
-
-                    for c in attr['objectClass']:
-                        class_list.append(str(c).lower())
+                if type(attr['objectClass']) in [SetOf, list]:
+                    class_list = [str(c) for c in attr['objectClass']]
+                else:
+                    class_list = [str(attr['objectClass'])]
 
                 if 'user' in class_list:
                     self.sid_type_dict[sid] = 'User'
@@ -1034,7 +1028,12 @@ class LDAPScan:
             group_info['domain'] = domain
             group_info['name'] = name
 
-            if 'user' in str(attr['objectClass']):
+            if type(attr['objectClass']) in [SetOf, list]:
+                object_class = [str(c) for c in attr['objectClass']]
+            else:
+                object_class = [str(attr['objectClass'])]
+
+            if 'user' in object_class:
                 domain_username = "%s\\%s" % (domain, name)
 
                 username = str(attr['sAMAccountName'])
@@ -1128,7 +1127,7 @@ class LDAPScan:
 
                 if not domain_username in users:
                     users[domain_username] = user_details
-            elif 'group' in str(attr['objectClass']):
+            elif 'group' in object_class:
 
                 if 'member' in attr:
                     if type(attr['member']) == list:
@@ -2370,7 +2369,7 @@ class LDAPScan:
             domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
             groupname = str(attr['sAMAccountName'])
 
-            if type(attr['objectClass']) == SetOf:
+            if type(attr['objectClass']) in [SetOf, list]:
                 object_class = [str(c) for c in attr['objectClass']]
             else:
                 object_class = [str(attr['objectClass'])]
