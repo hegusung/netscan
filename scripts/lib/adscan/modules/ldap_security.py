@@ -185,10 +185,12 @@ def run_ldaps_noEPA(inputUser, inputPassword, dcTarget):
 #error recieved from the bind attempt.
 async def run_ldaps_withEPA(inputUser, inputPassword, dcTarget, fqdn, timeout):
     try:
-        url = 'ldaps+ntlm-password://'+inputUser + ':' + urllib.parse.quote(inputPassword) +'@' + dcTarget
+        quoted_pass = urllib.parse.quote(inputPassword)
+        url = 'ldaps+ntlm-password://'+inputUser + ':' + quoted_pass +'@' + dcTarget
         conn_url = LDAPConnectionFactory.from_url(url)
         ldaps_client = conn_url.get_client()
         ldaps_client.target.timeout = timeout
+        ldaps_client.creds.secret = urllib.parse.unquote(quoted_pass)
         ldapsClientConn = MSLDAPClientConnection(ldaps_client.target, ldaps_client.creds)
         _, err = await ldapsClientConn.connect()
         if err is not None:
