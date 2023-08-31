@@ -81,7 +81,7 @@ def main():
     # Modules
     module_group = parser.add_argument_group("Modules")
     module_group.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    module_group.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
+    module_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
 
     # Misc
     misc_group = parser.add_argument_group("Misc")
@@ -224,9 +224,7 @@ def main():
     if args.ntds:
         actions['dump_ntds'] = {'method': args.ntds}
     if args.modules:
-        module_args = {
-        }
-        actions['modules'] = {'modules': args.modules, 'args': module_args}
+        actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
 
     adscan(targets, static_inputs, args.workers, actions, creds, args.ldap_protocol, args.timeout, args.python_ldap)
