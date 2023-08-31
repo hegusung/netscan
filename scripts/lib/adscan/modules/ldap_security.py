@@ -1,4 +1,5 @@
 import os.path
+import urllib
 from urllib.parse import urljoin
 from ctypes import *
 import struct
@@ -184,7 +185,7 @@ def run_ldaps_noEPA(inputUser, inputPassword, dcTarget):
 #error recieved from the bind attempt.
 async def run_ldaps_withEPA(inputUser, inputPassword, dcTarget, fqdn, timeout):
     try:
-        url = 'ldaps+ntlm-password://'+inputUser + ':' + inputPassword +'@' + dcTarget
+        url = 'ldaps+ntlm-password://'+inputUser + ':' + urllib.parse.quote(inputPassword) +'@' + dcTarget
         conn_url = LDAPConnectionFactory.from_url(url)
         ldaps_client = conn_url.get_client()
         ldaps_client.target.timeout = timeout
@@ -204,4 +205,5 @@ async def run_ldaps_withEPA(inputUser, inputPassword, dcTarget, fqdn, timeout):
         elif err is None:
             return False
     except Exception as e:
+        traceback.print_exc()
         Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "[LDAP_Security] Something went wrong during ldaps_withEPA bind:" + str(e)})

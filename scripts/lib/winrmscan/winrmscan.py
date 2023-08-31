@@ -22,22 +22,29 @@ def winrmscan_worker(target, actions, creds, timeout):
         hash = creds['hash'] if 'hash' in creds else None
         winrmscan = WinRMScan(target['hostname'], timeout)
 
-        success = winrmscan.auth(domain, username, password, hash)
+        if domain:
+            user = "%s@%s" % (username, domain)
+        else:
+            user = username
+
+        success = winrmscan.auth(domain, user, password, hash)
         if success: 
-            if domain:
-                user = "%s\\%s" % (domain, username)
-            else:
-                user = username
             if password:
                 creds_str = "%s and password %s" % (user, password)
             else:
                 creds_str = "%s and hash %s" % (user, hash)
-            Output.write({'target': target['hostname'], 'message': 'Successful authentication with credentials %s' % creds_str})
+            Output.success({'target': target['hostname'], 'message': 'Successful authentication with credentials %s' % creds_str})
 
             if 'command' in actions:
                 output = "Command '%s':\n" % actions['command']['command']
                 output += winrmscan.execute(actions['command']['command'], get_output=True)
                 Output.write({'target': target['hostname'], 'message': output})
+        else:
+            if password:
+                creds_str = "%s and password %s" % (user, password)
+            else:
+                creds_str = "%s and hash %s" % (user, hash)
+            Output.minor({'target': target['hostname'], 'message': 'Authentication failure with credentials %s' % creds_str})
 
     except Exception as e:
         Output.write({'target': target['hostname'], 'message': 'AAA %s: %s\n%s' % (type(e), e, traceback.format_exc())})
