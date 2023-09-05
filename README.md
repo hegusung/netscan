@@ -73,6 +73,7 @@ When everything is up and running, you can use the ` netscan ` command and enjoy
 
 1. Install dependencies
   ```bash
+  $> sudo apt update && apt install libsqlcipher-dev
   $> pip3 install -r requirements.txt
   ```
 2. Create the configuration file
@@ -82,6 +83,7 @@ When everything is up and running, you can use the ` netscan ` command and enjoy
 3. If needed, deploy `Elasticsearch` and `Kibana` on your systema.
 
 ## 2. Configuration
+
 > **Note**:  
 > The docker version is already configured with default settings. You're good to go.
 
