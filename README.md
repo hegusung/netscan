@@ -73,7 +73,7 @@ When everything is up and running, you can use the ` netscan ` command and enjoy
 
 1. Install dependencies
   ```bash
-  $> sudo apt update && apt install libsqlcipher-dev
+  $> sudo apt update && sudo apt install libsqlcipher-dev
   $> pip3 install -r requirements.txt
   ```
 2. Create the configuration file
