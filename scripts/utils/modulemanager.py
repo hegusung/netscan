@@ -28,12 +28,8 @@ class ModuleManager:
 
     def execute_modules(self, module_names, args):
         mods = [m.lower().strip() for m in module_names.split(',')]
-        if 'all' in mods:
-            for _, module in self.modules.items():
+        for name, module in self.modules.items():
+            if name in mods:
                 module.run(*args)
-        else:
-            for name, module in self.modules.items():
-                if name in mods:
-                    module.run(*args)
 
 
