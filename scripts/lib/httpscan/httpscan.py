@@ -119,7 +119,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
                     if ignored_code != None:
                         excluded_code_arg.append(ignored_code)
 
-                    args = ({}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, inexistant_url, True)
+                    args = (verb, data, {}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, inexistant_url, True)
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
 
 
@@ -136,7 +136,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
                     if ignored_code != None:
                         excluded_code_arg.append(ignored_code)
 
-                    args = ({}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, []), True
+                    args = (verb, data, {}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, [], True)
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
     except ConnectionRefusedError:
         pass

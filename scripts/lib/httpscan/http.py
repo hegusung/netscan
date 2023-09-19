@@ -192,10 +192,13 @@ class HTTP:
                         print("%s: %s" % (type(e), e))
 
         except requests.exceptions.ConnectTimeout:
+            #traceback.print_exc()
             response_data = None
         except requests.exceptions.ConnectionError as e:
+            #traceback.print_exc()
             response_data = None
         except requests.exceptions.ReadTimeout:
+            #traceback.print_exc()
             response_data = None
 
         return response_data

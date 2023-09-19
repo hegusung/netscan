@@ -136,7 +136,7 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue, delay):
                 print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
                 # Store the exception for debugging purposes
 
-                log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), Config.config.get('Logging', 'folder'), "stack_traces.log")
+                log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "..", Config.config.get('Logging', 'folder'), "stack_traces.log")
                 logfile = open(log_path, "a")
                 logfile.write("%s: %s\n%s: %s\n%s\n\n" % (str(worker_func), str(target), type(e), e, traceback.format_exc()))
                 logfile.close()

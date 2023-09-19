@@ -89,8 +89,8 @@ def replace_binary(data, pattern, value, size=None):
 
     return bytes(data)
 
-def open(path, open_t='r'):
-    return normal_open(normalize_path(path), open_t)
+def open(path, mode='r', buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None):
+    return normal_open(normalize_path(path), mode=mode, buffering=buffering, encoding=encoding, errors=errors, newline=newline, closefd=closefd, opener=opener)
 
 def is_docker_env():
     return "DOCKER_ENV" in os.environ
@@ -103,6 +103,10 @@ def normalize_path(dir_path):
         if not os.path.isabs(dir_path):
             dir_path = os.getenv("HOST_PWD") + "/" + dir_path
         dir_path = os.path.abspath(dir_path)
-        return os.getenv("DOCKER_ENV") + dir_path
+        if not dir_path.startswith(os.getenv("DOCKER_ENV")):
+            return os.getenv("DOCKER_ENV") + dir_path
+        else:
+            return dir_path
+
     else:
         return dir_path
