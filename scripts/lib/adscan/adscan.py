@@ -540,6 +540,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     for entry in smbscan.list_gpps():
                         # insert domain vulnerability
                         DB.insert_domain_vulnerability({
+                            'hostname': target['hostname'],
                             'domain': entry['domain'],
                             'name': 'Password in GPP',
                             'description': 'Password in GPP: User => %s, Password => %s' % (entry['username'], entry['password']),
@@ -604,6 +605,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         # insert domain vulnerability if lock_threshold == 0
                         if password_policy['lock_threshold'] == 0:
                             DB.insert_domain_vulnerability({
+                                'hostname': target['hostname'],
                                 'domain': password_policy['domain'],
                                 'name': 'No account lockout',
                                 'description': 'No account lockout for domain %s, accounts can be bruteforced' % (password_policy['domain'],),
@@ -673,9 +675,23 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     for vuln in ca_vulns:
                         Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['ca']).ljust(20), vuln['vuln_name'], vuln['description'])})
 
+                        DB.insert_domain_vulnerability({
+                            'hostname': target['hostname'],
+                            'domain': smb_info['domain'],
+                            'name': vuln['vuln_name'],
+                            'description': vuln['description'],
+                        })
+
                     Output.highlight({'target': ldapscan.url(), 'message': 'Certificate Templates vulnerabilities:'})
                     for vuln in template_vulns:
                         Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['template']).ljust(20), vuln['vuln_name'], vuln['description'])})
+
+                        DB.insert_domain_vulnerability({
+                            'hostname': target['hostname'],
+                            'domain': smb_info['domain'],
+                            'name': vuln['vuln_name'],
+                            'description': vuln['description'],
+                        })
 
             if 'cert_templates' in actions:
                 if ldap_authenticated:
@@ -1138,6 +1154,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                                     # insert domain vulnerability
                                     DB.insert_domain_vulnerability({
+                                        'hostname': target['hostname'],
                                         'domain': valid_user['domain'],
                                         'name': 'Kerberos pre-auth disabled',
                                         'description': 'Kerberos pre-auth is disabled for user %s\%s' % (valid_user['domain'], valid_user['username']),

@@ -907,16 +907,17 @@ class DB:
 
     @classmethod
     def insert_domain_vulnerability(self, vuln_doc):
-        vuln_doc['doc_type'] = 'domain_vuln'
-        vuln_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        vuln_doc = check_entry(vuln_doc, ['domain', 'name', 'description'], [])
+        vuln_doc = check_entry(vuln_doc, ['hostname', 'domain', 'name', 'description'], [])
+
+        vuln_doc['url'] = vuln_doc['domain'].lower()
+        vuln_doc['service'] = 'domain'
 
         vuln_doc['domain'] = vuln_doc['domain'].lower()
 
         if len(vuln_doc['domain']) == 0 or vuln_doc['domain'] == 'workgroup':
             return
 
-        self.send(vuln_doc)
+        self.insert_vulnerability(vuln_doc)
 
     @classmethod
     def insert_host_linux(self, host_doc):
