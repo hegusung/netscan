@@ -37,23 +37,25 @@ def call_certipy(dc_ip, creds):
     f.close()
 
     ca_vulns = []
-    for key, cert in certipy_json['Certificate Authorities'].items():
-        if '[!] Vulnerabilities' in cert:
-            for vuln_name, description in cert['[!] Vulnerabilities'].items():
-                ca_vulns.append({
-                    'ca': cert['CA Name'],
-                    'vuln_name': vuln_name,
-                    'description': description,
-                })
+    if type(certipy_json['Certificate Authorities']) != str:
+        for key, cert in certipy_json['Certificate Authorities'].items():
+            if '[!] Vulnerabilities' in cert:
+                for vuln_name, description in cert['[!] Vulnerabilities'].items():
+                    ca_vulns.append({
+                        'ca': cert['CA Name'],
+                        'vuln_name': vuln_name,
+                        'description': description,
+                    })
 
     template_vulns = []
-    for key, cert in certipy_json['Certificate Templates'].items():
-        if '[!] Vulnerabilities' in cert:
-            for vuln_name, description in cert['[!] Vulnerabilities'].items():
-                template_vulns.append({
-                    'template': cert['Template Name'],
-                    'vuln_name': vuln_name,
-                    'description': description,
-                })
+    if type(certipy_json['Certificate Templates']) != str:
+        for key, cert in certipy_json['Certificate Templates'].items():
+            if '[!] Vulnerabilities' in cert:
+                for vuln_name, description in cert['[!] Vulnerabilities'].items():
+                    template_vulns.append({
+                        'template': cert['Template Name'],
+                        'vuln_name': vuln_name,
+                        'description': description,
+                    })
 
     return ca_vulns, template_vulns

@@ -909,7 +909,8 @@ class DB:
     def insert_domain_vulnerability(self, vuln_doc):
         vuln_doc = check_entry(vuln_doc, ['hostname', 'domain', 'name', 'description'], [])
 
-        vuln_doc['url'] = vuln_doc['domain'].lower()
+        vuln_doc['port'] = 445
+        vuln_doc['url'] = "domain:%s" % vuln_doc['domain'].lower()
         vuln_doc['service'] = 'domain'
 
         vuln_doc['domain'] = vuln_doc['domain'].lower()
