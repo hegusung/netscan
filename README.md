@@ -31,6 +31,8 @@
 - [X] AD scanner
 - [X] HTTP scanner
 - [X] DNS scanner
+- [X] SNMP scanner
+- [X] TLS scanner
 
 ## Screenshots
 

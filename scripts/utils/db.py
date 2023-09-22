@@ -33,6 +33,7 @@ es_ids = {
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
     'secret': 'secret_{session}_{filepath}_{line}',
+    'snmp': 'snmp_{session}_{ip}_{port}_{snmp_key}',
     'domain': 'domain_domain_{session}_{domain}',
     'domain_container': 'domain_container_{session}_{domain}_{guid}',
     'domain_ou': 'domain_ou_{session}_{domain}_{guid}',
@@ -662,7 +663,43 @@ class DB:
         secret_doc['service'] = secret_doc['service']
         self.send(secret_doc)
 
+    @classmethod
+    def insert_snmp_entry(self, snmp_doc):
+        snmp_doc['doc_type'] = 'snmp'
+        snmp_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        snmp_doc = check_entry(snmp_doc, ['hostname', 'port', 'snmp_key', 'snmp_type', 'snmp_value'], [])
 
+        to_insert = []
+        if check_ip(snmp_doc['hostname']):
+            # 'host' is an IP
+            snmp_doc['ip'] = snmp_doc['hostname']
+            del snmp_doc['hostname']
+
+            to_insert.append(snmp_doc)
+        else:
+            # 'host' is an IP
+            ip_list = resolve_hostname(snmp_doc['hostname'])
+
+            for ip in ip_list:
+                # insert hostname in DNS snmp
+                self.insert_dns({
+                    'source': snmp_doc['hostname'],
+                    'query_type': 'A',
+                    'target': ip,
+                })
+
+                snmp_doc_tmp = copy(snmp_doc)
+                snmp_doc_tmp['ip'] = ip
+                del snmp_doc_tmp['hostname']
+
+                to_insert.append(snmp_doc_tmp)
+
+        for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
+            self.send(doc)
 
     @classmethod
     def insert_domain_domain(self, domain_doc):

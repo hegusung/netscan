@@ -42,6 +42,7 @@ service_filters = {
     'rlogin': [{'port': 513}],
     'rtsp': [{'service': 'rtsp'}, {'port': 554}],
     'jdwp': [{'service': 'jdwp'},],
+    'snmp': [{'service': 'snmp'},],
 }
 
 service_nmap_translate = {

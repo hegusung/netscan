@@ -28,3 +28,6 @@ psutil
 colorama
 python-magic
 certipy-ad
+pysnmp
+pysnmp-mibs
+sslyze
