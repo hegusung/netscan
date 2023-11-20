@@ -21,7 +21,7 @@ Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
 
 smb_modules = ModuleManager('lib/smbscan/modules')
 
-windows_build = re.compile("Windows \S+ Build (\d+)")
+windows_build = re.compile("Windows \\S+ Build (\\d+)")
 
 def smbscan_worker(target, actions, creds, timeout):
     try:

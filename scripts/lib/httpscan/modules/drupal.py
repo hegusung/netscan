@@ -12,7 +12,7 @@ from lib.httpscan.http import HTTP
 # source: https://www.ambionics.io/blog/drupal8-rce
 # Source: https://gist.github.com/leonjza/d0ab053be9b06fa020b66f00358e3d88/f9f6a5bb6605745e292bee3a4079f261d891738a
 
-drupal_version_pattern = re.compile("Drupal (\d+)")
+drupal_version_pattern = re.compile("Drupal (\\d+)")
 
 class Module:
     name = 'Drupal'

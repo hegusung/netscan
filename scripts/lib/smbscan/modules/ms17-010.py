@@ -195,7 +195,7 @@ def tree_connect_andx_request(ip, userid):
       b'\xC5\x5E'           # 'multiplex_id'
     ]
 
-    ipc = "\\\\{}\IPC$\x00".format(ip)
+    ipc = "\\\\{}\\IPC$\x00".format(ip)
 
     tree_connect_andx_request = [
       b'\x04',              # Word Count
