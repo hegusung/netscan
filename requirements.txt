@@ -5,6 +5,7 @@ beautifulsoup4
 pymongo
 pyOpenSSL
 ldap3
+git+https://github.com/wbond/oscrypto.git
 msldap
 mysqlclient
 mysql-connector

@@ -1354,7 +1354,7 @@ class SMBScan:
         if password is None:
             password = ''
         
-        endpoint = '\winreg'
+        endpoint = '\\winreg'
         rpctransport = transport.SMBTransport(self.hostname, self.port, endpoint, username, password, domain, lmhash, nthash, None, doKerberos = do_kerberos)
    
         dce = rpctransport.get_dce_rpc()
