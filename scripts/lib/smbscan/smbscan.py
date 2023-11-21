@@ -7,7 +7,7 @@ import struct
 import re
 
 from .smb import SMBScan, AuthFailure, sizeof_fmt
-from .smb_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_generator_count
+from .smb_bruteforce import bruteforce_worker, bruteforce_ntlm_worker, bruteforce_generator, bruteforce_generator_count
 
 from utils.output import Output
 from utils.dispatch import dispatch
@@ -634,15 +634,31 @@ def smbscan_worker(target, actions, creds, timeout):
                         domain = 'WORKGROUP'
                     username_file = actions['bruteforce']['username_file']
                     password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
+                    ntlm_file = actions['bruteforce']['ntlm_file']
                     bruteforce_workers = actions['bruteforce']['workers']
                     bruteforce_delay = actions['bruteforce']['delay']
 
-                    # The generator will provide a username:password_list couple
-                    gen = bruteforce_generator(target, domain, username_file, password_file)
-                    gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
+                    if username_file != None and ntlm_file == None:
+                        # The generator will provide a username:password_list couple
+                        gen = bruteforce_generator(target, domain, username_file, password_file)
+                        gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
 
-                    args = (bruteforce_delay, timeout,)
-                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+                        args = (bruteforce_delay, timeout,)
+                        dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+                    elif ntlm_file != None:
+                        # The generator will provide a username:ntlm_list couple
+                        if username_file != None:
+                            # If we have usernames in one file and NTLMs in another
+                            gen = bruteforce_generator(target, domain, username_file, ntlm_file)
+                            gen_size = bruteforce_generator_count(target, domain, username_file, ntlm_file)
+                        else:
+                            # If NTLM file have the user:NTLM format
+                            gen = bruteforce_generator(target, domain, ntlm_file, None)
+                            gen_size = bruteforce_generator_count(target, domain, ntlm_file, None)
+
+                        args = (bruteforce_delay, timeout,)
+                        dispatch(gen, gen_size, bruteforce_ntlm_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+
             if 'simple_bruteforce' in actions:
                 if 'username_file' in actions['simple_bruteforce'] != None:
                     Output.highlight({'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})
