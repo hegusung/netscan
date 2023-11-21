@@ -74,11 +74,14 @@ def check(zone, ns_ip):
                 int(network.network_address) + 1, int(network.broadcast_address) - 1
             )
         )
-        response = add_dns_record(zone, ns_ip, name, str(ip))
-        if response == dns.rcode.NOERROR:
-            del_dns_record(zone, ns_ip, name)
-            return True
-        else:
+        try:
+            response = add_dns_record(zone, ns_ip, name, str(ip))
+            if response == dns.rcode.NOERROR:
+                del_dns_record(zone, ns_ip, name)
+                return True
+            else:
+                return False
+        except OSError:
             return False
 
 

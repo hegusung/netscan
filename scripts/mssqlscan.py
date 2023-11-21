@@ -71,7 +71,7 @@ def main():
         creds['domain'] = args.domain
     if args.username:
         creds['username'] = args.username
-    if args.password:
+    if args.password != None:
         creds['password'] = args.password
     if args.hash:
         creds['hash'] = args.hash

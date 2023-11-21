@@ -3,10 +3,13 @@ import json
 
 from utils.utils import gen_random_string
 
-def call_certipy(dc_ip, creds):
+def call_certipy(dc_ip, creds, ldap_protocol):
 
     output_file = "/tmp/netscan_%s" % gen_random_string()
     cmd_parts = ["certipy", "find", "-vulnerable", "-enabled", "-output", output_file, "-json", "-dc-ip", dc_ip, "-timeout", "120"]
+
+    if ldap_protocol == 'ldap':
+        cmd_parts += ["-scheme", "ldap"]
 
     output_file += "_Certipy.json"
 
