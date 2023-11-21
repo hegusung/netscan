@@ -120,7 +120,7 @@ class SMBScan:
                 self.is_admin = self.check_if_admin(domain, username, password, hash)
 
         except impacket.smbconnection.SessionError as e:
-            error, desc = e.getErrorString()
+            error = e.getErrorString()
             if 'STATUS_ACCESS_DENIED' in str(error):
                 # Can happen on both login() and check_if_admin() 
                 pass
@@ -1354,7 +1354,7 @@ class SMBScan:
         if password is None:
             password = ''
         
-        endpoint = '\winreg'
+        endpoint = '\\winreg'
         rpctransport = transport.SMBTransport(self.hostname, self.port, endpoint, username, password, domain, lmhash, nthash, None, doKerberos = do_kerberos)
    
         dce = rpctransport.get_dce_rpc()

@@ -24,7 +24,7 @@ from utils.modulemanager import ModuleManager
 
 ad_modules = ModuleManager('lib/adscan/modules')
 
-windows_build = re.compile("Windows \S+ Build (\d+)")
+windows_build = re.compile("Windows \\S+ Build (\\d+)")
 
 def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
     # Process creds
@@ -1157,7 +1157,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                         'hostname': target['hostname'],
                                         'domain': valid_user['domain'],
                                         'name': 'Kerberos pre-auth disabled',
-                                        'description': 'Kerberos pre-auth is disabled for user %s\%s' % (valid_user['domain'], valid_user['username']),
+                                        'description': 'Kerberos pre-auth is disabled for user %s\\%s' % (valid_user['domain'], valid_user['username']),
                                     })
 
                                     cred_info = {

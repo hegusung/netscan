@@ -14,7 +14,7 @@ from utils.utils import gen_random_string, gen_bruteforce_creds
 
 # source: https://github.com/opsxcq/exploit-CVE-2017-7494
 
-version_pattern = re.compile("^Samba\s+(\d+)\.(\d+)\.(\d+)([^\d].*)?$")
+version_pattern = re.compile("^Samba\\s+(\\d+)\\.(\\d+)\\.(\\d+)([^\\d].*)?$")
 
 class Module:
     name = 'SambaCry'

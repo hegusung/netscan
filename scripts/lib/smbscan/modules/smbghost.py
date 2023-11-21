@@ -11,7 +11,7 @@ from utils.db import DB
 from utils.utils import gen_random_string, gen_bruteforce_creds
 from ..smb import SMBScan
 
-windows_build_pattern = re.compile("Windows 10.0 Build (\d+)")
+windows_build_pattern = re.compile("Windows 10.0 Build (\\d+)")
 
 # source: https://github.com/ollypwn/SMBGhost/blob/master/scanner.py
 

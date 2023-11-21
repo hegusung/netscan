@@ -6,8 +6,8 @@ from time import sleep
 from utils.output import Output
 from utils.db import DB
 
-ttl_pattern = re.compile("^\d+.+: icmp_seq=\d+ ttl=(\d+) \S+=\S+\s+ms.*$")
-rtt_pattern = re.compile("^rtt\s+min/avg/max/mdev\s+=\s+(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)\s+ms.*$")
+ttl_pattern = re.compile("^\\d+.+: icmp_seq=\\d+ ttl=(\\d+) \\S+=\\S+\\s+ms.*$")
+rtt_pattern = re.compile("^rtt\\s+min/avg/max/mdev\\s+=\\s+(\\d+\\.\\d+)/(\\d+\\.\\d+)/(\\d+\\.\\d+)/(\\d+\\.\\d+)\\s+ms.*$")
 
 def pingscan_worker(target, timeout):
     try:
