@@ -28,24 +28,25 @@ def dnsscan_worker(target, dn_server, do_tcp, actions, timeout):
             for action in actions:
                 if action[0] == 'dc':
                     for ad_server in dnsscan.lookup_dc():
-                        for ip in ad_server['ips']:
-                            DB.insert_dns({
-                                'source': ad_server['hostname'],
-                                'query_type': "A",
-                                'target': ip,
-                            })
+                        if ad_server['ips'] != None:
+                            for ip in ad_server['ips']:
+                                DB.insert_dns({
+                                    'source': ad_server['hostname'],
+                                    'query_type': "A",
+                                    'target': ip,
+                                })
 
-                            DB.insert_port({
-                                'hostname': ip,
-                                'port': 445,
-                                'protocol': 'tcp',
-                                'service': 'smb',
-                                'service_info': {
-                                    'is_dc': True,
-                                    'domain': target['hostname'],
-                                    'hostname': ad_server['hostname'],
-                                }
-                            })
+                                DB.insert_port({
+                                    'hostname': ip,
+                                    'port': 445,
+                                    'protocol': 'tcp',
+                                    'service': 'smb',
+                                    'service_info': {
+                                        'is_dc': True,
+                                        'domain': target['hostname'],
+                                        'hostname': ad_server['hostname'],
+                                    }
+                                })
 
 
                         Output.highlight({"message_type": "dns_dc", "domain": ad_server['domain'], "hostname": ad_server["hostname"], "ips": ad_server['ips']})
@@ -91,6 +92,8 @@ class DNSScan:
         except dns.resolver.NXDOMAIN:
             resolved = None
         except dns.resolver.NoAnswer:
+            resolved = None
+        except dns.resolver.NoNameservers:
             resolved = None
         except dns.exception.Timeout as e:
             Output.error(str(e))

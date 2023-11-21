@@ -4,6 +4,7 @@ import copy
 import csv
 from urllib.parse import urlparse
 from netaddr import *
+from utils.utils import normalize_path
 
 method_port = {
     "http": 80,
@@ -42,7 +43,7 @@ def port_file(input_file):
         return None
 
     ports = []
-    f = open(input_file)
+    f = open(normalize_path(input_file))
     for line in f:
         line = line.split('#')[0]
         line = line.strip()

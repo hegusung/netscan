@@ -47,6 +47,7 @@ def main():
 
     Config.load_config()
     DB.start_worker(args.nodb)
+    DB.save_start()
 
     targets = {}
     if args.targets:
@@ -64,7 +65,7 @@ def main():
         if args.top_ports:
             static_inputs['port'] += args.top_ports
         if args.port_file:
-            static_inputs['port'] += normalize_path(args.port_file)
+            static_inputs['port'] += args.port_file
         static_inputs['port'] = list(set(static_inputs['port']))
 
     actions = {}

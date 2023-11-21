@@ -1,6 +1,7 @@
 from time import sleep
 import os.path
 import OpenSSL
+import requests
 
 from .http import HTTP
 
@@ -138,5 +139,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
 
                     args = (verb, data, {}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, [], True)
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
+    except requests.exceptions.TooManyRedirects as e:
+        Output.error({'target': httpscan.url(target['path']), 'message': str(e)})
     except ConnectionRefusedError:
         pass

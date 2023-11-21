@@ -83,7 +83,7 @@ class SMBScan:
 
     def auth(self, domain='WORKGROUP', username=None, password=None, hash=None):
         if not self.conn:
-            Output.write({'target': self.url(), 'message': 'enum_host_info(): please connect first'})
+            Output.write({'target': self.url(), 'message': 'auth(): please connect first'})
 
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 

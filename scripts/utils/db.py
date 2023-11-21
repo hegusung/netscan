@@ -21,6 +21,7 @@ urllib3.disable_warnings()
 MAX_BULK = 100
 
 es_ids = {
+    'tool': 'ip_{session}_{@timestamp}',
     'ip': 'ip_{session}_{ip}',
     'dns': 'dns_{session}_{source}_{query_type}_{target}',
     'port': 'port_{session}_{ip}_{protocol}_{port}',
@@ -241,6 +242,24 @@ class DB:
             except Exception as e:
                 traceback.print_exc()
                 print('%s: %s' % (type(e), e))
+
+    @classmethod
+    def save_start(self):
+        
+        netscan = "netscan"
+        tool = os.path.basename(sys.argv[0]).split(".")[0]
+        args = " ".join(sys.argv[1:])
+
+        cmdline = "%s %s %s" % (netscan, tool, args)
+
+        tool_doc = {}
+        tool_doc['doc_type'] = 'tool'
+        tool_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        tool_doc['cmdline'] = cmdline
+        tool_doc['tool'] = tool
+
+        self.send(tool_doc)
+
 
     @classmethod
     def insert_ip(self, host_doc):
