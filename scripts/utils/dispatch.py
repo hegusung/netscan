@@ -154,9 +154,9 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue, delay):
 def progressbar_worker(target_size, pg_queue, pg_name):
 
     if pg_name == None:
-        pg = tqdm(total=target_size, mininterval=1, leave=False)
+        pg = tqdm(total=target_size, mininterval=1, leave=False, dynamic_ncols=True)
     else:
-        pg = tqdm(total=target_size, mininterval=1, desc=pg_name, leave=False)
+        pg = tqdm(total=target_size, mininterval=1, desc=pg_name, leave=False, dynamic_ncols=True)
     count = 0
 
     c = 0
