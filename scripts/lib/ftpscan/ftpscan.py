@@ -122,8 +122,13 @@ def ftpscan_worker(target, actions, creds, timeout):
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
 
+    except ConnectionRefusedError:
+        pass
     except Exception as e:
         Output.write({'target': ftpscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
-        ftpscan.disconnect()
+        try:
+            ftpscan.disconnect()
+        except:
+            pass
 

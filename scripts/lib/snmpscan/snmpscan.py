@@ -88,26 +88,29 @@ def snmpscan_worker(target, actions, creds, timeout):
 
         # Query
         if actions and auth:
-            if 'oid' in actions:
-                if actions['oid'] == 'all':
-                    oid = '1.3.6.1.2'
-                else:
-                    oid = actions['oid']
+            try:
+                if 'oid' in actions:
+                    if actions['oid'] == 'all':
+                        oid = '1.3.6.1.2'
+                    else:
+                        oid = actions['oid']
 
-                if auth[0] == 'SNMPv2':
-                    result = snmp.request_v2(community=auth[1], oid=oid)
-                    for res in result:
-                        Output.highlight({'target': snmp.url(), 'message': '%s: (%s) %s' % tuple(res)})
+                    if auth[0] == 'SNMPv2':
+                        result = snmp.request_v2(community=auth[1], oid=oid)
+                        for res in result:
+                            Output.highlight({'target': snmp.url(), 'message': '%s: (%s) %s' % tuple(res)})
 
-                        DB.insert_snmp_entry({
-                            'hostname': target['hostname'],
-                            'port': target['port'],
-                            'snmp_key': res[0],
-                            'snmp_type': res[1],
-                            'snmp_value': res[2],
-                        })
-                else:
-                    raise NotImplementedError("SNMPv2 only")
+                            DB.insert_snmp_entry({
+                                'hostname': target['hostname'],
+                                'port': target['port'],
+                                'snmp_key': res[0],
+                                'snmp_type': res[1],
+                                'snmp_value': res[2],
+                            })
+                    else:
+                        raise NotImplementedError("SNMPv2 only")
+            except SNMPTimeout as e:
+                pass
 
         if actions:
             if 'bruteforce' in actions:

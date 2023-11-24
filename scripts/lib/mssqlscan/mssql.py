@@ -103,7 +103,10 @@ class MSSQLScan:
         if password == None:
             password = ''
 
-        success = self.mssql.login(None, username, password, domain, ntlm_hash, not local_auth)
+        try:
+            success = self.mssql.login(None, username, password, domain, ntlm_hash, not local_auth)
+        except TimeoutError:
+            raise AuthFailure('Timeout')
 
         if not success:
             raise AuthFailure('Authentication failed')

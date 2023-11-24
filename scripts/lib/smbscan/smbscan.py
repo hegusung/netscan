@@ -476,7 +476,16 @@ def smbscan_worker(target, actions, creds, timeout):
                     output = smbscan.exec("wmic product get name,version,installdate", exec_method=None, get_output=True)
                     if output:
                         msg = "Applications:\n"
-                        app_items = output.encode().decode('utf16').split('\n')[1:]
+
+                        output = output.encode()
+                        # cleanup strange bytes at the beginning
+                        while len(output) > 2:
+                            if output[0] == 73 and output[2] == 110:
+                                break
+
+                            output = output[1:]
+
+                        app_items = output.decode('utf16', errors="ignore").split('\n')[1:]
                         for app in app_items:
                             items = app.split()
 

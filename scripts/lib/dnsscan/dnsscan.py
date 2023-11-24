@@ -189,6 +189,8 @@ class DNSScan:
                 if axfr == None:
                     Output.minor({"target": str(ns_dns), "message": "AXFR transfer failure"})
                     continue
+            except dns.exception.Timeout:
+                continue
             except dns.xfr.TransferError:
                 Output.minor({"target": str(ns_dns), "message": "AXFR transfer failure"})
                 continue

@@ -10,6 +10,7 @@ import dns.resolver
 import dns.update
 import dns.query
 import dns.rcode
+from dns.exception import Timeout
 import random
 from uuid import uuid4
 from ipaddress import IPv4Network, IPv4Address
@@ -81,6 +82,8 @@ def check(zone, ns_ip):
                 return True
             else:
                 return False
+        except Timeout:
+            return False
         except OSError:
             return False
 
