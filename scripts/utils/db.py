@@ -239,6 +239,8 @@ class DB:
                     inserts = []
             except BrokenPipeError:
                 break
+            except EOFError:
+                break
             except Exception as e:
                 traceback.print_exc()
                 print('%s: %s' % (type(e), e))

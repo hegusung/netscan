@@ -17,6 +17,8 @@ server_data/payloads/*.py
 !server_data/payloads/.gitkeep
 !server_data/payloads/invoke_mimikatz.py
 !server_data/payloads/reversetcp_powershell.py
+!server_data/payloads/loader_mimikatz_dll_x64.py
+!server_data/payloads/loader_mimikatz_payload_x64.py
 server_data/ressources/*
 !server_data/ressources/.gitkeep
 !server_data/ressources/Invoke-Mimikatz.ps1

@@ -32,3 +32,4 @@ certipy-ad
 pysnmp
 pysnmp-mibs
 sslyze
+gssapi

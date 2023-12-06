@@ -3,7 +3,7 @@
 import argparse
 import sys
 import os
-from utils.utils import normalize_path
+from utils.utils import check_ip, normalize_path
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.adscan.adscan import adscan_worker, ad_modules
@@ -29,7 +29,7 @@ def main():
     auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
     
     # Enum
-    user_group = parser.add_argument_group("Domain user enumeration")
+    user_group = parser.add_argument_group("Domain enumeration")
     user_group.add_argument("--domains", action='store_true', help='dump domains, containers and OUs from the Active Directory with some interesting parameters (Bloodhound)')
     user_group.add_argument("--users", action='store_true', help='dump users from the Active Directory, display if the account has one of the following enabled: AdminCount, Account disabled, Password not required, Password never expire, Do not require pre-auth, Trusted to auth for delegation (Bloodhound)')
     user_group.add_argument("--admins", action='store_true', help='dump users with administrative privileges from Active Directory')
@@ -85,6 +85,7 @@ def main():
 
     # Misc
     misc_group = parser.add_argument_group("Misc")
+    misc_group.add_argument('--target-domain', metavar='domain', nargs='?', type=str, help='Target domain to request for cross-domain enumeration', dest='target_domain')
     misc_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     misc_group.add_argument("--no-ssl", action='store_true', help="Perform a LDAP connection instead of LDAPS", dest='no_ssl')
@@ -135,10 +136,12 @@ def main():
             creds['hash'] = args.hash
     if args.domain:
         creds['domain'] = args.domain
-    else:
-        print('Please specify the domain (complete FQDN)')
-        sys.exit()
+
     if args.kerberos != None:
+        if len(args.targets) != 0 and check_ip(args.targets.split(',')[0]):
+            Output.error("Please specify the target hostname instead of the IP")
+            sys.exit()
+
         if len(args.kerberos) != 0:
             os.environ['KRB5CCNAME'] = args.kerberos
         if not 'KRB5CCNAME' in os.environ:
@@ -148,8 +151,19 @@ def main():
         creds['kerberos'] = True
     if args.dc_ip != None:
         creds['dc_ip'] = args.dc_ip
+        
+    target_domain = None
+    if args.target_domain != None:
+        target_domain = args.target_domain
+    elif 'domain' in creds:
+        target_domain = creds['domain']
+        
+    if target_domain == None:
+        print('Please specify the domain (complete FQDN) with -d or --target-domain')
+        sys.exit()
+        
 
-    actions = {}
+    actions = {'target_domain': target_domain}
     if args.domains:
         actions['domains'] = {}
     if args.users:

@@ -94,8 +94,6 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 # Start new connection
                 smbscan.connect()
 
-                creds_smb = copy.copy(creds)
-
                 success = False
                 is_admin = False
 
@@ -114,6 +112,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                     creds['username'] = user
                     creds['domain'] = domain
+
+                creds_smb = copy.copy(creds)
 
                 # Authenticate
                 if not 'username' in creds_smb:
@@ -183,6 +183,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
         # == LDAP check ==
         try:
 
+            target_domain = actions['target_domain']
             domain = creds['domain'] if 'domain' in creds else None
             username = creds['username'] if 'username' in creds else None
             password = ''
@@ -207,10 +208,12 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 success = False
                 try:
                     ldapscan = LDAPScan(target['hostname'], timeout, protocol=ldap_protocol, python_ldap=python_ldap)
-                    success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
+                    success, ldap_info = ldapscan.connect(target_domain, domain, username, password, ntlm, doKerberos, dc_ip)
 
                     if success:
                         break
+
+                    Output.minor({'target': ldapscan.url(), 'message': 'Failed to authenticate via %s' % ldap_protocol})
                 except OpenSSL.SSL.SysCallError as e:
                     pass
             else:
@@ -533,6 +536,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 })
 
                     ldapscan.list_dns(callback)
+                else:
+                    raise NotImplementedError('Dumping DNS through SMB')
 
             if 'gpps' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'Passwords in GPPs:'})
@@ -625,7 +630,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s   [%s]' % (entry['domain'].ljust(30), entry['direction'].ljust(20), entry['type'].ljust(20), ','.join(entry['tags']))})
                     ldapscan.list_trusts(callback)
                 else:
-                    raise NotImplementedError('Dumping hosts through SMB')
+                    raise NotImplementedError('Dumping trusts through SMB')
 
             if 'gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'GPOs:'})
@@ -645,7 +650,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                     ldapscan.list_gpos(callback)
                 else:
-                    raise NotImplementedError('Dumping users through SMB')
+                    raise NotImplementedError('Dumping GPOs through SMB')
 
 
             if 'casrv' in actions:
@@ -655,7 +660,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '- %s %s' % (entry['name'].ljust(30), entry['hostname'])})
                     ldapscan.list_casrv(callback)
                 else:
-                    raise NotImplementedError('Dumping hosts through LDAP')
+                    raise NotImplementedError('Dumping CA servers through SMB')
 
             if 'ca_certs' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'CA certs:'})
@@ -664,7 +669,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['algo'].ljust(30), ','.join(entry['common_names']))})
                     ldapscan.list_cacerts(callback)
                 else:
-                    raise NotImplementedError('Dumping hosts through LDAP')
+                    raise NotImplementedError('Dumping CA Cert through SMB')
 
             if 'certipy' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Certipy:'})
