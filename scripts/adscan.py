@@ -138,10 +138,6 @@ def main():
         creds['domain'] = args.domain
 
     if args.kerberos != None:
-        if len(args.targets) != 0 and check_ip(args.targets.split(',')[0]):
-            Output.error("Please specify the target hostname instead of the IP")
-            sys.exit()
-
         if len(args.kerberos) != 0:
             os.environ['KRB5CCNAME'] = args.kerberos
         if not 'KRB5CCNAME' in os.environ:

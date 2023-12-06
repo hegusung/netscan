@@ -18,7 +18,7 @@ from .kerberos import Kerberos
 from .external import call_certipy
 
 from utils.output import Output
-from utils.utils import AuthFailure
+from utils.utils import check_ip, AuthFailure
 from utils.db import DB
 from utils.modulemanager import ModuleManager
 
@@ -98,6 +98,12 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 is_admin = False
 
                 if 'kerberos' in creds:
+                    if check_ip(target['hostname']):
+                        Output.error("When using kerberos, use the hostname instead of the IP. Aborting")
+                        Output.minor("The hostname is probably: %s.%s" % (smb_info['hostname'], smb_info['domain']))
+                        return
+
+
                     ticket = os.environ['KRB5CCNAME']
 
                     from impacket.krb5.ccache import CCache
@@ -304,9 +310,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'dn': entry['dn'],
                             'functionallevel': entry['functionallevel'],
                             # For bloodhound
-                            'affected_computers': entry['affected_computers'],
                             'gpo_effect': entry['gpo_effect'],
-                            'child_objects': entry['child_objects'],
                             'trusts': entry['trusts'],
                             'links': entry['links'],
                             'aces': entry['aces'],
@@ -326,7 +330,6 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 'dn': entry['dn'],
                                 'guid': entry['guid'],
                                 # For bloodhound
-                                'child_objects': entry['child_objects'],
                                 'aces': entry['aces'],
                             })
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
@@ -343,9 +346,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 'dn': entry['dn'],
                                 'guid': entry['guid'],
                                 # For bloodhound
-                                'affected_computers': entry['affected_computers'],
                                 'gpo_effect': entry['gpo_effect'],
-                                'child_objects': entry['child_objects'],
                                 'links': entry['links'],
                                 'aces': entry['aces'],
                             })

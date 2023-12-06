@@ -32,11 +32,7 @@ class OU:
             guid += b[8:10].hex() + '-'
             guid += b[10:16].hex()
 
-            affected_computers = [{"ObjectType": "computer", "ObjectIdentifier": sid} for sid in ldap_obj._resolve_affected_computers(dn, domain_sid)]
-
-            # Resolve child objects 
-            child_objects = ldap_obj._resolve_child_objects(dn)
-
+            # Process GPO
             links = {}
             gpo_paths = []
             if 'gPLink' in attr:
@@ -75,15 +71,12 @@ class OU:
             gpo_effect = GPO.merge_gpo_effect(gpo_effect)
 
             aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'organizational-unit', schema_guid_dict)
-            aces = ldap_obj._resolve_sid_types(aces, 'aces')
 
             callback({
                 'domain': domain,
                 'name': str(attr['name']),
                 'dn': dn,
                 'guid': guid,
-                'affected_computers': affected_computers,
-                'child_objects': child_objects,
                 'links': list(links.values()),
                 'gpo_effect': gpo_effect,
                 'aces': aces,

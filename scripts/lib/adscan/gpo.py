@@ -40,7 +40,6 @@ class GPO:
             guid += b[10:16].hex()
 
             aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'group-policy-container', schema_guid_dict)
-            aces = ldap_obj._resolve_sid_types(aces, 'aces')
 
             callback({
                 'domain': domain,

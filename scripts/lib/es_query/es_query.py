@@ -570,19 +570,19 @@ def export_bloodhound(session, output_dir):
 
     domains, domain_fqdn_to_name, output = export_bloodhound_domains(session, output_dir, output)
 
+    output = export_bloodhound_containers(session, output_dir, output)
+
+    output = export_bloodhound_ous(session, output_dir, output)
+
     user_info, user_sid, output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
+
+    output = export_bloodhound_gpos(session, output_dir, output)
 
     group_sid = get_group_sid(session)
 
     domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, output)
 
     output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, output)
-    
-    output = export_bloodhound_containers(session, output_dir, output)
-
-    output = export_bloodhound_ous(session, output_dir, output)
-
-    output = export_bloodhound_gpos(session, output_dir, output)
 
     pprint(output)
 
