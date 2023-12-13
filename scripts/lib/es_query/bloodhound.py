@@ -38,7 +38,7 @@ def export_bloodhound_domains(session, output_dir, output):
     count = Elasticsearch.count(query)
     Output.write("Processing %d domains" % count)
 
-    pg = tqdm(total=count, mininterval=1, leave=False)
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -132,7 +132,7 @@ def export_bloodhound_containers(session, output_dir, output):
     count = Elasticsearch.count(query)
     Output.write("Processing %d containers" % count)
 
-    pg = tqdm(total=count, mininterval=1, leave=False)
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -210,7 +210,7 @@ def export_bloodhound_ous(session, output_dir, output):
     count = Elasticsearch.count(query)
     Output.write("Processing %d OUs" % count)
 
-    pg = tqdm(total=count, mininterval=1, leave=False)
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -297,7 +297,7 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
     count = Elasticsearch.count(query)
     Output.write("Processing %d Users" % count)
 
-    pg = tqdm(total=count, mininterval=1, leave=False)
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -453,7 +453,7 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
     count = Elasticsearch.count(query)
     Output.write("Processing %d Groups" % count)
 
-    pg = tqdm(total=count, mininterval=1, leave=False)
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -626,7 +626,7 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
     count = Elasticsearch.count(query)
     Output.write("Processing %d Computers" % count)
 
-    pg = tqdm(total=count, mininterval=1, leave=False)
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -845,7 +845,7 @@ def export_bloodhound_gpos(session, output_dir, output):
     count = Elasticsearch.count(query)
     Output.write("Processing %d GPOs" % count)
 
-    pg = tqdm(total=count, mininterval=1, leave=False)
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0

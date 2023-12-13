@@ -649,7 +649,7 @@ def dump(session, output_file):
     # Create output files in dir if non existant
     nb_documents = Elasticsearch.count(query)
 
-    pg = tqdm(total=nb_documents, mininterval=1, leave=False)
+    pg = tqdm(total=nb_documents, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -687,7 +687,7 @@ def restore(session, input_file):
 
     Output.write("%d documents to insert in elasticsearch session %s" % (c, session))
 
-    pg = tqdm(total=c, mininterval=1, leave=False)
+    pg = tqdm(total=c, mininterval=1, leave=False, dynamic_ncols=True)
 
     f = open(input_file)
 

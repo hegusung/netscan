@@ -150,7 +150,7 @@ class DNSScan:
         nb_lines = sum(1 for _ in f)
         f.close()
         f = open(subdomain_file)
-        for subdomain in tqdm.tqdm(f, total=nb_lines, mininterval=1, desc=self.hostname):
+        for subdomain in tqdm.tqdm(f, total=nb_lines, mininterval=1, desc=self.hostname, dynamic_ncols=True):
             subdomain = subdomain.strip()
             subdomain = "%s.%s" % (subdomain, self.hostname)
 
