@@ -24,7 +24,7 @@ class Module:
     name = 'LDAP_Security'
     description = 'Check for LDAP signing and channel binding [authenticated - kerberos not supported]'
 
-    def run(self, target, creds, args, timeout):
+    def run(self, target, target_domain, creds, args, timeout):
         if not 'username' in creds:
             Output.minor("[%s] Module requires a valid account" % self.name)
             return
@@ -186,6 +186,7 @@ def run_ldaps_noEPA(inputUser, inputPassword, dcTarget):
 async def run_ldaps_withEPA(inputUser, inputPassword, dcTarget, fqdn, timeout):
     try:
         quoted_pass = urllib.parse.quote(inputPassword)
+        quoted_pass = quoted_pass.replace('/', '%2F')
         url = 'ldaps+ntlm-password://'+inputUser + ':' + quoted_pass +'@' + dcTarget
         conn_url = LDAPConnectionFactory.from_url(url)
         ldaps_client = conn_url.get_client()

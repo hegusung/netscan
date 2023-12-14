@@ -287,7 +287,7 @@ class GetUserSPNs:
 
         try:
             resp = ldapConnection.search(searchFilter=searchFilter,
-                                         attributes=['servicePrincipalName', 'sAMAccountName',
+                                         attributes=['distinguishedName', 'servicePrincipalName', 'sAMAccountName',
                                                      'pwdLastSet', 'MemberOf', 'userAccountControl', 'lastLogon'],
                                          sizeLimit=999)
         except ldap.LDAPSearchError as e:
@@ -320,6 +320,8 @@ class GetUserSPNs:
                     if str(attribute['type']) == 'sAMAccountName':
                         sAMAccountName = str(attribute['vals'][0])
                         mustCommit = True
+                    elif str(attribute['type']) == 'distinguishedName':
+                        dn = str(attribute['vals'][0])
                     elif str(attribute['type']) == 'userAccountControl':
                         userAccountControl = str(attribute['vals'][0])
                         if int(userAccountControl) & UF_TRUSTED_FOR_DELEGATION:
@@ -347,7 +349,7 @@ class GetUserSPNs:
                         logging.debug('Bypassing disabled account %s ' % sAMAccountName)
                     else:
                         for spn in SPNs:
-                            answers.append([spn, sAMAccountName,memberOf, pwdLastSet, lastLogon])
+                            answers.append([spn, sAMAccountName, dn, pwdLastSet, lastLogon])
             except Exception as e:
                 pass
 

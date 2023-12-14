@@ -26,7 +26,7 @@ class Module:
     name = 'DNSUpdate'
     description = 'Check if the ZONE_UPDATE_INSECURE parameter is enabled [no authentication]'
 
-    def run(self, target, creds, args, timeout):
+    def run(self, target, target_domain, creds, args, timeout):
 
         if len(args) != 1:
             Output.error({'target': 'ldap://%s' % (target['hostname'],), 'message': '[%s] Requires 1 arg: -m dnsupdate <zone>' % self.name})

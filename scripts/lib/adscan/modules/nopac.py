@@ -26,7 +26,7 @@ class Module:
     name = 'NoPac'
     description = 'Check for NoPac (CVE-2021-42278 / CVE-2021-42287) [authenticated - kerberos not supported]'
 
-    def run(self, target, creds, args, timeout):
+    def run(self, target, target_domain, creds, args, timeout):
         if not 'username' in creds:
             Output.minor("Please specify a valid account for the NoPac module")
             return

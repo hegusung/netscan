@@ -74,12 +74,15 @@ class LDAPScan:
         # Use LDAP3 to get default naming context and config and schema
         connected = False
         for protocol in ['ldaps', 'ldap']:
-            s = Server('%s://%s' % (protocol, self.hostname), get_info=ALL)
-            c = Connection(s)
-            connected = c.bind()
-            
-            if connected:
-                break
+            try:
+                s = Server('%s://%s' % (protocol, self.hostname), get_info=ALL)
+                c = Connection(s)
+                connected = c.bind()
+                
+                if connected:
+                    break
+            except ldap3.core.exceptions.LDAPSocketOpenError:
+                pass
         else:
             raise Exception("Failed to connect to the LDAP service to get the naming contexts")
 
@@ -444,8 +447,39 @@ class LDAPScan:
         OU.list(self, smbscan, domain, domain_sid, callback)
 
     def list_gpos(self, callback):
-
         GPO.list(self, callback)
+
+    def _resolve_name_to_sid(self, domain, name):
+        if "\\" in name:
+            account_domain = name.split("\\")[0]
+            if "." in account_domain:
+                domain = account_domain
+            else:
+                # TODO: try to resolve better
+                return None
+            name = name.split("\\")[-1]
+
+        # Child object
+        search_filter = "(|(name=%s)(sAMAccountName=%s))" % (name, name)
+        search_base = ",".join(["DC=%s" % dc for dc in domain.split('.')])
+
+        sc = ldap.SimplePagedResultsControl(size=10)
+        attributes = ['distinguishedName', 'objectSid']
+        res = self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+        return_sid = None
+
+        for item in res:
+            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                continue
+
+            attr = self.to_dict_impacket(item)
+
+            if 'objectSid' in attr:
+                return_sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
+                break
+
+        return return_sid
 
     def _resolve_trusts(self, domain_name):
         trusts = []

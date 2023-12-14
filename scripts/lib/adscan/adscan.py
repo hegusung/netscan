@@ -547,36 +547,20 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         # insert domain vulnerability
                         DB.insert_domain_vulnerability({
                             'hostname': target['hostname'],
-                            'domain': entry['domain'],
+                            'domain': smb_info['domain'],
                             'name': 'Password in GPP',
-                            'description': 'Password in GPP: User => %s, Password => %s' % (entry['username'], entry['password']),
+                            'description': 'Password in GPP file %s: Username => %s, Newname => %s, Password => %s' % (entry['path'], entry['username'], entry['newname'], entry['password']),
                         })
 
-                        cred_info = {
-                            'domain': entry['domain'],
-                            'username': entry['username'],
-                            'type': 'password',
-                            'password': entry['password'],
-                        }
-                        DB.insert_domain_credential(cred_info)
+                        Output.write({'target': smbscan.url(), 'message': '- %s => %s :  %s' % (entry['username'].ljust(40), entry['newname'].ljust(40), entry['password'].ljust(20))})
 
-                        Output.write({'target': smbscan.url(), 'message': '- %s   %s' % (entry['username'].ljust(40), entry['password'].ljust(20))})
-
-            if 'spns' in actions:
-                Output.highlight({'target': smbscan.url(), 'message': 'SPNs:'})
+            if 'kerberoasting' in actions:
+                Output.highlight({'target': smbscan.url(), 'message': 'Kerberoasting:'})
                 if smb_authenticated:
                     for entry in smbscan.list_spns(ldapscan.defaultdomainnamingcontext):
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         tgs_hash = entry['tgs']['tgs'] if 'tgs' in entry['tgs'] else 'Unable to retreive TGS hash'
                         Output.vuln({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
-
-                        # insert domain SPN
-                        DB.insert_domain_spn({
-                            'domain': entry['domain'],
-                            'spn': entry['spn'],
-                            'username': entry['username'],
-                        })
-
 
                         if 'tgs' in entry['tgs']:
                             spn_hash = str(entry['tgs']['tgs'])
@@ -1252,7 +1236,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
             if 'modules' in actions:
                 if smb_available:
-                    ad_modules.execute_modules(actions['modules']['modules'], (target, creds, actions['modules']['args'], timeout))
+                    ad_modules.execute_modules(actions['modules']['modules'], (target, actions['target_domain'], creds, actions['modules']['args'], timeout))
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})

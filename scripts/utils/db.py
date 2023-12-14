@@ -42,7 +42,7 @@ es_ids = {
     'domain_host': 'domain_host_{session}_{domain}_{hostname}',
     'domain_user': 'domain_user_{session}_{domain}_{username}',
     'domain_group': 'domain_group_{session}_{domain}_{groupname}',
-    'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
+    #'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
     'domain_password': 'domain_password_{session}_{domain}_{username}_{password}',
     'domain_hash': 'domain_hash_{session}_{domain}_{username}_{format}_{hash}',
     'host_linux': 'host_linux_{session}_{ip}',
@@ -949,6 +949,7 @@ class DB:
 
         self.send(group_doc)
 
+    """
     @classmethod
     def insert_domain_spn(self, spn_doc):
         spn_doc['doc_type'] = 'domain_spn'
@@ -958,10 +959,13 @@ class DB:
         spn_doc['domain'] = spn_doc['domain'].lower()
         spn_doc['username'] = spn_doc['username'].lower()
 
+        print(spn_doc)
+
         if len(spn_doc['domain']) == 0 or spn_doc['domain'] == 'workgroup':
             return
 
         self.send(spn_doc)
+    """
 
     @classmethod
     def insert_domain_vulnerability(self, vuln_doc):

@@ -45,7 +45,12 @@ def get_child_objects(session, dn):
         except KeyError:
             child_type = 'Base'
 
-        if child_type in ['OU', 'Container']:
+        if 'sid' in source:
+            child_objects.append({
+                'ObjectIdentifier': source['sid'],
+                'ObjectType': child_type,
+            })
+        elif 'guid' in source:
             child_objects.append({
                 'ObjectIdentifier': source['guid'].upper(),
                 'ObjectType': child_type,

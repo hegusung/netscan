@@ -322,9 +322,14 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
             'highvalue': False,
             'unconstraineddelegation': 'Trusted for delegation' in source['tags'],
             'trustedtoauth': 'Trusted to auth for delegation' in source['tags'],
-            'passwordnotreqd': 'Password in required' in source['tags'],
+            'passwordnotreqd': 'Password not required' in source['tags'],
+            'enabled': not 'Account disabled' in source['tags'],
             'serviceprincipalnames': spn_targets,
+            'hasspn': len(spn_targets) != 0,
+            'displayname': source['fullname'],
+            'description': source['comment'],
             'admincount': 'adminCount>0' in source['tags'],
+            'samaccountname': source['username'],
         }
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
@@ -647,8 +652,11 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
             'domainsid': '-'.join(source['sid'].split('-')[:-1]),
             'operatingsystem': source['os'],
             'unconstraineddelegation': 'Trusted for delegation' in source['tags'],
+            'enabled': not 'Account disabled' in source['tags'],
             'trustedtoauth': 'Trusted to auth for delegation' in source['tags'],
+            'samaccountname': source['hostname'],
             'serviceprincipalnames': spn_targets,
+            'description': source['comment'],
         }
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
