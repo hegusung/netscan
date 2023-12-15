@@ -34,7 +34,7 @@ def main():
     
     # Modules
     parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    parser.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to execute all modules)', default=None, dest='modules')
+    parser.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules', default=None, dest='modules')
     
     # Module arguments
     parser.add_argument('--exec', metavar='command', nargs='?', type=str, help='Execute command if RCE from a module', default=None, dest='exec')
@@ -80,6 +80,8 @@ def main():
 
     actions = {}
     if args.modules:
+        if not http_modules.check_modules(args.modules[0]):
+            sys.exit()
         module_args = {
             'exec': args.exec,
             'bruteforce': args.bruteforce,

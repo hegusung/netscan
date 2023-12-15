@@ -84,7 +84,7 @@ def main():
     # Modules
     module_group = parser.add_argument_group("Modules")
     module_group.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    module_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
+    module_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules', default=None, dest='modules')
 
     # Misc
     misc_group = parser.add_argument_group("Misc")
@@ -238,6 +238,8 @@ def main():
     if args.ntds:
         actions['dump_ntds'] = {'method': args.ntds}
     if args.modules:
+        if not ad_modules.check_modules(args.modules[0]):
+            sys.exit()
         actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
 
