@@ -322,6 +322,7 @@ class SMBScan:
                 username_principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
 
+                Output.highlight({'target': self.url(), 'message': "Requesting TGT"})
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(username_principal, password, domain,
                                                                     unhexlify(lmhash), unhexlify(nthash), '',
                                                                     self.hostname)
@@ -408,6 +409,8 @@ class SMBScan:
                 print("%s: %s\n%s" % (type(e), str(e), traceback.format_exc()))
                 if 'KRB_AP_ERR_SKEW' in str(e):
                     Output.error("KRB_AP_ERR_SKEW received, please synchronize your time with the DC using : sudo ntpdate %s" % self.hostname)
+                elif 'KDC_ERR_BADOPTION' in str(e):
+                    Output.error("KDC_ERR_BADOPTION received, probably SPN is not allowed to delegate by user %s or initial TGT not forwardable" % userName)
                 else:
                     print("%s: %s\n%s" % (type(e), str(e), traceback.format_exc()))
             except Exception as e:
@@ -517,6 +520,7 @@ class SMBScan:
                       (int(cipher.enctype),int(constants.EncryptionTypes.rc4_hmac.value)))
 
         logging.info('\tRequesting S4U2self')
+        Output.highlight({'target': self.url(), 'message': "Requesting S4U2self"})
         message = encoder.encode(tgsReq)
 
         r = sendReceive(message, domain, kdcHost)
@@ -617,6 +621,7 @@ class SMBScan:
         message = encoder.encode(tgsReq)
 
         logging.info('\tRequesting S4U2Proxy')
+        Output.highlight({'target': self.url(), 'message': "Requesting S4U2Proxy"})
         r = sendReceive(message, domain, kdcHost)
 
         tgs = decoder.decode(r, asn1Spec=TGS_REP())[0]
@@ -1274,7 +1279,11 @@ class SMBScan:
             return ""
 
     def dump_ntds(self, method, callback_func=None):
-        self.enable_remoteops()
+        try:
+            self.enable_remoteops()
+        except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+            Output.error("DCERPCException caught: %s. Still trying to dump" % str(e))
+            pass
         use_vss_method = False
         NTDSFileName   = None
 
@@ -1307,7 +1316,7 @@ class SMBScan:
                 print('%s: %s' % (type(e), e))
         add_ntds_hash.ntds_hashes = 0
 
-        if self.remote_ops and self.bootkey:
+        if self.remote_ops:
             try:
                 if method == 'vss':
                     NTDSFileName = self.remote_ops.saveNTDS()

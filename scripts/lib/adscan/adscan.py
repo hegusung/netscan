@@ -16,6 +16,7 @@ from lib.smbscan.smb import SMBScan
 from .ldap import LDAPScan
 from .kerberos import Kerberos
 from .external import call_certipy
+from .accesscontrol import get_owner
 
 from utils.output import Output
 from utils.utils import check_ip, AuthFailure
@@ -314,11 +315,30 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'trusts': entry['trusts'],
                             'links': entry['links'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s:' % (entry['domain'],)})
+                        Output.write({'target': ldapscan.url(), 'message': '   Forest fonctional level: %s' % entry['functionallevel']})
+                        if int(entry['functionallevel']) < 2016:
+                                DB.insert_domain_vulnerability({
+                                    'hostname': ldapscan.hostname,
+                                    'domain': entry['domain'],
+                                    'name': 'Insecure Forest functional level',
+                                    'description': 'Insecure Forest functional level, is %s, should be at least 2016' % (entry['functionallevel'],),
+                                })
+
+
                         Output.write({'target': ldapscan.url(), 'message': '   Parameters:'})
                         for param_name, param_value in entry['parameters'].items():
                             Output.write({'target': ldapscan.url(), 'message': '    - %s: %s' % (param_name, param_value)})
+
+                            if param_name == 'ms-DS-MachineAccountQuota' and param_value != 0:
+                                DB.insert_domain_vulnerability({
+                                    'hostname': ldapscan.hostname,
+                                    'domain': entry['domain'],
+                                    'name': 'Insecure ms-DS-MachineAccountQuota value',
+                                    'description': 'Insecure ms-DS-MachineAccountQuota, is %d, should be 0' % (param_value,),
+                                })
 
                         # List containers
                         Output.write({'target': ldapscan.url(), 'message': '   Containers:'})
@@ -331,6 +351,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 'guid': entry['guid'],
                                 # For bloodhound
                                 'aces': entry['aces'],
+                                'owner': get_owner(entry['aces']),
                             })
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
 
@@ -349,6 +370,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 'gpo_effect': entry['gpo_effect'],
                                 'links': entry['links'],
                                 'aces': entry['aces'],
+                                'owner': get_owner(entry['aces']),
                             })
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
 
@@ -381,7 +403,10 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'tags': entry['tags'],
                             'group': entry['group'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                             'spns': entry['spns'],
+                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                            'sid_history': entry['sid_history'],
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
 
@@ -463,6 +488,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'members': entry['members'],
                             'tags': entry['tags'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'sid_history': entry['sid_history'],
                         })
 
                         Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s  [%s]' % (group.ljust(40), len(entry['members']), entry['comment'].ljust(30), ",".join(entry['tags']))})
@@ -485,7 +512,11 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'sid': entry['sid'],
                             'primary_gid': entry['primary_gid'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                             'spns': entry['spns'],
+                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                            'allowed_to_act_on_behalf_of_other_identity': entry['allowed_to_act_on_behalf_of_other_identity'],
+                            'allowed_to_act_on_behalf_of_other_identity_sids': entry['allowed_to_act_on_behalf_of_other_identity_sids'],
                             'created_date': entry['created_date'],
                             'last_logon': entry['last_logon'],
                             'last_password_change': entry['last_password_change'],
@@ -630,6 +661,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'dn': entry['dn'],
                             'gpcpath': entry['gpcpath'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   [%s]' % (entry['name'].ljust(30), entry['gpcpath'])})
 
@@ -1189,6 +1221,18 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         ldapscan.dump_gMSA(callback)
                     else:
                         Output.error({'target': ldapscan.url(), 'message': '--gmsa requires to connect to LDAP using SSL, it is probably not available here :('})
+            if 'dump_smsa' in actions:
+                if ldap_authenticated:
+                    if ldapscan.ssl:
+                        Output.highlight({'target': smbscan.url(), 'message': 'sMSA entries:'})
+                        def callback(entry):
+                            user = '%s\\%s' % (entry['domain'], entry['username'])
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['target_host'])})
+
+                        ldapscan.dump_sMSA(callback)
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': '--smsa requires to connect to LDAP using SSL, it is probably not available here :('})
+
             if 'dump_laps' in actions:
                 if ldap_authenticated:
                     Output.highlight({'target': smbscan.url(), 'message': 'LAPS entries:'})

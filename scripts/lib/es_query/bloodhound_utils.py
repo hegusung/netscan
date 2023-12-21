@@ -110,6 +110,8 @@ sid_type_dict = {
     'S-1-3-0': 'User',
     'S-1-3-1': 'User',
     'S-1-3-4': 'User',
+    'S-1-5-7': 'User', 
+    'S-1-5-11': 'Group',
     'S-1-5-18': 'User',
 }
 
@@ -150,16 +152,24 @@ def process_aces(session, aces):
 
 dn_dict = {}
 
-def resolve_sid_from_dn(session, members):
+def resolve_sid_from_dn(session, domain, members):
 
     output = []
 
     to_process = []
     for dn in members:
-        if not dn in dn_dict:
-            to_process.append(dn)
+        if not dn.startswith('CN=S-1-'):
+            if not dn in dn_dict:
+                to_process.append(dn)
+            else:
+                output.append(dn_dict[dn])
         else:
-            output.append(dn_dict[dn])
+            sid = dn[3:].split(',')[0]
+            if sid in sid_type_dict:
+                output.append({
+                    'ObjectIdentifier': '%s-%s' % (domain, sid),
+                    'ObjectType': sid_type_dict[sid],
+                })
 
     if len(to_process) != 0:
         query = {
@@ -199,4 +209,78 @@ def resolve_sid_from_dn(session, members):
 
     return output
 
+def get_object_from_name(session, name):
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": {"session.keyword": session}, },
+            { "match": {"hostname.keyword": name} }
+          ],
+          "filter": []
+        }
+      }
+    }
+
+    res = Elasticsearch.search(query)
+    res = list(res)
+    if len(res) == 0:
+        return None
+    else:
+        source = res[0]['_source']
+        object_type = doc_type_dict[source['doc_type']]
+
+        return {
+            "ObjectIdentifier": source['sid'],
+            "ObjectType": object_type,
+        }
+
+sid_dict = {}
+def resolve_sid(session, sid_list):
+
+    output = []
+
+    to_process = []
+    for sid in sid_list:
+        if not sid in sid_dict:
+            to_process.append(sid)
+        else:
+            output.append(sid_dict[sid])
+
+    if len(to_process) != 0:
+        query = {
+          "query": {
+            "bool": {
+              "must": [
+                { "match": {"session.keyword": session}, },
+              ],
+              "filter": {
+                  "terms": {
+                      "sid.keyword": to_process,
+                  }
+               }
+            }
+          }
+        }
+
+        res = Elasticsearch.search(query)
+        for item in res:
+            source = item['_source']
+            object_type = doc_type_dict[source['doc_type']]
+            sid = source['sid']
+
+            sid_dict[sid] = {"ObjectIdentifier": sid, "ObjectType": object_type}
+
+            output.append(sid_dict[source['sid']])
+
+            to_process.remove(source['sid'])
+
+        for sid in to_process:
+            object_type = "Base"
+
+            sid_dict[sid] = {"ObjectIdentifier": sid, "ObjectType": object_type}
+
+            output.append(sid_dict[sid])
+
+    return output
 

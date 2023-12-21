@@ -42,6 +42,14 @@ extended_rights = {
     '89e95b76-444d-4c62-991a-0facbeda640c': 'GetChangesInFilteredSet',
 }
 
+def get_owner(aces):
+    if 'aces' in aces:
+        for ace in aces['aces']:
+            if ace['RightName'] == 'Owns':
+                return ace['PrincipalSID'] 
+
+    return ''
+
 def parse_accesscontrol(security_descriptor, ldap):
     a = SR_SECURITY_DESCRIPTOR()
     a.fromString(security_descriptor)
@@ -94,44 +102,45 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
 
     for ace_b in sd['Dacl'].aces:
         ace = parse_ace(ace_b)
-        #print(ace)
 
         sid = process_sid(domain_name, ace['sid'])
 
+        if sid.endswith('S-1-5-18'):
+            continue
+
         if ace['type'] == 'ACCESS_ALLOWED_ACE':
-            #print(ace)
             if not ace['inherited'] and ace['inherit_only_ace']:
                 continue
 
             if 'GenericAll' in ace['rights']:
                 res['aces'].append({"PrincipalSID": sid, "RightName": "GenericAll", "IsInherited": ace['inherited']})
-            if 'GenericWrite' in ace['rights'] or 'WriteProperty' in ace['rights']:
-                if object_type in ['user', 'group', 'computer', 'group-policy-container']:
-                    res['aces'].append({"PrincipalSID": sid, "RightName": "GenericWrite", "IsInherited": ace['inherited']})
-            if 'WriteOwner' in ace['rights']:
-                res['aces'].append({"PrincipalSID": sid, "RightName": "WriteOwner", "IsInherited": ace['inherited']})
-            if 'WriteDACL' in ace['rights']:
-                res['aces'].append({"PrincipalSID": sid, "RightName": "WriteDacl", "IsInherited": ace['inherited']})
-            if 'ControlAccess' in ace['rights']:
-                if object_type in ['user', 'domain']:
-                    res['aces'].append({"PrincipalSID": sid, "RightName": "AllExtendedRights", "IsInherited": ace['inherited']})
-                elif object_type == 'computer' and not sid.endswith('S-1-5-32-544') and not sid.endswith('-512'):
-                    res['aces'].append({"PrincipalSID": sid, "RightName": "AllExtendedRights", "IsInherited": ace['inherited']})
+            else:
+                if 'GenericWrite' in ace['rights'] or 'WriteProperty' in ace['rights']:
+                    if object_type in ['user', 'group', 'computer', 'group-policy-container']:
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "GenericWrite", "IsInherited": ace['inherited']})
+                if 'WriteOwner' in ace['rights']:
+                    res['aces'].append({"PrincipalSID": sid, "RightName": "WriteOwner", "IsInherited": ace['inherited']})
+                if 'WriteDACL' in ace['rights']:
+                    res['aces'].append({"PrincipalSID": sid, "RightName": "WriteDacl", "IsInherited": ace['inherited']})
+                if 'ControlAccess' in ace['rights']:
+                    if object_type in ['user', 'domain']:
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "AllExtendedRights", "IsInherited": ace['inherited']})
+                    elif object_type == 'computer' and not sid.endswith('S-1-5-32-544') and not sid.endswith('-512'):
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "AllExtendedRights", "IsInherited": ace['inherited']})
 
         elif ace['type'] == 'ACCESS_ALLOWED_OBJECT_ACE':
-            #print(ace)
             if not ace['inherited'] and ace['inherit_only_ace']:
                 continue
 
             # Check if the ACE has restrictions on object type (inherited case)
             if ace['inherited'] and 'INHERITED_OBJECT_TYPE_PRESENT' in ace['flags']:
                  # Verify if the ACE applies to this object type
-                 if ace['inherited_guid'] != schema_guid_dict[object_type]:
+                 if not object_type in schema_guid_dict or ace['inherited_guid'] != schema_guid_dict[object_type]:
                      continue
 
             # Check generic access masks first
             if 'GenericAll' in ace['rights'] or 'GenericWrite' in ace['rights'] or 'WriteOwner' in ace['rights'] or 'WriteDACL' in ace['rights']:
-                if 'OBJECT_TYPE_PRESENT' in ace['flags'] and ace['guid'] != schema_guid_dict[object_type]:
+                if not object_type in schema_guid_dict or 'OBJECT_TYPE_PRESENT' in ace['flags'] and ace['guid'] != schema_guid_dict[object_type]:
                     continue
 
                 if 'GenericAll' in ace['rights']:
@@ -139,12 +148,13 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
                         res['aces'].append({"PrincipalSID": sid, "RightName": "ReadLAPSPassword", "IsInherited": ace['inherited']})
                     else:
                         res['aces'].append({"PrincipalSID": sid, "RightName": "GenericAll", "IsInherited": ace['inherited']})
-                if 'GenericWrite' in ace['rights']:
-                    res['aces'].append({"PrincipalSID": sid, "RightName": "GenericWrite", "IsInherited": ace['inherited']})
-                if 'WriteOwner' in ace['rights']:
-                    res['aces'].append({"PrincipalSID": sid, "RightName": "WriteOwner", "IsInherited": ace['inherited']})
-                if 'WriteDACL' in ace['rights']:
-                    res['aces'].append({"PrincipalSID": sid, "RightName": "WriteDacl", "IsInherited": ace['inherited']})
+                else:
+                    if 'GenericWrite' in ace['rights']:
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "GenericWrite", "IsInherited": ace['inherited']})
+                    if 'WriteOwner' in ace['rights']:
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "WriteOwner", "IsInherited": ace['inherited']})
+                    if 'WriteDACL' in ace['rights']:
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "WriteDacl", "IsInherited": ace['inherited']})
 
             if 'WriteProperty' in ace['rights']:
                 if object_type in ['user', 'group', 'computer', 'group-policy-container'] and not 'OBJECT_TYPE_PRESENT' in ace['flags']:

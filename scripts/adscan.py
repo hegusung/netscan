@@ -74,6 +74,7 @@ def main():
     # Dump
     admin_group = parser.add_argument_group("Domain admin actions")
     admin_group.add_argument("--gmsa", action='store_true', help="Dump gMSA passwords")
+    admin_group.add_argument("--smsa", action='store_true', help="Dump sMSA passwords")
     admin_group.add_argument("--laps", action='store_true', help="Dump LAPS passwords")
     admin_group.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="Dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
 
@@ -233,6 +234,8 @@ def main():
         actions['users_brute'] = {'username_file': args.users_brute}
     if args.gmsa:
         actions['dump_gmsa'] = {}
+    if args.smsa:
+        actions['dump_smsa'] = {}
     if args.laps:
         actions['dump_laps'] = {}
     if args.ntds:

@@ -310,7 +310,6 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
         if not 'tags' in source:
             source['tags'] = []
 
-        allowed_to_delegate = [] # TODO Not sure why, but sharphound doesn't seem to set this value (msDS-AllowedToDelegateTo)
         object_identifier = source['sid']
         primary_group_sid = "-".join(source['sid'].split('-')[:-1] + [str(source['primary_gid'])])
         spn_targets = source['spns']
@@ -323,6 +322,7 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
             'unconstraineddelegation': 'Trusted for delegation' in source['tags'],
             'trustedtoauth': 'Trusted to auth for delegation' in source['tags'],
             'passwordnotreqd': 'Password not required' in source['tags'],
+            'dontreqpreauth': 'Do not require pre-auth' in source['tags'],
             'enabled': not 'Account disabled' in source['tags'],
             'serviceprincipalnames': spn_targets,
             'hasspn': len(spn_targets) != 0,
@@ -332,12 +332,33 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
             'samaccountname': source['username'],
         }
 
+        allowed_to_delegate = [] 
+        if 'allowed_to_delegate_to' in source:
+            properties['allowedtodelegate'] = source['allowed_to_delegate_to']
+
+            processed = []
+            for spn in source['allowed_to_delegate_to']:
+                name = spn.split('/')[1].split('.')[0].lower()
+
+                if not name in processed:
+                    processed.append(name)
+
+                    target = get_object_from_name(session, name)
+                    if target:
+                        allowed_to_delegate.append(target)
+
+        sid_history = []
+        if 'sid_history' in source:
+            properties['sidhistory'] = source['sid_history']
+
+            sid_history = resolve_sid(session, source['sid_history'])
+
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
 
         ace_list = process_aces(session, acl_info['aces'])
         spn_targets = [] # TODO Not sure why, but sharphound doesn't seem to set this value
-        has_sid_history = [] # TODO
+        has_sid_history = sid_history
         is_deleted = False # TODO
         is_acl_protected = acl_info['is_acl_protected']
 
@@ -375,6 +396,25 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
                 "domain": domain_info['name'],
                 "domainsid": domain_info['sid'],
                 "name": "NT AUTHORITY@%s" % domain_info['name'],
+            },
+            "Aces": [],
+            "SPNTargets": [],
+            "HasSIDHistory": [],
+            "IsDeleted": False,
+            "IsACLProtected": False,
+        }
+        data.append(user)
+
+        c += 1
+
+        user = {
+            "AllowedToDelegate": [],
+            "ObjectIdentifier": "%s-S-1-5-7" % domain_info['name'],
+            "PrimaryGroupSID": None,
+            "Properties": {
+                "domain": domain_info['name'],
+                "domainsid": domain_info['sid'],
+                "name": "ANONYMOUS@%s" % domain_info['name'],
             },
             "Aces": [],
             "SPNTargets": [],
@@ -491,7 +531,7 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
             'admincount': 'adminCount>0' in source['tags'],
         }
         # Members
-        members = resolve_sid_from_dn(session, source['members'])
+        members = resolve_sid_from_dn(session, source['domain'].upper(), source['members'])
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
@@ -640,8 +680,6 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
         if not 'tags' in source:
             source['tags'] = []
 
-        allowed_to_delegate = [] # TODO Not sure why, but sharphound doesn't seem to set this value (msDS-AllowedToDelegateTo)
-        allowed_to_act = [] # TODO 
         object_identifier = source['sid']
         primary_group_sid = "-".join(source['sid'].split('-')[:-1] + [str(source['primary_gid'])])
         spn_targets = source['spns']
@@ -679,6 +717,25 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
                     'ObjectIdentifier': source['sid'],
                     'ObjectType': 'Computer',
                 }]
+
+        allowed_to_delegate = [] 
+        if 'allowed_to_delegate_to' in source:
+            properties['allowedtodelegate'] = source['allowed_to_delegate_to']
+
+            processed = []
+            for spn in source['allowed_to_delegate_to']:
+                name = spn.split('/')[1].split('.')[0].lower()
+
+                if not name in processed:
+                    processed.append(name)
+
+                    target = get_object_from_name(session, name)
+                    if target:
+                        allowed_to_delegate.append(target)
+
+        allowed_to_act = [] 
+        if 'allowed_to_act_on_behalf_of_other_identity_sids' in source:
+            allowed_to_act = resolve_sid(session, source['allowed_to_act_on_behalf_of_other_identity_sids'])
 
         computer_info = {
             'AllowedToDelegate': allowed_to_delegate,
