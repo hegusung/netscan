@@ -60,7 +60,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
                 try:
                     success, is_admin = mssqlscan.auth(domain, username, password, ntlm_hash)
-                    if password:
+                    if password != None:
                         Output.success({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (user, password)})
                     else:
                         Output.success({'target': mssqlscan.url(), 'message': 'Successful authentication with credentials %s and hash %s' % (user, ntlm_hash)})

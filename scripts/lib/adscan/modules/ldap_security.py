@@ -1,4 +1,5 @@
 import os.path
+import urllib
 from urllib.parse import urljoin
 from ctypes import *
 import struct
@@ -23,7 +24,7 @@ class Module:
     name = 'LDAP_Security'
     description = 'Check for LDAP signing and channel binding [authenticated - kerberos not supported]'
 
-    def run(self, target, creds, args, timeout):
+    def run(self, target, target_domain, creds, args, timeout):
         if not 'username' in creds:
             Output.minor("[%s] Module requires a valid account" % self.name)
             return
@@ -100,7 +101,7 @@ class Module:
                 # Not vulnerable
                 pass
             else:
-                Output.error({'target': 'ldap://%s:%d' % (dcIp, 389), 'message': "[" + self.name + "] ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
+                Output.error({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': "[" + self.name + "] ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
 
             
 #Conduct and LDAP bind and determine if server signing
@@ -184,10 +185,13 @@ def run_ldaps_noEPA(inputUser, inputPassword, dcTarget):
 #error recieved from the bind attempt.
 async def run_ldaps_withEPA(inputUser, inputPassword, dcTarget, fqdn, timeout):
     try:
-        url = 'ldaps+ntlm-password://'+inputUser + ':' + inputPassword +'@' + dcTarget
+        quoted_pass = urllib.parse.quote(inputPassword)
+        quoted_pass = quoted_pass.replace('/', '%2F')
+        url = 'ldaps+ntlm-password://'+inputUser + ':' + quoted_pass +'@' + dcTarget
         conn_url = LDAPConnectionFactory.from_url(url)
         ldaps_client = conn_url.get_client()
         ldaps_client.target.timeout = timeout
+        ldaps_client.creds.secret = urllib.parse.unquote(quoted_pass)
         ldapsClientConn = MSLDAPClientConnection(ldaps_client.target, ldaps_client.creds)
         _, err = await ldapsClientConn.connect()
         if err is not None:
@@ -204,4 +208,5 @@ async def run_ldaps_withEPA(inputUser, inputPassword, dcTarget, fqdn, timeout):
         elif err is None:
             return False
     except Exception as e:
+        traceback.print_exc()
         Output.error({'target': 'ldaps://%s:%d' % (dcTarget, 636), 'message': "[LDAP_Security] Something went wrong during ldaps_withEPA bind:" + str(e)})

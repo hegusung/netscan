@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+from utils.utils import normalize_path
 from server.payload_manager import PayloadManager
 from server.ressources import get_ressource_md5, list_ressources
 
@@ -27,7 +28,7 @@ def main():
             return
 
         if args.output:
-            f = open(args.output, 'wb')
+            f = open(normalize_path(args.output), 'wb')
             if type(payload) == bytes:
                 f.write(payload)
             else:

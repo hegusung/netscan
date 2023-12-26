@@ -1,8 +1,10 @@
 import os
 import json
 import base64
+from tqdm import tqdm
 from utils.db import Elasticsearch
 from utils.output import Output
+from lib.es_query.bloodhound_utils import *
 
 from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
 
@@ -14,8 +16,8 @@ def export_bloodhound_domains(session, output_dir, output):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain"        }},
-            { "match": { "session": session }},
+            { "match": { "doc_type.keyword":   "domain"        }},
+            { "match": { "session.keyword": session }},
           ],
           "filter": [
           ]
@@ -32,6 +34,11 @@ def export_bloodhound_domains(session, output_dir, output):
     # Create output files in dir if non existant
 
     data = []
+    
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d domains" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -54,13 +61,17 @@ def export_bloodhound_domains(session, output_dir, output):
             'functionallevel': source['functionallevel'],
         }
 
+        # Query child objects
+        child_objects = get_child_objects(session, source['dn'])
+
         gpo_changes = source['gpo_effect']
-        gpo_changes["AffectedComputers"] = source['affected_computers']
+        gpo_changes["AffectedComputers"] = get_affected_computers(session, source['dn'], source['sid'])
+        # OLD gpo_changes["AffectedComputers"] = source['affected_computers']
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
 
-        ace_list = acl_info['aces']
+        ace_list = process_aces(session, acl_info['aces'])
         is_acl_protected = acl_info['is_acl_protected']
         is_deleted = False
 
@@ -70,13 +81,16 @@ def export_bloodhound_domains(session, output_dir, output):
             'Links': source['links'],
             'Aces': ace_list,
             'GPOChanges': gpo_changes,
-            'ChildObjects': source['child_objects'],
+            'ChildObjects': child_objects,
             'Trusts': source['trusts'],
             'IsACLProtected': is_acl_protected,
             'IsDeleted': is_deleted,
         })
 
+        pg.update(1)
         c += 1
+
+    pg.close()
 
     meta = {
         "methods": 0,
@@ -93,6 +107,166 @@ def export_bloodhound_domains(session, output_dir, output):
 
     return domains, domain_fqdn_to_name, output
 
+def export_bloodhound_containers(session, output_dir, output):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_container"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    filename = os.path.join(output_dir, '%s_bloodhound_containers.txt' % session)
+    file = open(filename, 'w')
+
+    # Create output files in dir if non existant
+
+    data = []
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d containers" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        object_identifier = source['guid'].upper()
+        properties = {
+            'domain': source['domain'].upper(),
+            'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
+            'distinguishedname': source['dn'].upper(),
+            'domainsid': source['domain_sid'],
+        }
+
+        # Query child objects
+        child_objects = get_child_objects(session, source['dn'])
+
+        acl_info = source['aces']
+
+        ace_list = process_aces(session, acl_info['aces'])
+        is_acl_protected = acl_info['is_acl_protected']
+        is_deleted = False
+
+        data.append({
+            'ObjectIdentifier': object_identifier,
+            'Properties': properties,
+            'Aces': ace_list,
+            'ChildObjects': child_objects,
+            'IsACLProtected': is_acl_protected,
+            'IsDeleted': is_deleted,
+        })
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    meta = {
+        "methods": 0,
+        "type": "containers",
+        "count": c,
+        "version": BLOODHOUND_VERSION
+    }
+
+    output.append(("Containers", filename, c,  "Containers written"))
+    
+    file.write(json.dumps({'data': data, 'meta': meta}))
+
+    file.close()
+
+    return output
+
+def export_bloodhound_ous(session, output_dir, output):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_ou"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    filename = os.path.join(output_dir, '%s_bloodhound_ous.txt' % session)
+    file = open(filename, 'w')
+
+    # Create output files in dir if non existant
+
+    data = []
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d OUs" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        object_identifier = source['guid'].upper()
+        properties = {
+            'domain': source['domain'].upper(),
+            'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
+            'distinguishedname': source['dn'].upper(),
+            'domainsid': source['domain_sid'],
+        }
+
+        # Query child objects
+        child_objects = get_child_objects(session, source['dn'])
+
+        gpo_changes = source['gpo_effect']
+        gpo_changes["AffectedComputers"] = get_affected_computers(session, source['dn'], source['domain_sid'])
+
+        acl_info = source['aces']
+
+        ace_list = process_aces(session, acl_info['aces'])
+        is_acl_protected = acl_info['is_acl_protected']
+        is_deleted = False
+
+        data.append({
+            'ObjectIdentifier': object_identifier,
+            'Properties': properties,
+            'Aces': ace_list,
+            'GPOChanges': gpo_changes,
+            'Links': source['links'],
+            'ChildObjects': child_objects,
+            'IsACLProtected': is_acl_protected,
+            'IsDeleted': is_deleted,
+        })
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    meta = {
+        "methods": 0,
+        "type": "ous",
+        "count": c,
+        "version": BLOODHOUND_VERSION
+    }
+
+    output.append(("OUs", filename, c,  "OUs written"))
+    
+    file.write(json.dumps({'data': data, 'meta': meta}))
+
+    file.close()
+
+    return output
 
 
 def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output):
@@ -101,8 +275,8 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_user"        }},
-            { "match": { "session": session }},
+            { "match": { "doc_type.keyword":   "domain_user"        }},
+            { "match": { "session.keyword": session }},
             #{ "match": { "user": "gmsa3$" }}
           ],
           "filter": [
@@ -120,6 +294,11 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
     user_info = []
     user_sid = []
 
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d Users" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
     res = Elasticsearch.search(query)
     c = 0
     for item in res:
@@ -131,7 +310,6 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
         if not 'tags' in source:
             source['tags'] = []
 
-        allowed_to_delegate = [] # TODO Not sure why, but sharphound doesn't seem to set this value (msDS-AllowedToDelegateTo)
         object_identifier = source['sid']
         primary_group_sid = "-".join(source['sid'].split('-')[:-1] + [str(source['primary_gid'])])
         spn_targets = source['spns']
@@ -143,17 +321,44 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
             'highvalue': False,
             'unconstraineddelegation': 'Trusted for delegation' in source['tags'],
             'trustedtoauth': 'Trusted to auth for delegation' in source['tags'],
-            'passwordnotreqd': 'Password in required' in source['tags'],
+            'passwordnotreqd': 'Password not required' in source['tags'],
+            'dontreqpreauth': 'Do not require pre-auth' in source['tags'],
+            'enabled': not 'Account disabled' in source['tags'],
             'serviceprincipalnames': spn_targets,
+            'hasspn': len(spn_targets) != 0,
+            'displayname': source['fullname'],
+            'description': source['comment'],
             'admincount': 'adminCount>0' in source['tags'],
+            'samaccountname': source['username'],
         }
+
+        allowed_to_delegate = [] 
+        if 'allowed_to_delegate_to' in source:
+            properties['allowedtodelegate'] = source['allowed_to_delegate_to']
+
+            processed = []
+            for spn in source['allowed_to_delegate_to']:
+                name = spn.split('/')[1].split('.')[0].lower()
+
+                if not name in processed:
+                    processed.append(name)
+
+                    target = get_object_from_name(session, name)
+                    if target:
+                        allowed_to_delegate.append(target)
+
+        sid_history = []
+        if 'sid_history' in source:
+            properties['sidhistory'] = source['sid_history']
+
+            sid_history = resolve_sid(session, source['sid_history'])
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
 
-        ace_list = acl_info['aces']
+        ace_list = process_aces(session, acl_info['aces'])
         spn_targets = [] # TODO Not sure why, but sharphound doesn't seem to set this value
-        has_sid_history = [] # TODO
+        has_sid_history = sid_history
         is_deleted = False # TODO
         is_acl_protected = acl_info['is_acl_protected']
 
@@ -177,7 +382,10 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
         })
         user_sid.append(source['sid'])
 
+        pg.update(1)
         c += 1
+
+    pg.close()
 
     for domain_info in domains:
         user = {
@@ -188,6 +396,25 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
                 "domain": domain_info['name'],
                 "domainsid": domain_info['sid'],
                 "name": "NT AUTHORITY@%s" % domain_info['name'],
+            },
+            "Aces": [],
+            "SPNTargets": [],
+            "HasSIDHistory": [],
+            "IsDeleted": False,
+            "IsACLProtected": False,
+        }
+        data.append(user)
+
+        c += 1
+
+        user = {
+            "AllowedToDelegate": [],
+            "ObjectIdentifier": "%s-S-1-5-7" % domain_info['name'],
+            "PrimaryGroupSID": None,
+            "Properties": {
+                "domain": domain_info['name'],
+                "domainsid": domain_info['sid'],
+                "name": "ANONYMOUS@%s" % domain_info['name'],
             },
             "Aces": [],
             "SPNTargets": [],
@@ -239,15 +466,14 @@ def get_group_sid(session):
     return group_sid
 
 
-
 def export_bloodhound_groups(session, output_dir, domains, domain_controlers, output):
 
     query = {
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_group"        }},
-            { "match": { "session": session }},
+            { "match": { "doc_type.keyword":   "domain_group"        }},
+            { "match": { "session.keyword": session }},
             #{ "match": { "user": "gmsa3$" }}
           ],
           "filter": [
@@ -263,6 +489,11 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
 
     data = []
     group_sid = []
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d Groups" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -300,12 +531,12 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
             'admincount': 'adminCount>0' in source['tags'],
         }
         # Members
-        members = source['members']
+        members = resolve_sid_from_dn(session, source['domain'].upper(), source['members'])
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
 
-        ace_list = acl_info['aces']
+        ace_list = process_aces(session, acl_info['aces'])
         is_deleted = False # TODO
         is_acl_protected = acl_info['is_acl_protected']
 
@@ -318,7 +549,10 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
             'IsACLProtected': is_acl_protected,
         })
 
+        pg.update(1)
         c += 1
+
+    pg.close()
 
     for domain_info in domains:
 
@@ -412,8 +646,8 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_host"        }},
-            { "match": { "session": session }},
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }},
             #{ "match": { "user": "gmsa3$" }}
           ],
           "filter": [
@@ -429,6 +663,11 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
 
     data = []
 
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d Computers" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
     res = Elasticsearch.search(query)
     c = 0
     for item in res:
@@ -441,8 +680,6 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
         if not 'tags' in source:
             source['tags'] = []
 
-        allowed_to_delegate = [] # TODO Not sure why, but sharphound doesn't seem to set this value (msDS-AllowedToDelegateTo)
-        allowed_to_act = [] # TODO 
         object_identifier = source['sid']
         primary_group_sid = "-".join(source['sid'].split('-')[:-1] + [str(source['primary_gid'])])
         spn_targets = source['spns']
@@ -453,14 +690,17 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
             'domainsid': '-'.join(source['sid'].split('-')[:-1]),
             'operatingsystem': source['os'],
             'unconstraineddelegation': 'Trusted for delegation' in source['tags'],
+            'enabled': not 'Account disabled' in source['tags'],
             'trustedtoauth': 'Trusted to auth for delegation' in source['tags'],
+            'samaccountname': source['hostname'],
             'serviceprincipalnames': spn_targets,
+            'description': source['comment'],
         }
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
 
-        ace_list = acl_info['aces']
+        ace_list = process_aces(session, acl_info['aces'])
         spn_targets = [] # TODO Not sure why, but sharphound doesn't seem to set this value
         has_sid_history = [] # TODO
         is_deleted = False # TODO
@@ -477,6 +717,25 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
                     'ObjectIdentifier': source['sid'],
                     'ObjectType': 'Computer',
                 }]
+
+        allowed_to_delegate = [] 
+        if 'allowed_to_delegate_to' in source:
+            properties['allowedtodelegate'] = source['allowed_to_delegate_to']
+
+            processed = []
+            for spn in source['allowed_to_delegate_to']:
+                name = spn.split('/')[1].split('.')[0].lower()
+
+                if not name in processed:
+                    processed.append(name)
+
+                    target = get_object_from_name(session, name)
+                    if target:
+                        allowed_to_delegate.append(target)
+
+        allowed_to_act = [] 
+        if 'allowed_to_act_on_behalf_of_other_identity_sids' in source:
+            allowed_to_act = resolve_sid(session, source['allowed_to_act_on_behalf_of_other_identity_sids'])
 
         computer_info = {
             'AllowedToDelegate': allowed_to_delegate,
@@ -595,29 +854,12 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
                 "FailureReason": None
             }
 
-
-
-            """
-            "Sessions": {
-                "Results": [],
-                "Collected": False,
-                "FailureReason": None
-            },
-            "PrivilegedSessions": {
-                "Results": [],
-                "Collected": False,
-                "FailureReason": None
-            },
-            "RegistrySessions": {
-                "Results": [],
-                "Collected": False,
-                "FailureReason": None
-            },
-            """
-
         data.append(computer_info)
 
+        pg.update(1)
         c += 1
+
+    pg.close()
 
     meta = {
         "methods": 0,
@@ -635,153 +877,14 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
     return domain_controlers, output
 
 
-def export_bloodhound_ous(session, output_dir, output):
-
-    query = {
-      "query": {
-        "bool": {
-          "must": [
-            { "match": { "doc_type":   "domain_ou"        }},
-            { "match": { "session": session }},
-          ],
-          "filter": [
-          ]
-        }
-      },
-    }
-
-    filename = os.path.join(output_dir, '%s_bloodhound_ous.txt' % session)
-    file = open(filename, 'w')
-
-    # Create output files in dir if non existant
-
-    data = []
-
-    res = Elasticsearch.search(query)
-    c = 0
-    for item in res:
-        source = item['_source']
-
-        object_identifier = source['guid'].upper()
-        properties = {
-            'domain': source['domain'].upper(),
-            'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
-            'distinguishedname': source['dn'].upper(),
-            'domainsid': source['domain_sid'],
-        }
-
-        gpo_changes = source['gpo_effect']
-        gpo_changes["AffectedComputers"] = source['affected_computers']
-
-        acl_info = source['aces']
-
-        ace_list = acl_info['aces']
-        is_acl_protected = acl_info['is_acl_protected']
-        is_deleted = False
-
-        data.append({
-            'ObjectIdentifier': object_identifier,
-            'Properties': properties,
-            'Aces': ace_list,
-            'GPOChanges': gpo_changes,
-            'Links': source['links'],
-            'ChildObjects': source['child_objects'],
-            'IsACLProtected': is_acl_protected,
-            'IsDeleted': is_deleted,
-        })
-
-        c += 1
-
-    meta = {
-        "methods": 0,
-        "type": "ous",
-        "count": c,
-        "version": BLOODHOUND_VERSION
-    }
-
-    output.append(("OUs", filename, c,  "OUs written"))
-    
-    file.write(json.dumps({'data': data, 'meta': meta}))
-
-    file.close()
-
-    return output
-
-def export_bloodhound_containers(session, output_dir, output):
-
-    query = {
-      "query": {
-        "bool": {
-          "must": [
-            { "match": { "doc_type":   "domain_container"        }},
-            { "match": { "session": session }},
-          ],
-          "filter": [
-          ]
-        }
-      },
-    }
-
-    filename = os.path.join(output_dir, '%s_bloodhound_containers.txt' % session)
-    file = open(filename, 'w')
-
-    # Create output files in dir if non existant
-
-    data = []
-
-    res = Elasticsearch.search(query)
-    c = 0
-    for item in res:
-        source = item['_source']
-
-        object_identifier = source['guid'].upper()
-        properties = {
-            'domain': source['domain'].upper(),
-            'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
-            'distinguishedname': source['dn'].upper(),
-            'domainsid': source['domain_sid'],
-        }
-
-        acl_info = source['aces']
-
-        ace_list = acl_info['aces']
-        is_acl_protected = acl_info['is_acl_protected']
-        is_deleted = False
-
-        data.append({
-            'ObjectIdentifier': object_identifier,
-            'Properties': properties,
-            'Aces': ace_list,
-            'ChildObjects': source['child_objects'],
-            'IsACLProtected': is_acl_protected,
-            'IsDeleted': is_deleted,
-        })
-
-        c += 1
-
-    meta = {
-        "methods": 0,
-        "type": "containers",
-        "count": c,
-        "version": BLOODHOUND_VERSION
-    }
-
-    output.append(("Containers", filename, c,  "Containers written"))
-    
-    file.write(json.dumps({'data': data, 'meta': meta}))
-
-    file.close()
-
-    return output
-
 def export_bloodhound_gpos(session, output_dir, output):
 
     query = {
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_gpo"        }},
-            { "match": { "session": session }},
+            { "match": { "doc_type.keyword":   "domain_gpo"        }},
+            { "match": { "session.keyword": session }},
           ],
           "filter": [
           ]
@@ -795,6 +898,11 @@ def export_bloodhound_gpos(session, output_dir, output):
     # Create output files in dir if non existant
 
     data = []
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d GPOs" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -812,7 +920,7 @@ def export_bloodhound_gpos(session, output_dir, output):
 
         acl_info = source['aces']
 
-        ace_list = acl_info['aces']
+        ace_list = process_aces(session, acl_info['aces'])
         is_acl_protected = acl_info['is_acl_protected']
         is_deleted = False
 
@@ -824,7 +932,10 @@ def export_bloodhound_gpos(session, output_dir, output):
             'IsDeleted': is_deleted,
         })
 
+        pg.update(1)
         c += 1
+
+    pg.close()
 
     meta = {
         "methods": 0,

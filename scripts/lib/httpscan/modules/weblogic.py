@@ -18,7 +18,7 @@ weblogic_urls = [
     'console',
 ]
 
-version_pattern = re.compile('<p id="footerVersion">[^:]+: (\S+)</p>')
+version_pattern = re.compile('<p id="footerVersion">[^:]+: (\\S+)</p>')
 
 class Module:
     name = 'Weblogic'

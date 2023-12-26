@@ -4,13 +4,13 @@ import re
 import telnetlib
 
 # Taken from metasploit
-regex_login = re.compile(b'(?:log[io]n( name|)|user( ?name|id|))\s*\:', re.IGNORECASE)
-regex_password = re.compile(b'(?:password|passwd)\s*\:', re.IGNORECASE)
-regex_busy = re.compile(b'(?:Another\ telnet\ session\ is\ in\ progress|Disconnecting\.\.\.)', re.IGNORECASE | re.MULTILINE)
-regex_waiting = re.compile(b'(?:.*please\ wait.*|.*one\ minute.*)', re.IGNORECASE | re.MULTILINE)
-regex_failure = re.compile(b'(?:Incorrect|Unknown|Fail|Invalid|Login|Password|Passwd|Username|Unable|Error|Denied|Reject|Sorry|^http|html|Not\ on\ system\ console|Enter\ username\ and\ password|Auto\ Apply\ On|YOU\ LOGGED\ IN\ USING\ ALL\ UPPERCASE\ CHARACTERS|\n\*$|(Login ?|User ?)(name|):|^\s*\<[a-f0-9]+\>\s*$|^\s*220.*FTP|not\ allowed\ to\ log\ in)', re.IGNORECASE | re.MULTILINE)
-regex_false_failure = re.compile(b'(?:(^\s*last)\ login *\:|allows only\ .*\ Telnet\ Client\ License)', re.IGNORECASE|re.MULTILINE)
-regex_success = re.compile(b'(?:list\ of\ built-in|sh.*[\#\$]\s*$|\[\/\]\s*$|or\ the\ MENU\ system|Password\ is\ not\ set|logging\ in\ as\ visitor|Login\ successful)', re.IGNORECASE | re.MULTILINE)
+regex_login = re.compile(b'(?:log[io]n( name|)|user( ?name|id|))\\s*\\:', re.IGNORECASE)
+regex_password = re.compile(b'(?:password|passwd)\\s*\\:', re.IGNORECASE)
+regex_busy = re.compile(b'(?:Another\\ telnet\\ session\\ is\\ in\\ progress|Disconnecting\\.\\.\\.)', re.IGNORECASE | re.MULTILINE)
+regex_waiting = re.compile(b'(?:.*please\\ wait.*|.*one\\ minute.*)', re.IGNORECASE | re.MULTILINE)
+regex_failure = re.compile(b'(?:Incorrect|Unknown|Fail|Invalid|Login|Password|Passwd|Username|Unable|Error|Denied|Reject|Sorry|^http|html|Not\\ on\\ system\\ console|Enter\\ username\\ and\\ password|Auto\\ Apply\\ On|YOU\\ LOGGED\\ IN\\ USING\\ ALL\\ UPPERCASE\\ CHARACTERS|\n\\*$|(Login ?|User ?)(name|):|^\\s*\\<[a-f0-9]+\\>\\s*$|^\\s*220.*FTP|not\\ allowed\\ to\\ log\\ in)', re.IGNORECASE | re.MULTILINE)
+regex_false_failure = re.compile(b'(?:(^\\s*last)\\ login *\\:|allows only\\ .*\\ Telnet\\ Client\\ License)', re.IGNORECASE|re.MULTILINE)
+regex_success = re.compile(b'(?:list\\ of\\ built-in|sh.*[\\#\\$]\\s*$|\\[\\/\\]\\s*$|or\\ the\\ MENU\\ system|Password\\ is\\ not\\ set|logging\\ in\\ as\\ visitor|Login\\ successful)', re.IGNORECASE | re.MULTILINE)
 
 class Telnet:
 

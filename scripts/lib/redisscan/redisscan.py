@@ -75,7 +75,29 @@ def redisscan_worker(target, actions, creds, timeout):
             version_tuple = tuple([int(i) for i in version.split(".")])
 
             if version_tuple < (2, 8, 21) or version_tuple[0] == 3 and version_tuple < (3, 0, 2):
-                Output.write({'target': redis.url(), 'message': "RCE on Redis (CVE-2015-4335)"})
+                Output.vuln({'target': redis.url(), 'message': "RCE on Redis (CVE-2015-4335)"})
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'redis',
+                    'url': redis.url(),
+                    'name': 'RCE on Redis (CVE-2015-4335)',
+                    'description': 'Redis version vulnerable to CVE-2015-4335: %s' % redis.url(),
+                }
+                DB.insert_vulnerability(vuln_info)
+
+            if version_tuple <= (5, 0, 5):
+                Output.vuln({'target': redis.url(), 'message': "Authenticated RCE on Redis, use Redis-Rogue-Server to exploit"})
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'redis',
+                    'url': redis.url(),
+                    'name': 'Authenticated RCE on Redis',
+                    'description': 'Redis version vulnerable to an RCE, use Redis-Rogue-Server to exploit: %s' % redis.url(),
+                }
+                DB.insert_vulnerability(vuln_info)
+
 
         if not auth:
             Output.write({'target': redis.url(), 'message': 'Unknown'})

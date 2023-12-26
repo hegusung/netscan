@@ -21,6 +21,7 @@ if __name__ == '__main__':
 
     Config.load_config()
     DB.start_worker(args.nodb)
+    DB.save_start()
 
     VulnCallback.init()
 

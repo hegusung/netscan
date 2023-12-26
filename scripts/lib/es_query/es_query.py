@@ -9,6 +9,8 @@ from utils.db import Elasticsearch
 from utils.output import Output
 from lib.es_query.bloodhound import *
 
+#from utils.utils import open
+
 output = []
 
 service_filters = {
@@ -40,6 +42,7 @@ service_filters = {
     'rlogin': [{'port': 513}],
     'rtsp': [{'service': 'rtsp'}, {'port': 554}],
     'jdwp': [{'service': 'jdwp'},],
+    'snmp': [{'service': 'snmp'},],
 }
 
 service_nmap_translate = {
@@ -567,19 +570,19 @@ def export_bloodhound(session, output_dir):
 
     domains, domain_fqdn_to_name, output = export_bloodhound_domains(session, output_dir, output)
 
+    output = export_bloodhound_containers(session, output_dir, output)
+
+    output = export_bloodhound_ous(session, output_dir, output)
+
     user_info, user_sid, output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
+
+    output = export_bloodhound_gpos(session, output_dir, output)
 
     group_sid = get_group_sid(session)
 
     domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, output)
 
     output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, output)
-    
-    output = export_bloodhound_containers(session, output_dir, output)
-
-    output = export_bloodhound_ous(session, output_dir, output)
-
-    output = export_bloodhound_gpos(session, output_dir, output)
 
     pprint(output)
 
@@ -646,7 +649,7 @@ def dump(session, output_file):
     # Create output files in dir if non existant
     nb_documents = Elasticsearch.count(query)
 
-    pg = tqdm(total=nb_documents, mininterval=1, leave=False)
+    pg = tqdm(total=nb_documents, mininterval=1, leave=False, dynamic_ncols=True)
 
     res = Elasticsearch.search(query)
     c = 0
@@ -670,9 +673,9 @@ def restore(session, input_file):
         print('A session must be defined')
         return
 
-    if not os.path.exists(input_file):
-        print('The input file must exist')
-        return
+    #if not os.path.exists(input_file):
+    #    print('The input file must exist')
+    #    return
     
     Output.write("Counting the number of documents....")
 
@@ -684,7 +687,7 @@ def restore(session, input_file):
 
     Output.write("%d documents to insert in elasticsearch session %s" % (c, session))
 
-    pg = tqdm(total=c, mininterval=1, leave=False)
+    pg = tqdm(total=c, mininterval=1, leave=False, dynamic_ncols=True)
 
     f = open(input_file)
 

@@ -5,7 +5,7 @@ from .ftp_bruteforce import *
 
 from utils.output import Output
 from utils.dispatch import dispatch
-from utils.utils import sizeof_fmt
+from utils.utils import sizeof_fmt, gen_random_string
 from utils.db import DB
 
 def ftpscan_worker(target, actions, creds, timeout):
@@ -97,22 +97,38 @@ def ftpscan_worker(target, actions, creds, timeout):
 
         if 'bruteforce' in actions:
             if 'username_file' in actions['bruteforce'] != None:
-                Output.write({'target': ftpscan.url(), 'message': 'Starting bruteforce:'})
+                # Try random creds
+                ftpscan = FTPScan(target['hostname'], target['port'], timeout)
+                rnd_user = gen_random_string()
+                rnd_pass = gen_random_string()
+                success = ftpscan.auth(rnd_user, rnd_pass)
 
-                username_file = actions['bruteforce']['username_file']
-                password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                bruteforce_workers = actions['bruteforce']['workers']
+                if success == True:
+                    Output.success({'target': ftpscan.url(), 'message': 'FTP server accepts any credentials'})
 
-                # The generator will provide a username:password_list couple
-                gen = bruteforce_generator(target, username_file, password_file)
-                gen_size = bruteforce_generator_count(target, username_file, password_file)
+                else:
 
-                args = (timeout,)
-                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+                    Output.write({'target': ftpscan.url(), 'message': 'Starting bruteforce:'})
+
+                    username_file = actions['bruteforce']['username_file']
+                    password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
+                    bruteforce_workers = actions['bruteforce']['workers']
+
+                    # The generator will provide a username:password_list couple
+                    gen = bruteforce_generator(target, username_file, password_file)
+                    gen_size = bruteforce_generator_count(target, username_file, password_file)
+
+                    args = (timeout,)
+                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
 
+    except ConnectionRefusedError:
+        pass
     except Exception as e:
         Output.write({'target': ftpscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
-        ftpscan.disconnect()
+        try:
+            ftpscan.disconnect()
+        except:
+            pass
 

@@ -21,6 +21,7 @@ urllib3.disable_warnings()
 MAX_BULK = 100
 
 es_ids = {
+    'tool': 'ip_{session}_{@timestamp}',
     'ip': 'ip_{session}_{ip}',
     'dns': 'dns_{session}_{source}_{query_type}_{target}',
     'port': 'port_{session}_{ip}_{protocol}_{port}',
@@ -32,6 +33,8 @@ es_ids = {
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
+    'secret': 'secret_{session}_{filepath}_{line}',
+    'snmp': 'snmp_{session}_{ip}_{port}_{snmp_key}',
     'domain': 'domain_domain_{session}_{domain}',
     'domain_container': 'domain_container_{session}_{domain}_{guid}',
     'domain_ou': 'domain_ou_{session}_{domain}_{guid}',
@@ -39,7 +42,7 @@ es_ids = {
     'domain_host': 'domain_host_{session}_{domain}_{hostname}',
     'domain_user': 'domain_user_{session}_{domain}_{username}',
     'domain_group': 'domain_group_{session}_{domain}_{groupname}',
-    'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
+    #'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
     'domain_password': 'domain_password_{session}_{domain}_{username}_{password}',
     'domain_hash': 'domain_hash_{session}_{domain}_{username}_{format}_{hash}',
     'host_linux': 'host_linux_{session}_{ip}',
@@ -236,9 +239,29 @@ class DB:
                     inserts = []
             except BrokenPipeError:
                 break
+            except EOFError:
+                break
             except Exception as e:
                 traceback.print_exc()
                 print('%s: %s' % (type(e), e))
+
+    @classmethod
+    def save_start(self):
+        
+        netscan = "netscan"
+        tool = os.path.basename(sys.argv[0]).split(".")[0]
+        args = " ".join(sys.argv[1:])
+
+        cmdline = "%s %s %s" % (netscan, tool, args)
+
+        tool_doc = {}
+        tool_doc['doc_type'] = 'tool'
+        tool_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        tool_doc['cmdline'] = cmdline
+        tool_doc['tool'] = tool
+
+        self.send(tool_doc)
+
 
     @classmethod
     def insert_ip(self, host_doc):
@@ -653,6 +676,53 @@ class DB:
             self.send(doc)
 
     @classmethod
+    def insert_secret(self, secret_doc):
+        secret_doc['doc_type'] = 'secret'
+        secret_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        secret_doc = check_entry(secret_doc, ['filepath', 'secret_name', 'line', 'reliability'], [])
+
+        secret_doc['service'] = secret_doc['service']
+        self.send(secret_doc)
+
+    @classmethod
+    def insert_snmp_entry(self, snmp_doc):
+        snmp_doc['doc_type'] = 'snmp'
+        snmp_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        snmp_doc = check_entry(snmp_doc, ['hostname', 'port', 'snmp_key', 'snmp_type', 'snmp_value'], [])
+
+        to_insert = []
+        if check_ip(snmp_doc['hostname']):
+            # 'host' is an IP
+            snmp_doc['ip'] = snmp_doc['hostname']
+            del snmp_doc['hostname']
+
+            to_insert.append(snmp_doc)
+        else:
+            # 'host' is an IP
+            ip_list = resolve_hostname(snmp_doc['hostname'])
+
+            for ip in ip_list:
+                # insert hostname in DNS snmp
+                self.insert_dns({
+                    'source': snmp_doc['hostname'],
+                    'query_type': 'A',
+                    'target': ip,
+                })
+
+                snmp_doc_tmp = copy(snmp_doc)
+                snmp_doc_tmp['ip'] = ip
+                del snmp_doc_tmp['hostname']
+
+                to_insert.append(snmp_doc_tmp)
+
+        for doc in to_insert:
+            if 'tags' in doc:
+                append = {'tags': doc['tags']}
+                del doc['tags']
+                doc['append'] = append
+            self.send(doc)
+
+    @classmethod
     def insert_domain_domain(self, domain_doc):
         domain_doc['doc_type'] = 'domain'
         domain_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
@@ -798,7 +868,7 @@ class DB:
         if len(user_doc['domain']) == 0 or user_doc['domain'] == 'workgroup':
             return
 
-        if 'created_date' in user_doc:
+        if 'created_date' in user_doc and user_doc['created_date'] != None:
             user_doc['created_date'] = int(user_doc['created_date'].timestamp()*1000)
         if 'last_logon' in user_doc and user_doc['last_logon'] != None:
             user_doc['last_logon'] = int(user_doc['last_logon'].timestamp()*1000)
@@ -879,6 +949,7 @@ class DB:
 
         self.send(group_doc)
 
+    """
     @classmethod
     def insert_domain_spn(self, spn_doc):
         spn_doc['doc_type'] = 'domain_spn'
@@ -888,23 +959,28 @@ class DB:
         spn_doc['domain'] = spn_doc['domain'].lower()
         spn_doc['username'] = spn_doc['username'].lower()
 
+        print(spn_doc)
+
         if len(spn_doc['domain']) == 0 or spn_doc['domain'] == 'workgroup':
             return
 
         self.send(spn_doc)
+    """
 
     @classmethod
     def insert_domain_vulnerability(self, vuln_doc):
-        vuln_doc['doc_type'] = 'domain_vuln'
-        vuln_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        vuln_doc = check_entry(vuln_doc, ['domain', 'name', 'description'], [])
+        vuln_doc = check_entry(vuln_doc, ['hostname', 'domain', 'name', 'description'], [])
+
+        vuln_doc['port'] = 445
+        vuln_doc['url'] = "domain:%s" % vuln_doc['domain'].lower()
+        vuln_doc['service'] = 'domain'
 
         vuln_doc['domain'] = vuln_doc['domain'].lower()
 
         if len(vuln_doc['domain']) == 0 or vuln_doc['domain'] == 'workgroup':
             return
 
-        self.send(vuln_doc)
+        self.insert_vulnerability(vuln_doc)
 
     @classmethod
     def insert_host_linux(self, host_doc):

@@ -136,7 +136,7 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue, delay):
                 print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
                 # Store the exception for debugging purposes
 
-                log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), Config.config.get('Logging', 'folder'), "stack_traces.log")
+                log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "..", Config.config.get('Logging', 'folder'), "stack_traces.log")
                 logfile = open(log_path, "a")
                 logfile.write("%s: %s\n%s: %s\n%s\n\n" % (str(worker_func), str(target), type(e), e, traceback.format_exc()))
                 logfile.close()
@@ -154,9 +154,9 @@ def thread_worker(feed_queue, worker_func, func_args, pg_queue, delay):
 def progressbar_worker(target_size, pg_queue, pg_name):
 
     if pg_name == None:
-        pg = tqdm(total=target_size, mininterval=1, leave=False)
+        pg = tqdm(total=target_size, mininterval=1, leave=False, dynamic_ncols=True)
     else:
-        pg = tqdm(total=target_size, mininterval=1, desc=pg_name, leave=False)
+        pg = tqdm(total=target_size, mininterval=1, desc=pg_name, leave=False, dynamic_ncols=True)
     count = 0
 
     c = 0

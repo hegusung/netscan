@@ -17,12 +17,7 @@ class OU:
 
         schema_guid_dict = ldap_obj._get_schema_guid_dict(['Organizational-Unit', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
-        def process(item):
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
-
-            attr = ldap_obj.to_dict(item)
-
+        def process(attr):
             ou_domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
 
             if ou_domain.lower() != domain.lower():
@@ -37,11 +32,7 @@ class OU:
             guid += b[8:10].hex() + '-'
             guid += b[10:16].hex()
 
-            affected_computers = [{"ObjectType": "computer", "ObjectIdentifier": sid} for sid in ldap_obj._resolve_affected_computers(dn, domain_sid)]
-
-            # Resolve child objects 
-            child_objects = ldap_obj._resolve_child_objects(dn)
-
+            # Process GPO
             links = {}
             gpo_paths = []
             if 'gPLink' in attr:
@@ -80,25 +71,21 @@ class OU:
             gpo_effect = GPO.merge_gpo_effect(gpo_effect)
 
             aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'organizational-unit', schema_guid_dict)
-            aces = ldap_obj._resolve_sid_types(aces, 'aces')
 
             callback({
                 'domain': domain,
                 'name': str(attr['name']),
                 'dn': dn,
                 'guid': guid,
-                'affected_computers': affected_computers,
-                'child_objects': child_objects,
                 'links': list(links.values()),
                 'gpo_effect': gpo_effect,
                 'aces': aces,
             })
 
-
-        sc = ldap.SimplePagedResultsControl(size=100)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink']
         sbase = "%s" % ldap_obj.defaultdomainnamingcontext
-        ldap_obj.conn.search(searchBase=sbase, searchFilter='(objectCategory=organizationalUnit)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
+        search_filter='(objectCategory=organizationalUnit)'
+        attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink']
+
+        ldap_obj.query(process, sbase, search_filter, attributes, query_sd=True)
 
 

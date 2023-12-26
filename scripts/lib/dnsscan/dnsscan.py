@@ -7,6 +7,7 @@ import tqdm
 
 from utils.output import Output
 from utils.db import DB
+from utils.utils import open
 
 ip_regex = re.compile("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
 
@@ -27,24 +28,25 @@ def dnsscan_worker(target, dn_server, do_tcp, actions, timeout):
             for action in actions:
                 if action[0] == 'dc':
                     for ad_server in dnsscan.lookup_dc():
-                        for ip in ad_server['ips']:
-                            DB.insert_dns({
-                                'source': ad_server['hostname'],
-                                'query_type': "A",
-                                'target': ip,
-                            })
+                        if ad_server['ips'] != None:
+                            for ip in ad_server['ips']:
+                                DB.insert_dns({
+                                    'source': ad_server['hostname'],
+                                    'query_type': "A",
+                                    'target': ip,
+                                })
 
-                            DB.insert_port({
-                                'hostname': ip,
-                                'port': 445,
-                                'protocol': 'tcp',
-                                'service': 'smb',
-                                'service_info': {
-                                    'is_dc': True,
-                                    'domain': target['hostname'],
-                                    'hostname': ad_server['hostname'],
-                                }
-                            })
+                                DB.insert_port({
+                                    'hostname': ip,
+                                    'port': 445,
+                                    'protocol': 'tcp',
+                                    'service': 'smb',
+                                    'service_info': {
+                                        'is_dc': True,
+                                        'domain': target['hostname'],
+                                        'hostname': ad_server['hostname'],
+                                    }
+                                })
 
 
                         Output.highlight({"message_type": "dns_dc", "domain": ad_server['domain'], "hostname": ad_server["hostname"], "ips": ad_server['ips']})
@@ -90,6 +92,8 @@ class DNSScan:
         except dns.resolver.NXDOMAIN:
             resolved = None
         except dns.resolver.NoAnswer:
+            resolved = None
+        except dns.resolver.NoNameservers:
             resolved = None
         except dns.exception.Timeout as e:
             Output.error(str(e))
@@ -146,7 +150,7 @@ class DNSScan:
         nb_lines = sum(1 for _ in f)
         f.close()
         f = open(subdomain_file)
-        for subdomain in tqdm.tqdm(f, total=nb_lines, mininterval=1, desc=self.hostname):
+        for subdomain in tqdm.tqdm(f, total=nb_lines, mininterval=1, desc=self.hostname, dynamic_ncols=True):
             subdomain = subdomain.strip()
             subdomain = "%s.%s" % (subdomain, self.hostname)
 
@@ -185,6 +189,8 @@ class DNSScan:
                 if axfr == None:
                     Output.minor({"target": str(ns_dns), "message": "AXFR transfer failure"})
                     continue
+            except dns.exception.Timeout:
+                continue
             except dns.xfr.TransferError:
                 Output.minor({"target": str(ns_dns), "message": "AXFR transfer failure"})
                 continue

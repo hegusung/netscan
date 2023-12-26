@@ -4,6 +4,7 @@ import copy
 import csv
 from urllib.parse import urlparse
 from netaddr import *
+from utils.utils import normalize_path
 
 method_port = {
     "http": 80,
@@ -12,7 +13,7 @@ method_port = {
     "smb": 445,
 }
 
-ipv4_regex = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(3[012]|[12][0-9]|[1-9]))?$')
+ipv4_regex = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(3[012]|[12][0-9]|[1-9]))?$')
 
 """
 Used by argparse arguments
@@ -42,7 +43,7 @@ def port_file(input_file):
         return None
 
     ports = []
-    f = open(input_file)
+    f = open(normalize_path(input_file))
     for line in f:
         line = line.split('#')[0]
         line = line.strip()

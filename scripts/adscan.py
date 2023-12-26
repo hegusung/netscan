@@ -3,7 +3,7 @@
 import argparse
 import sys
 import os
-from utils.utils import normalize_path
+from utils.utils import check_ip, normalize_path
 from utils.dispatch import dispatch_targets
 from utils.output import Output
 from lib.adscan.adscan import adscan_worker, ad_modules
@@ -29,7 +29,7 @@ def main():
     auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
     
     # Enum
-    user_group = parser.add_argument_group("Domain user enumeration")
+    user_group = parser.add_argument_group("Domain enumeration")
     user_group.add_argument("--domains", action='store_true', help='dump domains, containers and OUs from the Active Directory with some interesting parameters (Bloodhound)')
     user_group.add_argument("--users", action='store_true', help='dump users from the Active Directory, display if the account has one of the following enabled: AdminCount, Account disabled, Password not required, Password never expire, Do not require pre-auth, Trusted to auth for delegation (Bloodhound)')
     user_group.add_argument("--admins", action='store_true', help='dump users with administrative privileges from Active Directory')
@@ -38,13 +38,30 @@ def main():
     user_group.add_argument("--hosts", action='store_true', help='dump hosts from the Active Directory, list if it has trusted for delegation enabled (Bloodhound)')
     user_group.add_argument("--dns", action='store_true', help='dump DNS entries from the Active Directory')
     user_group.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
-    user_group.add_argument("--spns", action='store_true', help='dump SPNS from the Active Directory')
     user_group.add_argument("--passpol", action='store_true', help='dump password policy from the Active Directory')
     user_group.add_argument("--trusts", action='store_true', help='dump trusts from the Active Directory')
     user_group.add_argument("--gpos", action='store_true', help='dump GPOs from the Active Directory (Bloodhound)', dest='gpos')
     user_group.add_argument("--list-groups", metavar='username', type=str, nargs='?', help='List groups of a specific user / group', default=None, const='', dest='list_groups')
     user_group.add_argument("--list-users", metavar='groupname', type=str, nargs='?', help='List users of a specific group', default=None, dest='list_users')
     user_group.add_argument("--constrained-delegation", action='store_true', help='List constrained delegations', dest='constrained_delegation')
+
+    # AD modifications
+    modif_group = parser.add_argument_group("Domain modification")
+    modif_group.add_argument("--add-to-group", metavar=("GroupDN", "UserDN"), type=str, nargs=2, help='Add a user to a group', dest='group_add')
+    modif_group.add_argument("--del-from-group", metavar=("GroupDN", "UserDN"), type=str, nargs=2, help='Remove a user from a group', dest='group_del')
+    modif_group.add_argument("--set-owner", metavar=("PrincipalDN", "TargetDN"), type=str, nargs=2, help='Modify the Target object to set the Principal as the owner', dest='set_owner')
+    modif_group.add_argument("--add-ace", metavar=("PrincipalDN", "Right", "TargetDN"), type=str, nargs=3, help='Modify the Target object to add an ACE for the Principal', dest='add_ace')
+    modif_group.add_argument("--restore-acl", metavar=("ACLfile",), type=str, nargs=1, help='Remove a user from a group', dest='restore_acl')
+    modif_group.add_argument("--add-computer", metavar=("ComputerName", "Password"), type=str, nargs=2, help='Add a computer to the domain', dest='add_computer')
+    modif_group.add_argument("--del-object", metavar=("ObjectDN",), type=str, nargs=1, help='Delete a LDAP entry from the domain', dest='del_object')
+    modif_group.add_argument("--set-password", metavar=("ObjectDN", "Password"), type=str, nargs=2, help='Change a user or computer Password', dest='set_password')
+    modif_group.add_argument("--add-parameter", metavar=("ObjectDN", "Parameter", "Value"), type=str, nargs=3, help='Add a new parameter to the parameter list', dest='add_parameter')
+    modif_group.add_argument("--replace-parameter", metavar=("ObjectDN", "Parameter", "Value"), type=str, nargs=3, help='Replace the parameter value', dest='replace_parameter')
+    modif_group.add_argument("--delete-parameter", metavar=("ObjectDN", "Parameter", "Value"), type=str, nargs=3, help='Delete a value froma parameter', dest='delete_parameter')
+
+    # Attack
+    attk_group = parser.add_argument_group("Attacks")
+    attk_group.add_argument("--kerberoasting", action='store_true', help='Execute a kerberoasting attack on the accounts with a SPN')
 
     acls_group = parser.add_argument_group("Enumerate ACLs/ACEs")
     acls_group.add_argument("--vuln-gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory', dest='vuln_gpos')
@@ -60,15 +77,18 @@ def main():
     adcs_group = parser.add_argument_group("ADCS")
     adcs_group.add_argument("--adcs", action='store_true', help='Discover the domain root Certificate Authority')
     adcs_group.add_argument("--ca-certs", action='store_true', help='List CA certificates from Active Directory', dest='ca_certs')
+    adcs_group.add_argument("--certipy", action='store_true', help='Execute certipy', dest='certipy')
     adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory', dest='cert_templates')
     adcs_group.add_argument("--esc1", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC1)', default=None, const='', dest='esc1')
     adcs_group.add_argument("--esc2", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC2)', default=None, const='', dest='esc2')
     adcs_group.add_argument("--esc3", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC3)', default=None, const='', dest='esc3')
     adcs_group.add_argument("--esc4", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC4)', default=None, const='', dest='esc4')
+    adcs_group.add_argument("--esc11", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC11)', default=None, const='', dest='esc11')
 
     # Dump
     admin_group = parser.add_argument_group("Domain admin actions")
     admin_group.add_argument("--gmsa", action='store_true', help="Dump gMSA passwords")
+    admin_group.add_argument("--smsa", action='store_true', help="Dump sMSA passwords")
     admin_group.add_argument("--laps", action='store_true', help="Dump LAPS passwords")
     admin_group.add_argument("--ntds", choices={'vss', 'drsuapi'}, nargs='?', const='drsuapi', help="Dump the NTDS.dit from target DCs using the specifed method (default: drsuapi)")
 
@@ -79,14 +99,16 @@ def main():
     # Modules
     module_group = parser.add_argument_group("Modules")
     module_group.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    module_group.add_argument('-m', metavar='modules', nargs='?', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
+    module_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules', default=None, dest='modules')
 
     # Misc
     misc_group = parser.add_argument_group("Misc")
+    misc_group.add_argument('--target-domain', metavar='domain', nargs='?', type=str, help='Target domain to request for cross-domain enumeration', dest='target_domain')
     misc_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     misc_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     misc_group.add_argument("--no-ssl", action='store_true', help="Perform a LDAP connection instead of LDAPS", dest='no_ssl')
     misc_group.add_argument('--ldap-protocol', choices={"ldaps", "ldap", "gc"}, default=None, help="Way to connect to the ldap service (default: ldaps)", dest='ldap_protocol')
+    misc_group.add_argument("--python-ldap", action='store_true', help="Use python-ldap3 instead of impacket's ldap library", dest='python_ldap')
     
     # Dispatcher arguments
     misc_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
@@ -106,6 +128,7 @@ def main():
 
     Config.load_config()
     DB.start_worker(args.nodb)
+    DB.save_start()
 
     targets = {}
     if args.targets:
@@ -131,9 +154,7 @@ def main():
             creds['hash'] = args.hash
     if args.domain:
         creds['domain'] = args.domain
-    else:
-        print('Please specify the domain (complete FQDN)')
-        sys.exit()
+
     if args.kerberos != None:
         if len(args.kerberos) != 0:
             os.environ['KRB5CCNAME'] = args.kerberos
@@ -144,8 +165,19 @@ def main():
         creds['kerberos'] = True
     if args.dc_ip != None:
         creds['dc_ip'] = args.dc_ip
+        
+    target_domain = None
+    if args.target_domain != None:
+        target_domain = args.target_domain
+    elif 'domain' in creds:
+        target_domain = creds['domain']
+        
+    if target_domain == None:
+        print('Please specify the domain (complete FQDN) with -d or --target-domain')
+        sys.exit()
+        
 
-    actions = {}
+    actions = {'target_domain': target_domain}
     if args.domains:
         actions['domains'] = {}
     if args.users:
@@ -162,8 +194,8 @@ def main():
         actions['dns'] ={}
     if args.gpp:
         actions['gpps'] ={}
-    if args.spns:
-        actions['spns'] ={}
+    if args.kerberoasting:
+        actions['kerberoasting'] ={}
     if args.passpol:
         actions['passpol'] = {}
     if args.trusts:
@@ -175,6 +207,8 @@ def main():
         actions['casrv'] = {}
     if args.ca_certs:
         actions['ca_certs'] = {}
+    if args.certipy:
+        actions['certipy'] = {}
     if args.cert_templates:
         actions['cert_templates'] = {}
     if args.esc1 != None:
@@ -185,6 +219,8 @@ def main():
         actions['esc3'] = {'user': args.esc3}
     if args.esc4 != None:
         actions['esc4'] = {'user': args.esc4}
+    if args.esc11 != None:
+        actions['esc11'] = {'user': args.esc11}
 
     if args.vuln_gpos:
         actions['vuln_gpos'] = {}
@@ -212,24 +248,48 @@ def main():
         actions['users_brute'] = {'username_file': args.users_brute}
     if args.gmsa:
         actions['dump_gmsa'] = {}
+    if args.smsa:
+        actions['dump_smsa'] = {}
     if args.laps:
         actions['dump_laps'] = {}
     if args.ntds:
         actions['dump_ntds'] = {'method': args.ntds}
+    if args.group_add:
+        actions['group_add'] = {'group': args.group_add[0], 'user': args.group_add[1]}
+    if args.group_del:
+        actions['group_del'] = {'group': args.group_del[0], 'user': args.group_del[1]}
+    if args.set_owner:
+        actions['set_owner'] = {'principal': args.set_owner[0], 'target': args.set_owner[1]}
+    if args.add_ace:
+        actions['add_ace'] = {'principal': args.add_ace[0], 'right': args.add_ace[1], 'target': args.add_ace[2]}
+    if args.restore_acl:
+        actions['restore_acl'] = {'file': args.restore_acl[0]}
+    if args.add_computer:
+        actions['add_computer'] = {'computer_name': args.add_computer[0], 'computer_password': args.add_computer[1]}
+    if args.del_object:
+        actions['del_object'] = {'object_dn': args.del_object[0]}
+    if args.set_password:
+        actions['set_password'] = {'object_dn': args.set_password[0], 'password': args.set_password[1]}
+    if args.add_parameter:
+        actions['add_parameter'] = {'object_dn': args.add_parameter[0], 'parameter': args.add_parameter[1], 'value': args.add_parameter[2]}
+    if args.replace_parameter:
+        actions['replace_parameter'] = {'object_dn': args.replace_parameter[0], 'parameter': args.replace_parameter[1], 'value': args.replace_parameter[2]}
+    if args.delete_parameter:
+        actions['delete_parameter'] = {'object_dn': args.delete_parameter[0], 'parameter': args.delete_parameter[1], 'value': args.delete_parameter[2]}
     if args.modules:
-        module_args = {
-        }
-        actions['modules'] = {'modules': args.modules, 'args': module_args}
+        if not ad_modules.check_modules(args.modules[0]):
+            sys.exit()
+        actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
 
-    adscan(targets, static_inputs, args.workers, actions, creds, args.ldap_protocol, args.timeout)
+    adscan(targets, static_inputs, args.workers, actions, creds, args.ldap_protocol, args.timeout, args.python_ldap)
 
     DB.stop_worker()
     Output.stop()
 
 
-def adscan(input_targets, static_inputs, workers, actions, creds, no_ssl, timeout):
-    args = (actions, creds, no_ssl, timeout)
+def adscan(input_targets, static_inputs, workers, actions, creds, no_ssl, timeout, python_ldap):
+    args = (actions, creds, no_ssl, python_ldap, timeout)
     dispatch_targets(input_targets, static_inputs, adscan_worker, args, workers=workers)
 
 

@@ -42,7 +42,7 @@ class SMBEXEC:
         if self.__password is None:
             self.__password = ''
 
-        stringbinding = 'ncacn_np:%s[\pipe\svcctl]' % self.__host
+        stringbinding = 'ncacn_np:%s[\\pipe\\svcctl]' % self.__host
         logging.debug('StringBinding %s'%stringbinding)
         self.__rpctransport = transport.DCERPCTransportFactory(stringbinding)
         self.__rpctransport.set_dport(self.__port)

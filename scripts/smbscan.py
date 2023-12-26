@@ -36,7 +36,7 @@ def main():
     share_group.add_argument('--shares', action='store_true', help='List shares', dest='shares')
     share_group.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
     share_group.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
-    #share_group.add_argument('--search', metavar='SEARCH', type=str, nargs='?', help='Search pattern', default=None, dest='search')
+    share_group.add_argument('--search', action='store_true', help='Search for secrets', dest='search')
     
     # Execution-related
     cmd_group = parser.add_argument_group("Command execution (admin rights required)")
@@ -59,8 +59,8 @@ def main():
     enum_group.add_argument("--apps", action='store_true', help='dump applications list from target systems')
     enum_group.add_argument("--processes", action='store_true', help='dump processes list from target systems')
     enum_group.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
-    enum_group.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems')
-    enum_group.add_argument("--sessions", action='store_true', help='dump sessions from target systems')
+    enum_group.add_argument("--loggedin", action='store_true', help='dump logged on users from target systems (Bloodhound)')
+    enum_group.add_argument("--sessions", action='store_true', help='dump sessions from target systems (Bloodhound)')
     enum_group.add_argument("--rid-brute", metavar="range", help='RID bruteforce', type=str, default=None, dest='rid_brute')
     
     # Bruteforce
@@ -69,13 +69,14 @@ def main():
     bruteforce_group.add_argument("--simple-bruteforce", action='store_true', help='Enable simple bruteforce (username=password)', dest='simple_bruteforce')
     bruteforce_group.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
     bruteforce_group.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
+    bruteforce_group.add_argument('--ntlm-file', metavar='ntlm file', type=str, nargs='?', help='NTLM (with -U) or User:NTLM (without -U) file', default=None, dest='ntlm_file')
     bruteforce_group.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers for the bruteforce', default=5, dest='bruteforce_workers')
     bruteforce_group.add_argument('--bruteforce-delay', metavar='seconds', nargs='?', type=int, help='Delay between each bruteforce attempt', default=0, dest='bruteforce_delay')
     
     # Modules
     module_group = parser.add_argument_group("Modules")
     module_group.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    module_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules ("-m all" to launch all modules)', default=None, dest='modules')
+    module_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules', default=None, dest='modules')
     
     misc_group = parser.add_argument_group("Misc")
     misc_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
@@ -107,6 +108,7 @@ def main():
     Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
+    DB.save_start()
 
     targets = {}
     if args.targets:
@@ -152,8 +154,8 @@ def main():
             actions['list']['share'] = args.list
     if args.shares:
         actions['list_shares'] = {}
-    #if args.search:
-    #    actions['search'] = {}
+    if args.search:
+        actions['search'] = {}
     if args.command:
         actions['command'] = {'command': args.command, 'method': args.exec_method, 'code_page': args.code_page}
     if args.payload:
@@ -189,10 +191,12 @@ def main():
 
         actions['rid_brute'] = {'start': start_rid, 'end': end_rid}
     if args.bruteforce:
-        actions['bruteforce'] ={'username_file': normalize_path(args.username_file), 'password_file': normalize_path(args.password_file), 'workers': args.bruteforce_workers, 'delay': args.bruteforce_delay}
+        actions['bruteforce'] ={'username_file': normalize_path(args.username_file), 'password_file': normalize_path(args.password_file), 'ntlm_file': normalize_path(args.ntlm_file), 'workers': args.bruteforce_workers, 'delay': args.bruteforce_delay}
     if args.simple_bruteforce:
         actions['simple_bruteforce'] ={'username_file': normalize_path(args.username_file), 'workers': args.bruteforce_workers, 'delay': args.bruteforce_delay}
     if args.modules:
+        if not smb_modules.check_modules(args.modules[0]):
+            sys.exit()
         actions['modules'] = {'modules': args.modules[0], 'args': args.modules[1:]}
 
 

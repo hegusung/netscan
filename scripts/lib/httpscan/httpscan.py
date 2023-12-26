@@ -1,6 +1,7 @@
 from time import sleep
 import os.path
 import OpenSSL
+import requests
 
 from .http import HTTP
 
@@ -13,11 +14,14 @@ from utils.modulemanager import ModuleManager
 
 http_modules = ModuleManager('lib/httpscan/modules')
 
-def httpscan_worker(target, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[], inexistant_url=[], ignore_cert=False):
+def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[], inexistant_url=[], ignore_cert=True):
     try:
         httpscan = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout, headers=header_dict, auth=http_auth, cookies=cookie_dict)
 
-        output = httpscan.get(target['path'], params=target['params'] if 'params' in target else None)
+        if verb == 'GET':
+            output = httpscan.get(target['path'], params=target['params'] if 'params' in target else None)
+        elif verb == 'POST':
+            output = httpscan.post(target['path'], data, params=target['params'] if 'params' in target else None)
         if output != None and not output['code'] in excluded_code:
 
             for inex in inexistant_url:
@@ -116,7 +120,7 @@ def httpscan_worker(target, actions, useragent, header_dict, http_auth, cookie_d
                     if ignored_code != None:
                         excluded_code_arg.append(ignored_code)
 
-                    args = ({}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, inexistant_url, True)
+                    args = (verb, data, {}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, inexistant_url, True)
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
 
 
@@ -133,7 +137,9 @@ def httpscan_worker(target, actions, useragent, header_dict, http_auth, cookie_d
                     if ignored_code != None:
                         excluded_code_arg.append(ignored_code)
 
-                    args = ({}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, []), True
+                    args = (verb, data, {}, useragent, header_dict, http_auth, cookie_dict, proxy, None, extensions, dir_bruteforce_workers, timeout, excluded_code_arg, [], True)
                     dispatch(gen, gen_size, httpscan_worker, args, workers=dir_bruteforce_workers, process=False, pg_name=httpscan.url(target['path'])) 
+    except requests.exceptions.TooManyRedirects as e:
+        Output.error({'target': httpscan.url(target['path']), 'message': str(e)})
     except ConnectionRefusedError:
         pass

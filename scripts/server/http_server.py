@@ -64,7 +64,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             f = self.send_ressource_file(file_md5)
         else:
             # Move to file directory
-            self.path = "/server_data/files" + self.path
+            self.path = PATH_OFFSET + self.path
 
             f = self.send_head()
         if f:
@@ -98,7 +98,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 f.close()
             return
         else:
-            self.path = "/server_data/files" + self.path
+            self.path = PATH_OFFSET + self.path
             r, info = self.deal_post_data()
         Output.highlight("%s %s %s" % (info, "by: ", self.client_address[0]))
         f = BytesIO()
@@ -130,7 +130,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(405, "Method not allowed")
             return
         else:
-            path = os.path.join(os.path.dirname(__file__), "files" + self.path)
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', "files" + self.path)
             length = int(self.headers['Content-Length'])
             with open(path, 'wb') as f:
                 f.write(self.rfile.read(length))
@@ -209,7 +209,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 continue
 
         if module:
-            path = os.path.join(os.path.dirname(__file__), 'uploads', '%s_%s_%s' % (timestamp, self.client_address[0], module.name))
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', 'uploads', '%s_%s_%s' % (timestamp, self.client_address[0], module.name))
 
             f = open(path, 'wb')
             f.write(data)
@@ -278,7 +278,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def send_ressource_file(self, file_md5):
         file_md5 = file_md5.lower()
 
-        files_path = os.path.join(os.path.dirname(__file__), 'ressources')
+        files_path = os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', 'ressources')
         for f_name in os.listdir(files_path):
             path = os.path.join(files_path, f_name)
 

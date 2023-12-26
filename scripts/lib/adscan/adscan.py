@@ -15,17 +15,20 @@ from ldap3.core.exceptions import LDAPSocketSendError
 from lib.smbscan.smb import SMBScan
 from .ldap import LDAPScan
 from .kerberos import Kerberos
+from .external import call_certipy
+from .accesscontrol import get_owner
+from .adedit import ADEdit
 
 from utils.output import Output
-from utils.utils import AuthFailure
+from utils.utils import check_ip, AuthFailure
 from utils.db import DB
 from utils.modulemanager import ModuleManager
 
 ad_modules = ModuleManager('lib/adscan/modules')
 
-windows_build = re.compile("Windows \S+ Build (\d+)")
+windows_build = re.compile("Windows \\S+ Build (\\d+)")
 
-def adscan_worker(target, actions, creds, ldap_protocol, timeout):
+def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
     # Process creds
     if 'username' in creds and '\\' in creds['username']:
         creds['domain'] = creds['username'].split('\\')[0]
@@ -93,12 +96,16 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                 # Start new connection
                 smbscan.connect()
 
-                creds_smb = copy.copy(creds)
-
                 success = False
                 is_admin = False
 
                 if 'kerberos' in creds:
+                    if check_ip(target['hostname']):
+                        Output.error("When using kerberos, use the hostname instead of the IP. Aborting")
+                        Output.minor("The hostname is probably: %s.%s" % (smb_info['hostname'], smb_info['domain']))
+                        return
+
+
                     ticket = os.environ['KRB5CCNAME']
 
                     from impacket.krb5.ccache import CCache
@@ -113,6 +120,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
 
                     creds['username'] = user
                     creds['domain'] = domain
+
+                creds_smb = copy.copy(creds)
 
                 # Authenticate
                 if not 'username' in creds_smb:
@@ -182,6 +191,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
         # == LDAP check ==
         try:
 
+            target_domain = actions['target_domain']
             domain = creds['domain'] if 'domain' in creds else None
             username = creds['username'] if 'username' in creds else None
             password = ''
@@ -205,11 +215,13 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
             for ldap_protocol in ldap_protocols:
                 success = False
                 try:
-                    ldapscan = LDAPScan(target['hostname'], timeout, protocol=ldap_protocol)
-                    success, ldap_info = ldapscan.connect(domain, username, password, ntlm, doKerberos, dc_ip)
+                    ldapscan = LDAPScan(target['hostname'], timeout, protocol=ldap_protocol, python_ldap=python_ldap)
+                    success, ldap_info = ldapscan.connect(target_domain, domain, username, password, ntlm, doKerberos, dc_ip)
 
                     if success:
                         break
+
+                    Output.minor({'target': ldapscan.url(), 'message': 'Failed to authenticate via %s' % ldap_protocol})
                 except OpenSSL.SSL.SysCallError as e:
                     pass
             else:
@@ -300,17 +312,34 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                             'dn': entry['dn'],
                             'functionallevel': entry['functionallevel'],
                             # For bloodhound
-                            'affected_computers': entry['affected_computers'],
                             'gpo_effect': entry['gpo_effect'],
-                            'child_objects': entry['child_objects'],
                             'trusts': entry['trusts'],
                             'links': entry['links'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s:' % (entry['domain'],)})
+                        Output.write({'target': ldapscan.url(), 'message': '   Forest fonctional level: %s' % entry['functionallevel']})
+                        if int(entry['functionallevel']) < 2016:
+                                DB.insert_domain_vulnerability({
+                                    'hostname': ldapscan.hostname,
+                                    'domain': entry['domain'],
+                                    'name': 'Insecure Forest functional level',
+                                    'description': 'Insecure Forest functional level, is %s, should be at least 2016' % (entry['functionallevel'],),
+                                })
+
+
                         Output.write({'target': ldapscan.url(), 'message': '   Parameters:'})
                         for param_name, param_value in entry['parameters'].items():
                             Output.write({'target': ldapscan.url(), 'message': '    - %s: %s' % (param_name, param_value)})
+
+                            if param_name == 'ms-DS-MachineAccountQuota' and param_value != 0:
+                                DB.insert_domain_vulnerability({
+                                    'hostname': ldapscan.hostname,
+                                    'domain': entry['domain'],
+                                    'name': 'Insecure ms-DS-MachineAccountQuota value',
+                                    'description': 'Insecure ms-DS-MachineAccountQuota, is %d, should be 0' % (param_value,),
+                                })
 
                         # List containers
                         Output.write({'target': ldapscan.url(), 'message': '   Containers:'})
@@ -322,8 +351,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                                 'dn': entry['dn'],
                                 'guid': entry['guid'],
                                 # For bloodhound
-                                'child_objects': entry['child_objects'],
                                 'aces': entry['aces'],
+                                'owner': get_owner(entry['aces']),
                             })
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
 
@@ -339,11 +368,10 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                                 'dn': entry['dn'],
                                 'guid': entry['guid'],
                                 # For bloodhound
-                                'affected_computers': entry['affected_computers'],
                                 'gpo_effect': entry['gpo_effect'],
-                                'child_objects': entry['child_objects'],
                                 'links': entry['links'],
                                 'aces': entry['aces'],
+                                'owner': get_owner(entry['aces']),
                             })
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
 
@@ -376,7 +404,10 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                             'tags': entry['tags'],
                             'group': entry['group'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                             'spns': entry['spns'],
+                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                            'sid_history': entry['sid_history'],
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
 
@@ -458,6 +489,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                             'members': entry['members'],
                             'tags': entry['tags'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'sid_history': entry['sid_history'],
                         })
 
                         Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s  [%s]' % (group.ljust(40), len(entry['members']), entry['comment'].ljust(30), ",".join(entry['tags']))})
@@ -480,7 +513,11 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                             'sid': entry['sid'],
                             'primary_gid': entry['primary_gid'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                             'spns': entry['spns'],
+                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                            'allowed_to_act_on_behalf_of_other_identity': entry['allowed_to_act_on_behalf_of_other_identity'],
+                            'allowed_to_act_on_behalf_of_other_identity_sids': entry['allowed_to_act_on_behalf_of_other_identity_sids'],
                             'created_date': entry['created_date'],
                             'last_logon': entry['last_logon'],
                             'last_password_change': entry['last_password_change'],
@@ -532,6 +569,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                                 })
 
                     ldapscan.list_dns(callback)
+                else:
+                    raise NotImplementedError('Dumping DNS through SMB')
 
             if 'gpps' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'Passwords in GPPs:'})
@@ -539,36 +578,21 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                     for entry in smbscan.list_gpps():
                         # insert domain vulnerability
                         DB.insert_domain_vulnerability({
-                            'domain': entry['domain'],
+                            'hostname': target['hostname'],
+                            'domain': smb_info['domain'],
                             'name': 'Password in GPP',
-                            'description': 'Password in GPP: User => %s, Password => %s' % (entry['username'], entry['password']),
+                            'description': 'Password in GPP file %s: Username => %s, Newname => %s, Password => %s' % (entry['path'], entry['username'], entry['newname'], entry['password']),
                         })
 
-                        cred_info = {
-                            'domain': entry['domain'],
-                            'username': entry['username'],
-                            'type': 'password',
-                            'password': entry['password'],
-                        }
-                        DB.insert_domain_credential(cred_info)
+                        Output.write({'target': smbscan.url(), 'message': '- %s => %s :  %s' % (entry['username'].ljust(40), entry['newname'].ljust(40), entry['password'].ljust(20))})
 
-                        Output.write({'target': smbscan.url(), 'message': '- %s   %s' % (entry['username'].ljust(40), entry['password'].ljust(20))})
-
-            if 'spns' in actions:
-                Output.highlight({'target': smbscan.url(), 'message': 'SPNs:'})
+            if 'kerberoasting' in actions:
+                Output.highlight({'target': smbscan.url(), 'message': 'Kerberoasting:'})
                 if smb_authenticated:
                     for entry in smbscan.list_spns(ldapscan.defaultdomainnamingcontext):
                         user = '%s\\%s' % (entry['domain'], entry['username'])
                         tgs_hash = entry['tgs']['tgs'] if 'tgs' in entry['tgs'] else 'Unable to retreive TGS hash'
-                        Output.write({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
-
-                        # insert domain SPN
-                        DB.insert_domain_spn({
-                            'domain': entry['domain'],
-                            'spn': entry['spn'],
-                            'username': entry['username'],
-                        })
-
+                        Output.vuln({'target': smbscan.url(), 'message': '- %s   %s   %s\n%s' % (entry['spn'].ljust(30), user.ljust(40), entry['tgs']['format'], tgs_hash)})
 
                         if 'tgs' in entry['tgs']:
                             spn_hash = str(entry['tgs']['tgs'])
@@ -603,6 +627,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         # insert domain vulnerability if lock_threshold == 0
                         if password_policy['lock_threshold'] == 0:
                             DB.insert_domain_vulnerability({
+                                'hostname': target['hostname'],
                                 'domain': password_policy['domain'],
                                 'name': 'No account lockout',
                                 'description': 'No account lockout for domain %s, accounts can be bruteforced' % (password_policy['domain'],),
@@ -622,7 +647,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s   [%s]' % (entry['domain'].ljust(30), entry['direction'].ljust(20), entry['type'].ljust(20), ','.join(entry['tags']))})
                     ldapscan.list_trusts(callback)
                 else:
-                    raise NotImplementedError('Dumping hosts through SMB')
+                    raise NotImplementedError('Dumping trusts through SMB')
 
             if 'gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'GPOs:'})
@@ -637,12 +662,13 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                             'dn': entry['dn'],
                             'gpcpath': entry['gpcpath'],
                             'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   [%s]' % (entry['name'].ljust(30), entry['gpcpath'])})
 
                     ldapscan.list_gpos(callback)
                 else:
-                    raise NotImplementedError('Dumping users through SMB')
+                    raise NotImplementedError('Dumping GPOs through SMB')
 
 
             if 'casrv' in actions:
@@ -652,7 +678,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '- %s %s' % (entry['name'].ljust(30), entry['hostname'])})
                     ldapscan.list_casrv(callback)
                 else:
-                    raise NotImplementedError('Dumping hosts through LDAP')
+                    raise NotImplementedError('Dumping CA servers through SMB')
 
             if 'ca_certs' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'CA certs:'})
@@ -661,7 +687,34 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['algo'].ljust(30), ','.join(entry['common_names']))})
                     ldapscan.list_cacerts(callback)
                 else:
-                    raise NotImplementedError('Dumping hosts through LDAP')
+                    raise NotImplementedError('Dumping CA Cert through SMB')
+
+            if 'certipy' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Certipy:'})
+                if ldap_authenticated:
+                    ca_vulns, template_vulns = call_certipy(target['hostname'], creds, ldapscan.protocol)
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Certificate Authorities vulnerabilities:'})
+                    for vuln in ca_vulns:
+                        Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['ca']).ljust(20), vuln['vuln_name'], vuln['description'])})
+
+                        DB.insert_domain_vulnerability({
+                            'hostname': target['hostname'],
+                            'domain': smb_info['domain'],
+                            'name': vuln['vuln_name'],
+                            'description': vuln['description'],
+                        })
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Certificate Templates vulnerabilities:'})
+                    for vuln in template_vulns:
+                        Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['template']).ljust(20), vuln['vuln_name'], vuln['description'])})
+
+                        DB.insert_domain_vulnerability({
+                            'hostname': target['hostname'],
+                            'domain': smb_info['domain'],
+                            'name': vuln['vuln_name'],
+                            'description': vuln['description'],
+                        })
 
             if 'cert_templates' in actions:
                 if ldap_authenticated:
@@ -937,6 +990,51 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                     Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC4) exploitable by user %s:' % username})
                     ldapscan.check_esc4(username, callback)
 
+            if 'esc11' in actions:
+
+                if len(actions['esc11']['user']) == 0:
+                    #domain = creds['domain']
+                    username = creds['username']
+                elif not '\\' in actions['esc11']['user']:
+                    #domain = creds['domain']
+                    username = actions['esc11']['user']
+                else:
+                    #domain = actions['esc11']['user'].split('\\')[0]
+                    username = actions['esc11']['user'].split('\\')[-1]
+
+                if ldap_authenticated:
+                    enrollment_services = []
+                    def callback(entry):
+                        enrollment_services.append(entry)
+                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s" % (entry['name'].ljust(30), entry['dns'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    ldapscan.list_enrollment_services(callback)
+
+                    def callback(entry):
+                        enabled = False
+                        enrollment_service = None
+                        for e_s in enrollment_services:
+                            if entry['name'] in e_s['templates']:
+                                enabled = True
+                                enrollment_service = e_s['name']
+                                break
+
+                        if not "WriteDACL" in entry['ace']['rights'] and not 'WriteOwner' in entry['ace']['rights'] and not 'GenericAll' in entry['ace']['rights'] and not 'GenericWrite' in entry['ace']['rights']:
+                            return
+
+                        priv_account = entry['ace']['name'] if 'name' in entry['ace'] else entry['ace']['sid']
+                        status = entry['ace']['type']
+
+                        if enabled:
+                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)\n\tCA:                         %s\n\tPrivilege:          (%s)  [%s]  %s" % (entry['name'].ljust(30), enrollment_service, status, ','.join(entry['ace']['rights']), priv_account)})
+                        else:
+                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)\n\tCA:                         %s\n\tPrivilege:          (%s)  [%s]  %s" % (entry['name'].ljust(30), enrollment_service, status, ','.join(entry['ace']['rights']), priv_account)})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Misconfigured certificates templates (ESC4) exploitable by user %s:' % username})
+                    ldapscan.check_esc11(username, callback)
+
+
 
             if 'vuln_gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Vulnerable GPOs:'})
@@ -1038,7 +1136,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         if len(entry['rights']) > 0:
                             if 'parameter' in entry:
                                 parameter = entry['parameter'] if 'parameter' in entry else entry['guid']
-                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] %s:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), parameter['type'], parameter['name'])})
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] %s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), parameter)})
                             elif 'guid' in entry:
                                 Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] guid:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), entry['guid'])})
                             else:
@@ -1079,9 +1177,10 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
 
                                     # insert domain vulnerability
                                     DB.insert_domain_vulnerability({
+                                        'hostname': target['hostname'],
                                         'domain': valid_user['domain'],
                                         'name': 'Kerberos pre-auth disabled',
-                                        'description': 'Kerberos pre-auth is disabled for user %s\%s' % (valid_user['domain'], valid_user['username']),
+                                        'description': 'Kerberos pre-auth is disabled for user %s\\%s' % (valid_user['domain'], valid_user['username']),
                                     })
 
                                     cred_info = {
@@ -1123,6 +1222,18 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
                         ldapscan.dump_gMSA(callback)
                     else:
                         Output.error({'target': ldapscan.url(), 'message': '--gmsa requires to connect to LDAP using SSL, it is probably not available here :('})
+            if 'dump_smsa' in actions:
+                if ldap_authenticated:
+                    if ldapscan.ssl:
+                        Output.highlight({'target': smbscan.url(), 'message': 'sMSA entries:'})
+                        def callback(entry):
+                            user = '%s\\%s' % (entry['domain'], entry['username'])
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), entry['target_host'])})
+
+                        ldapscan.dump_sMSA(callback)
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': '--smsa requires to connect to LDAP using SSL, it is probably not available here :('})
+
             if 'dump_laps' in actions:
                 if ldap_authenticated:
                     Output.highlight({'target': smbscan.url(), 'message': 'LAPS entries:'})
@@ -1170,7 +1281,180 @@ def adscan_worker(target, actions, creds, ldap_protocol, timeout):
 
             if 'modules' in actions:
                 if smb_available:
-                    ad_modules.execute_modules(actions['modules']['modules'], (target, creds, actions['modules']['args'], timeout))
+                    ad_modules.execute_modules(actions['modules']['modules'], (target, actions['target_domain'], creds, actions['modules']['args'], timeout))
+
+            if 'group_add' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.add_user_to_group(actions['group_add']['group'], actions['group_add']['user'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully added user "%s" to group "%s"' % (actions['group_add']['user'], actions['group_add']['group'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to add user "%s" to group "%s": %s' % (actions['group_add']['user'], actions['group_add']['group'], res)})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'group_del' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.remove_user_from_group(actions['group_del']['group'], actions['group_del']['user'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully removed user "%s" from group "%s"' % (actions['group_del']['user'], actions['group_del']['group'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to remove user "%s" from group "%s": %s' % (actions['group_del']['user'], actions['group_del']['group'], res)})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'set_owner' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        Output.highlight({'target': ldapscan.url(), 'message': 'Backuping the current target ACL: %s...' % (actions['set_owner']['target'],)})
+                        res, backup_name, security_descriptor = adedit.backup_acl(actions['set_owner']['target'],)
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully backupped the ACL to the file %s' % (backup_name,)})
+
+                            Output.highlight({'target': ldapscan.url(), 'message': 'Setting "%s" as the object "%s" owner' % (actions['set_owner']['principal'], actions['set_owner']['target'],)})
+
+                            res = adedit.set_owner(actions['set_owner']['principal'], actions['set_owner']['target'], security_descriptor)
+                            if res == True:
+                                Output.success({'target': ldapscan.url(), 'message': 'Successfully changed the object %s owner' % (actions['set_owner']['target'],)})
+                            else:
+                                Output.error({'target': ldapscan.url(), 'message': 'Failed to change the owner: %s' % res})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to backup the acl: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+
+            if 'add_ace' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        Output.highlight({'target': ldapscan.url(), 'message': 'Backuping the current target ACL: %s...' % (actions['add_ace']['target'],)})
+                        res, backup_name, security_descriptor = adedit.backup_acl(actions['add_ace']['target'],)
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully backupped the ACL to the file %s' % (backup_name,)})
+
+                            Output.highlight({'target': ldapscan.url(), 'message': 'Adding the privilege %s for %s to the principal %s' % (actions['add_ace']['right'], actions['add_ace']['principal'], actions['add_ace']['target'],)})
+
+                            res = adedit.add_ace(actions['add_ace']['principal'], actions['add_ace']['right'], actions['add_ace']['target'], security_descriptor)
+                            if res == True:
+                                Output.success({'target': ldapscan.url(), 'message': 'Successfully added a new ACE to the target %s' % (actions['add_ace']['target'],)})
+                            else:
+                                Output.error({'target': ldapscan.url(), 'message': 'Failed to add a new ace: %s' % res})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to backup the acl: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'restore_acl' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.restore_acl(actions['restore_acl']['file'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully restored the ACL'})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to restore the ACL: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'add_computer' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res, computer_dn = adedit.add_computer(actions['add_computer']['computer_name'], actions['add_computer']['computer_password'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully added a new computer %s to the domain with the password "%s"' % (computer_dn, actions['add_computer']['computer_password'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to add a computer to the domain: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'del_object' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.del_object(actions['del_object']['object_dn'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully deleted the object %s' % actions['del_object']['object_dn']})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to delete the object: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'set_password' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.set_password(actions['set_password']['object_dn'], actions['set_password']['password'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully changed the password from the object %s to %s' % (actions['set_password']['object_dn'], actions['set_password']['password'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to change the object password: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'add_parameter' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.modify_add(actions['add_parameter']['object_dn'], actions['add_parameter']['parameter'], actions['add_parameter']['value'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully added "%s" to the parameter %s of the object %s' % (actions['add_parameter']['value'], actions['add_parameter']['parameter'], actions['add_parameter']['object_dn'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to add the value: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'replace_parameter' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.modify_replace(actions['replace_parameter']['object_dn'], actions['replace_parameter']['parameter'], actions['replace_parameter']['value'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully replaced the parameter %s of the object %s with the value "%s"' % (actions['replace_parameter']['parameter'], actions['replace_parameter']['object_dn'], actions['replace_parameter']['value'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to replace the value: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'delete_parameter' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.modify_delete(actions['delete_parameter']['object_dn'], actions['delete_parameter']['parameter'], actions['delete_parameter']['value'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully deleted the value "%s" from the parameter %s of the object %s' % (actions['delete_parameter']['value'], actions['delete_parameter']['parameter'], actions['delete_parameter']['object_dn'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to delete the value: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+
+
+
+
+
+
+
+
+
+
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})

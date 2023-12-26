@@ -45,6 +45,7 @@ def main():
     Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
+    DB.save_start()
 
     targets = {}
     if args.targets:

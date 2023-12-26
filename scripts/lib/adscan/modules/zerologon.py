@@ -21,7 +21,7 @@ class Module:
     name = 'ZeroLogon'
     description = 'Check for ZeroLogon (CVE-2020-1472)'
 
-    def run(self, target, creds, args, timeout):
+    def run(self, target, target_domain, creds, args, timeout):
 
         Output.minor({'target': 'smb://%s:%d' % (target['hostname'], 445), 'message': '[%s] Running module...' % self.name})
 
