@@ -17,6 +17,7 @@ from .ldap import LDAPScan
 from .kerberos import Kerberos
 from .external import call_certipy
 from .accesscontrol import get_owner
+from .adedit import ADEdit
 
 from utils.output import Output
 from utils.utils import check_ip, AuthFailure
@@ -1135,7 +1136,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         if len(entry['rights']) > 0:
                             if 'parameter' in entry:
                                 parameter = entry['parameter'] if 'parameter' in entry else entry['guid']
-                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] %s:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), parameter['type'], parameter['name'])})
+                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] %s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), parameter)})
                             elif 'guid' in entry:
                                 Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] guid:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), entry['guid'])})
                             else:
@@ -1281,6 +1282,179 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
             if 'modules' in actions:
                 if smb_available:
                     ad_modules.execute_modules(actions['modules']['modules'], (target, actions['target_domain'], creds, actions['modules']['args'], timeout))
+
+            if 'group_add' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.add_user_to_group(actions['group_add']['group'], actions['group_add']['user'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully added user "%s" to group "%s"' % (actions['group_add']['user'], actions['group_add']['group'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to add user "%s" to group "%s": %s' % (actions['group_add']['user'], actions['group_add']['group'], res)})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'group_del' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.remove_user_from_group(actions['group_del']['group'], actions['group_del']['user'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully removed user "%s" from group "%s"' % (actions['group_del']['user'], actions['group_del']['group'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to remove user "%s" from group "%s": %s' % (actions['group_del']['user'], actions['group_del']['group'], res)})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'set_owner' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        Output.highlight({'target': ldapscan.url(), 'message': 'Backuping the current target ACL: %s...' % (actions['set_owner']['target'],)})
+                        res, backup_name, security_descriptor = adedit.backup_acl(actions['set_owner']['target'],)
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully backupped the ACL to the file %s' % (backup_name,)})
+
+                            Output.highlight({'target': ldapscan.url(), 'message': 'Setting "%s" as the object "%s" owner' % (actions['set_owner']['principal'], actions['set_owner']['target'],)})
+
+                            res = adedit.set_owner(actions['set_owner']['principal'], actions['set_owner']['target'], security_descriptor)
+                            if res == True:
+                                Output.success({'target': ldapscan.url(), 'message': 'Successfully changed the object %s owner' % (actions['set_owner']['target'],)})
+                            else:
+                                Output.error({'target': ldapscan.url(), 'message': 'Failed to change the owner: %s' % res})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to backup the acl: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+
+            if 'add_ace' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        Output.highlight({'target': ldapscan.url(), 'message': 'Backuping the current target ACL: %s...' % (actions['add_ace']['target'],)})
+                        res, backup_name, security_descriptor = adedit.backup_acl(actions['add_ace']['target'],)
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully backupped the ACL to the file %s' % (backup_name,)})
+
+                            Output.highlight({'target': ldapscan.url(), 'message': 'Adding the privilege %s for %s to the principal %s' % (actions['add_ace']['right'], actions['add_ace']['principal'], actions['add_ace']['target'],)})
+
+                            res = adedit.add_ace(actions['add_ace']['principal'], actions['add_ace']['right'], actions['add_ace']['target'], security_descriptor)
+                            if res == True:
+                                Output.success({'target': ldapscan.url(), 'message': 'Successfully added a new ACE to the target %s' % (actions['add_ace']['target'],)})
+                            else:
+                                Output.error({'target': ldapscan.url(), 'message': 'Failed to add a new ace: %s' % res})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to backup the acl: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'restore_acl' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.restore_acl(actions['restore_acl']['file'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully restored the ACL'})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to restore the ACL: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'add_computer' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res, computer_dn = adedit.add_computer(actions['add_computer']['computer_name'], actions['add_computer']['computer_password'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully added a new computer %s to the domain with the password "%s"' % (computer_dn, actions['add_computer']['computer_password'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to add a computer to the domain: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'del_object' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.del_object(actions['del_object']['object_dn'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully deleted the object %s' % actions['del_object']['object_dn']})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to delete the object: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'set_password' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.set_password(actions['set_password']['object_dn'], actions['set_password']['password'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully changed the password from the object %s to %s' % (actions['set_password']['object_dn'], actions['set_password']['password'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to change the object password: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'add_parameter' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.modify_add(actions['add_parameter']['object_dn'], actions['add_parameter']['parameter'], actions['add_parameter']['value'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully added "%s" to the parameter %s of the object %s' % (actions['add_parameter']['value'], actions['add_parameter']['parameter'], actions['add_parameter']['object_dn'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to add the value: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'replace_parameter' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.modify_replace(actions['replace_parameter']['object_dn'], actions['replace_parameter']['parameter'], actions['replace_parameter']['value'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully replaced the parameter %s of the object %s with the value "%s"' % (actions['replace_parameter']['parameter'], actions['replace_parameter']['object_dn'], actions['replace_parameter']['value'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to replace the value: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+            if 'delete_parameter' in actions:
+                if ldap_authenticated:
+                    adedit = ADEdit(ldapscan)
+
+                    if adedit.connect():
+                        res = adedit.modify_delete(actions['delete_parameter']['object_dn'], actions['delete_parameter']['parameter'], actions['delete_parameter']['value'])
+                        if res == True:
+                            Output.success({'target': ldapscan.url(), 'message': 'Successfully deleted the value "%s" from the parameter %s of the object %s' % (actions['delete_parameter']['value'], actions['delete_parameter']['parameter'], actions['delete_parameter']['object_dn'])})
+                        else:
+                            Output.error({'target': ldapscan.url(), 'message': 'Failed to delete the value: %s' % res})
+                    else:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while connecting to LDAP using python-ldap3'})
+
+
+
+
+
+
+
+
+
+
+
 
         else:
             Output.write({'target': smbscan.url(), 'message': 'LDAP: Unable to connect to both ldap and smb services'})

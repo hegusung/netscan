@@ -54,6 +54,15 @@ def parse_accesscontrol(security_descriptor, ldap):
     a = SR_SECURITY_DESCRIPTOR()
     a.fromString(security_descriptor)
 
+    sid = parse_sid(a['OwnerSid'])
+    name = search_name(sid, ldap)
+    yield {
+        'type': '',
+        'sid': sid,
+        'name': name,
+        'rights': ['Owns'],
+    }
+
     for ace_b in a['Dacl'].aces:
         ace = parse_ace(ace_b)
 

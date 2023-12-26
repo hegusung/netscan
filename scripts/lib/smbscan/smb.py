@@ -1103,25 +1103,26 @@ class SMBScan:
 
 
     def list_gpps(self):
+        gpp_share = 'SYSVOL'
         sysvol_found = False
         for share in self.list_shares():
-            if share['name'] == 'SYSVOL' and 'READ' in share['access']:
+            if share['name'] == gpp_share and 'READ' in share['access']:
                 sysvol_found = True
                 break
 
         if not sysvol_found:
-            print('No access to SYSVOL share')
+            Output.error({'target': self.url(), 'message': 'No access to %s share' % gpp_share})
             return
 
         gpp_files = []
-        for path in self.list_content('\\', 'SYSVOL', recurse=10):
+        for path in self.list_content('\\', gpp_share, recurse=10):
             filename = path['name'].split('\\')[-1]
             if filename.endswith(".xml"):
                 gpp_files.append(path['name'])
 
         for path in gpp_files:
             buf = BytesIO()
-            self.conn.getFile('SYSVOL', path, buf.write)
+            self.conn.getFile(gpp_share, path, buf.write)
 
             root = minidom.parseString(buf.getvalue())
             xmltype = root.childNodes[0].tagName

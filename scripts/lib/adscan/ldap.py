@@ -32,7 +32,7 @@ import ldap3
 from ldap3 import Server, Connection, SUBTREE, ALL
 from ldap3.protocol.microsoft import security_descriptor_control
 
-from lib.adscan.accesscontrol import parse_accesscontrol, parse_sd, process_sid
+from lib.adscan.accesscontrol import extended_rights, parse_accesscontrol, parse_sd, process_sid
 from lib.adscan.ou import OU
 from lib.adscan.gpo import GPO
 
@@ -45,7 +45,7 @@ class LDAPScan:
         #self.port = port
         self.timeout = timeout
         self.protocol = protocol
-        self.ssl = protocol in ['ldaps']
+        self.ssl = protocol.endswith('s')
         # define which lib to use for queries
         self.python_ldap = python_ldap
 
@@ -73,18 +73,15 @@ class LDAPScan:
 
         # Use LDAP3 to get default naming context and config and schema
         connected = False
-        for protocol in ['ldaps', 'ldap']:
-            try:
-                s = Server('%s://%s' % (protocol, self.hostname), get_info=ALL)
-                c = Connection(s)
-                connected = c.bind()
-                
-                if connected:
-                    break
-            except ldap3.core.exceptions.LDAPSocketOpenError:
-                pass
-        else:
-            raise Exception("Failed to connect to the LDAP service to get the naming contexts")
+        try:
+            s = Server('%s://%s' % (self.protocol, self.hostname), get_info=ALL)
+            c = Connection(s)
+            connected = c.bind()
+            
+            if not connected:
+                return False, None
+        except ldap3.core.exceptions.LDAPSocketOpenError:
+            pass
 
         self.defaultdomainnamingcontext = c.server.info.other['defaultNamingContext'][0]
         self.configurationnamingcontext = c.server.info.other['configurationNamingContext'][0]
@@ -244,9 +241,9 @@ class LDAPScan:
                 port = 3268
                 use_ssl = False
             else:
-                raise Exception("Unknown protocol")
+                raise Exception("unknown protocol")
 
-            s = Server(self.hostname, port=port, use_ssl=use_ssl, get_info=ALL)  # define an unsecure LDAP server, requesting info on DSE and schema
+            s = Server(self.hostname, port=port, use_ssl=use_ssl, get_info=ALL)  
             if not self.do_kerberos:
                 user = "%s\\%s" % (self.domain, self.username)
                 if self.nt_hash != '':
@@ -2044,7 +2041,7 @@ class LDAPScan:
             controls = [build_control('1.2.840.113556.1.4.801', True, sdcontrol)]
             return controls
 
-        schema_guid_dict = self.generate_guid_dict(all=all)
+        #schema_guid_dict = self.generate_guid_dict(all=all)
 
         if self.schemanamingcontext.lower() in object_acl.lower():
             searchBase = self.schemanamingcontext
@@ -2058,7 +2055,7 @@ class LDAPScan:
             searchBase = self.defaultdomainnamingcontext
 
         sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        resp = self.conn.search(searchBase=searchBase, searchFilter=search_filter, attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'name', 'msDS-GroupMSAMembership'], searchControls=[sc], sizeLimit=0)
+        resp = self.conn.search(searchBase=searchBase, searchFilter=search_filter, attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'name', 'msDS-GroupMSAMembership', 'objectClass'], searchControls=[sc], sizeLimit=0)
 
         for item in resp:
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
@@ -2076,10 +2073,11 @@ class LDAPScan:
 
             if 'nTSecurityDescriptor' in attr:
                 sd = bytes(attr['nTSecurityDescriptor'])
-                for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
+                parsed_ace = parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext))
+                for ace in parsed_ace:
                     ace['target'] = target
-                    if 'guid' in ace and ace['guid'] in schema_guid_dict:
-                        ace['parameter'] = schema_guid_dict[ace['guid']]
+                    if 'guid' in ace and ace['guid'] in extended_rights:
+                        ace['parameter'] = extended_rights[ace['guid']]
 
                     if all:
                         callback(ace)
@@ -2093,7 +2091,8 @@ class LDAPScan:
             if 'msDS-GroupMSAMembership' in attr:
                 sd = bytes(attr['msDS-GroupMSAMembership'])
 
-                for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
+                parsed_ace = parse_sd(sd, domain, object_type, schema_guid_dict)
+                for ace in parsed_ace:
                     ace['target'] = target
                     if 'guid' in ace and ace['guid'] in schema_guid_dict:
                         ace['parameter'] = schema_guid_dict[ace['guid']]
@@ -2293,7 +2292,7 @@ class LDAPScan:
                 new_groups.append('-'.join(obj_sid))
 
             if 'memberOf' in attr:
-                if type(attr['memberOf']) == SetOf:
+                if type(attr['memberOf']) == list:
                     for memberOf in attr['memberOf']:
                         new_groups.append(str(memberOf))
                 else:

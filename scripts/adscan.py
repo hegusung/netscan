@@ -45,6 +45,20 @@ def main():
     user_group.add_argument("--list-users", metavar='groupname', type=str, nargs='?', help='List users of a specific group', default=None, dest='list_users')
     user_group.add_argument("--constrained-delegation", action='store_true', help='List constrained delegations', dest='constrained_delegation')
 
+    # AD modifications
+    modif_group = parser.add_argument_group("Domain modification")
+    modif_group.add_argument("--add-to-group", metavar=("GroupDN", "UserDN"), type=str, nargs=2, help='Add a user to a group', dest='group_add')
+    modif_group.add_argument("--del-from-group", metavar=("GroupDN", "UserDN"), type=str, nargs=2, help='Remove a user from a group', dest='group_del')
+    modif_group.add_argument("--set-owner", metavar=("PrincipalDN", "TargetDN"), type=str, nargs=2, help='Modify the Target object to set the Principal as the owner', dest='set_owner')
+    modif_group.add_argument("--add-ace", metavar=("PrincipalDN", "Right", "TargetDN"), type=str, nargs=3, help='Modify the Target object to add an ACE for the Principal', dest='add_ace')
+    modif_group.add_argument("--restore-acl", metavar=("ACLfile",), type=str, nargs=1, help='Remove a user from a group', dest='restore_acl')
+    modif_group.add_argument("--add-computer", metavar=("ComputerName", "Password"), type=str, nargs=2, help='Add a computer to the domain', dest='add_computer')
+    modif_group.add_argument("--del-object", metavar=("ObjectDN",), type=str, nargs=1, help='Delete a LDAP entry from the domain', dest='del_object')
+    modif_group.add_argument("--set-password", metavar=("ObjectDN", "Password"), type=str, nargs=2, help='Change a user or computer Password', dest='set_password')
+    modif_group.add_argument("--add-parameter", metavar=("ObjectDN", "Parameter", "Value"), type=str, nargs=3, help='Add a new parameter to the parameter list', dest='add_parameter')
+    modif_group.add_argument("--replace-parameter", metavar=("ObjectDN", "Parameter", "Value"), type=str, nargs=3, help='Replace the parameter value', dest='replace_parameter')
+    modif_group.add_argument("--delete-parameter", metavar=("ObjectDN", "Parameter", "Value"), type=str, nargs=3, help='Delete a value froma parameter', dest='delete_parameter')
+
     # Attack
     attk_group = parser.add_argument_group("Attacks")
     attk_group.add_argument("--kerberoasting", action='store_true', help='Execute a kerberoasting attack on the accounts with a SPN')
@@ -240,6 +254,28 @@ def main():
         actions['dump_laps'] = {}
     if args.ntds:
         actions['dump_ntds'] = {'method': args.ntds}
+    if args.group_add:
+        actions['group_add'] = {'group': args.group_add[0], 'user': args.group_add[1]}
+    if args.group_del:
+        actions['group_del'] = {'group': args.group_del[0], 'user': args.group_del[1]}
+    if args.set_owner:
+        actions['set_owner'] = {'principal': args.set_owner[0], 'target': args.set_owner[1]}
+    if args.add_ace:
+        actions['add_ace'] = {'principal': args.add_ace[0], 'right': args.add_ace[1], 'target': args.add_ace[2]}
+    if args.restore_acl:
+        actions['restore_acl'] = {'file': args.restore_acl[0]}
+    if args.add_computer:
+        actions['add_computer'] = {'computer_name': args.add_computer[0], 'computer_password': args.add_computer[1]}
+    if args.del_object:
+        actions['del_object'] = {'object_dn': args.del_object[0]}
+    if args.set_password:
+        actions['set_password'] = {'object_dn': args.set_password[0], 'password': args.set_password[1]}
+    if args.add_parameter:
+        actions['add_parameter'] = {'object_dn': args.add_parameter[0], 'parameter': args.add_parameter[1], 'value': args.add_parameter[2]}
+    if args.replace_parameter:
+        actions['replace_parameter'] = {'object_dn': args.replace_parameter[0], 'parameter': args.replace_parameter[1], 'value': args.replace_parameter[2]}
+    if args.delete_parameter:
+        actions['delete_parameter'] = {'object_dn': args.delete_parameter[0], 'parameter': args.delete_parameter[1], 'value': args.delete_parameter[2]}
     if args.modules:
         if not ad_modules.check_modules(args.modules[0]):
             sys.exit()
