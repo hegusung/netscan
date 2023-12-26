@@ -13,26 +13,119 @@
 
 ## Features
 
-- [x] FTP scanner
-- [x] MySQL scanner
-- [x] MongoDB scanner
+- [x] Everything is stored in Elasticsearch. Data is visible via Kibana
+- [x] Active Directory
+  - [x] Enumeration
+  - [x] Active Directory attacks
+  - [X] Active Directory modifications
+  - [x] Active Directory Certificate Services
+  - [x] Bloodhound export
+  - [x] Modules
+    - [x] ZeroLogon (CVE-2020-1472)
+    - [x] NoPAC (CVE-2021-42278 / CVE-2021-42287)
+    - [x] Check if ZONE_UPDATE_INSECURE parameter is enabled
+    - [x] Check for LDAP signing and channel binding
 - [x] Ping scanner
 - [x] Port scanner
+  - [x] Nmap service detection
+  - [x] Nmap scripts executions
+- [x] FTP scanner
+  - [x] FTP authentication
+  - [x] FTP multi-host bruteforce
+  - [x] FTP listing
+- [x] MySQL scanner
+  - [x] MySQL authentication
+  - [x] MySQL multi-host bruteforce
+  - [x] MySQL database listing
+  - [x] MySQL queries
+- [x] MsSQL scanner
+  - [x] MsSQL authentication
+  - [x] MsSQL multi-host bruteforce
+  - [x] MsSQL database listing
+  - [x] MsSQL queries
+  - [x] MsSQL command execution
+- [x] MongoDB scanner
+  - [x] MongoDB authentication
+  - [x] MongoDB multi-host bruteforce
+  - [x] MongoDB database listing
 - [x] Postgres scanner
-- [x] RDP scanner
+  - [x] Postgres authentication
+  - [x] Postgres multi-host bruteforce
+  - [x] Postgres database listing
+  - [x] Postgres command execution
 - [x] Redis scanner
+  - [x] Redis authentication
+  - [x] Redis multi-host bruteforce
+  - [x] Redis RCE detection       
+- [x] RDP scanner
+  - [x] RDP authentication (does not mean you have rdp access)
+  - [x] Modules
+    - [x] Bluekeep (CVE-2019-0708) detection
+- [x] VNC scanner
+  - [x] VNC authentication
+  - [x] VNC multi-host bruteforce
+  - [x] VNC rubber-ducky execution
+  - [x] VNC screenshot
+- [x] Telnet scanner
+  - [x] Telnet authentication
+  - [x] Telnet multi-host bruteforce
+  - [x] Telnet command execution      
+- [x] SSH scanner
+  - [x] SSH authentication
+  - [x] SSH multi-host bruteforce
+  - [x] SSH command execution
+  - [x] Modules
+    - [x] LinPEAS
+    - [x] DirtyPipe (CVE-2022-0847)
+    - [x] Get kernel and packages versions
+    - [x] List network interfaces
+    - [x] PwnKit vulnerability (CVE-2021-4034)
+- [x] WinRM scanner
+  - [x] WinRM authentication
+  - [x] WinRM multi-host bruteforce
 - [x] Rsync scanner
 - [x] RTSP scanner
-- [X] SMB scanner
-- [X] SSH scanner
-- [X] Telnet scanner
-- [X] VNC scanner
-- [X] WinRM scanner
-- [X] AD scanner
-- [X] HTTP scanner
+  - [x] Screenshot
+- [x] SNMP scanner
+  - [x] SNMP authentication
+  - [x] SNMP multi-host bruteforce
+  - [x] SNMP enumeration
+- [X] TLS scanner 
 - [X] DNS scanner
-- [X] SNMP scanner
-- [X] TLS scanner
+  - [x] DNS queries
+  - [x] Reverse-DNS queries
+  - [x] Subdomain bruteforce
+  - [x] AXFR transfer
+  - [x] Domain Controller detection
+- [x] SMB scanner
+  - [x] SMB authentication
+  - [x] SMB multi-host bruteforce (be careful not to block accounts...)
+  - [x] SMB shared folder listing
+  - [x] SMB enumeration
+  - [x] SMB secrets collection (SAM, LSA secrets)
+  - [x] SMB command execution
+  - [x] SMB modules
+    - [x] EternalBlue detection (MS17-010)
+    - [x] SambaCry detection (CVE-2017-7494)
+    - [x] DropTheMic detection (CVE-2019-1040)
+    - [x] SMBGhost detection (CVE-2020-0796)
+    - [x] PetitPotam exploit (CVE-2021-36942)
+    - [x] PrintNightmare vulnerability (CVE-2021-1675)
+    - [x] PrintSpooler service detection
+    - [x] DFSCoerce
+- [x] HTTP scanner
+  - [x] HTTP service header and page title enumeration
+  - [x] HTTP authentication
+  - [x] HTTP modules
+    - [x] Axis2
+    - [x] Tomcat
+    - [x] JBoss
+    - [x] Heartbleed
+    - [x] Jenkins
+    - [x] PhpMyAdmin
+    - [x] And more !  
+
+
 
 ## Screenshots
 
