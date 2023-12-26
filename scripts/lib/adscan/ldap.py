@@ -35,6 +35,8 @@ from ldap3.protocol.microsoft import security_descriptor_control
 from lib.adscan.accesscontrol import extended_rights, parse_accesscontrol, parse_sd, process_sid
 from lib.adscan.ou import OU
 from lib.adscan.gpo import GPO
+from lib.adscan.user import User
+from lib.adscan.domain import Domain
 
 from utils.output import Output
 
@@ -198,9 +200,16 @@ class LDAPScan:
 
         return item_dict
 
+    # =============
+    # === Utils ===
+    # =============
 
     def query(self, callback, search_base, search_filter, attributes, query_sd=False, page_size=1000, scope=None):
 
+        for result in self.query_generator(search_base, search_filter, attributes, query_sd=query_sd, page_size=page_size, scope=scope):
+            callback(result)
+
+    def query_generator(self, search_base, search_filter, attributes, query_sd=False, page_size=1000, scope=None):
         if not self.python_ldap:
             # use impacket ldap
 
@@ -214,6 +223,7 @@ class LDAPScan:
             if scope != None:
                 scope = Scope(scope)
 
+            """
             def process(item):
                 if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                     return
@@ -221,8 +231,14 @@ class LDAPScan:
                 result = self.to_dict_impacket(item)
 
                 callback(result)
+            """
 
-            self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, perRecordCallback=process, attributes=attributes, scope=scope)
+            #self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, perRecordCallback=process, attributes=attributes, scope=scope)
+            for item in self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, attributes=attributes, scope=scope):
+                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                    continue
+
+                yield self.to_dict_impacket(item)
 
         else:
             # use ldap3
@@ -241,7 +257,7 @@ class LDAPScan:
                 port = 3268
                 use_ssl = False
             else:
-                raise Exception("unknown protocol")
+                raise Exception("Unknown protocol")
 
             s = Server(self.hostname, port=port, use_ssl=use_ssl, get_info=ALL)  
             if not self.do_kerberos:
@@ -280,170 +296,16 @@ class LDAPScan:
                 if item['type'] != 'searchResEntry':
                     continue
 
-                result = self.to_dict_ldap3(item)
+                yield self.to_dict_ldap3(item)
+                #result = self.to_dict_ldap3(item)
 
-                callback(result)
+                #callback(result)
 
 
     def getUnixTime(self, t):
         t -= 116444736000000000
         t /= 10000000
         return t
-
-    def list_domains(self, smbscan, callback):
-
-        schema_guid_dict = self._get_schema_guid_dict(['domain', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
-
-        def process(attr):
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            domain_sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical() if 'objectSid' in attr else None
-            dn = str(attr['distinguishedName'])
-
-            parameters = {}
-            if 'ms-DS-MachineAccountQuota' in attr:
-                parameters['ms-DS-MachineAccountQuota'] = int(attr['ms-DS-MachineAccountQuota'])
-            if 'msDS-ExpirePasswordsOnSmartCardOnlyAccounts' in attr:
-                parameters['msDS-ExpirePasswordsOnSmartCardOnlyAccounts'] = str(attr['msDS-ExpirePasswordsOnSmartCardOnlyAccounts'])
-
-            trusts = self._resolve_trusts(domain)
-
-            links = {}
-            gpo_paths = []
-            for l in str(attr['gPLink']).split(']'):
-                if len(l) == 0:
-                    continue
-                # Remove initial [
-                l = l[1:]
-                # Take after ://
-                l = l.split('://')[-1]
-                # Take before ;
-                status = l.split(';')[1]
-                link = l.split(';')[0]
-
-                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
-                if status in ['1', '3']:
-                    continue
-
-                links[link.lower()] = {'IsEnforced': False if status == '0' else True}
-
-            for link_dn, link_guid_path in self._resolve_links(links.keys()).items():
-                links[link_dn.lower()]['GUID'] = link_guid_path[0].upper()
-                gpo_paths.append((link_guid_path[1], link_dn))
-
-            # Resolve GPO effects
-            gpo_effect = {}
-            for sid in OU.privileged_sid_dict:
-                gpo_effect[sid] = {}
-                for t in ['Memberof', 'Members', 'Localgroup']:
-                    gpo_effect[sid][t] = []
-
-            for gpo_path, gpo_dn in gpo_paths:
-                GPO.resolve_effect(smbscan, self, gpo_dn, gpo_path, gpo_effect)
-            gpo_effect = GPO.merge_gpo_effect(gpo_effect)
-
-            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'domain', schema_guid_dict)
-
-            if 'msDS-Behavior-Version' in attr:
-                level = int(str(attr['msDS-Behavior-Version']))
-                functional_levels = {
-                    0: "2000 Mixed/Native",
-                    1: "2003 Interim",
-                    2: "2003",
-                    3: "2008",
-                    4: "2008 R2",
-                    5: "2012",
-                    6: "2012 R2",
-                    7: "2016"
-                }
-                if level in functional_levels:
-                    functional_level = functional_levels[level]
-                else:
-                    functional_level = "Unknown"
-            else:
-                functional_level = "Unknown"
-
-            name = str(attr['name'])
-
-            # dSHeuristics
-            try:
-                dSHeuristics = ""
-                parameters['dSHeuristics'] = ""
-
-                search_filter = "(dsHeuristics=*)"
-                search_base = "CN=Directory Service,CN=Windows NT,CN=Services,%s" % self.configurationnamingcontext
-
-                sc = ldap.SimplePagedResultsControl(size=10)
-                attributes = ['distinguishedName', 'dsHeuristics']
-                res = self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
-
-                for item in res:
-                    if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                        continue
-
-                    attr = self.to_dict_impacket(item)
-
-                    parameters['dSHeuristics'] = str(attr['dSHeuristics'])
-
-                    break
-            except impacket.ldap.ldap.LDAPSearchError:
-                pass
-
-            callback({
-                'domain': domain,
-                'name': name,
-                'parameters': parameters,
-                'sid': domain_sid,
-                'dn': dn,
-                'functionallevel': functional_level,
-                'trusts': trusts,
-                'links': list(links.values()),
-                'gpo_effect': gpo_effect,
-                'aces': aces,
-            })
-
-        sbase = "%s" % self.defaultdomainnamingcontext
-        search_filter = '(objectCategory=domain)'
-        attributes = ['distinguishedName', 'name', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version', 'msDS-ExpirePasswordsOnSmartCardOnlyAccounts']
-
-        self.query(process, sbase, search_filter, attributes, query_sd=True)
-
-
-    def list_containers(self, domain, callback):
-
-        schema_guid_dict = self._get_schema_guid_dict(['container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
-
-        def process(attr):
-            container_domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-
-            if container_domain.lower() != domain.lower():
-                return
-
-            dn = str(attr['distinguishedName'])
-
-            b = bytes(attr['objectGUID'])
-            guid = b[0:4][::-1].hex() + '-'
-            guid += b[4:6][::-1].hex() + '-'
-            guid += b[6:8][::-1].hex() + '-'
-            guid += b[8:10].hex() + '-'
-            guid += b[10:16].hex()
-
-            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'container', schema_guid_dict)
-
-            callback({
-                'domain': domain,
-                'name': str(attr['name']),
-                'dn': dn,
-                'guid': guid,
-                'aces': aces,
-            })
-
-        sbase = "%s" % self.defaultdomainnamingcontext
-        search_filter='(objectCategory=container)'
-        attributes = ['name', 'distinguishedName', 'nTSecurityDescriptor', 'objectGUID']
-
-        self.query(process, sbase, search_filter, attributes, query_sd=True)
-
 
     def _get_schema_guid_dict(self, parameters):
 
@@ -470,12 +332,6 @@ class LDAPScan:
             ldap_conn.disconnect()
 
         return schema_guid_dict
-
-    def list_ous(self, smbscan, domain, domain_sid, callback):
-        OU.list(self, smbscan, domain, domain_sid, callback)
-
-    def list_gpos(self, callback):
-        GPO.list(self, callback)
 
     def _resolve_name_to_sid(self, domain, name):
         if "\\" in name:
@@ -740,9 +596,428 @@ class LDAPScan:
 
         return data
 
+    def _get_members_recursive(self, name, users={}, processed_groups=[]):
+        if type(name) == int:
+            search_filter="(primaryGroupID=%d)" % name
+        elif name.startswith('S-'):
+            search_filter="(objectsid=%s)" % name
+        elif name.startswith('CN='):
+            name = name.replace('(', '\\28')
+            name = name.replace(')', '\\29')
+            search_filter="(distinguishedName=%s)" % name
+        else:
+            search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
+
+        group_info = {'domain': None, 'name': None}
+        def process(attr, users={}, processed_groups=[], group_info={}):
+
+            sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
+
+            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+            try:
+                name = str(attr['sAMAccountName'])
+            except KeyError:
+                return
+            
+            group_info['domain'] = domain
+            group_info['name'] = name
+
+            if type(attr['objectClass']) in [SetOf, list]:
+                object_class = [str(c) for c in attr['objectClass']]
+            else:
+                object_class = [str(attr['objectClass'])]
+
+            if 'user' in object_class:
+                domain_username = "%s\\%s" % (domain, name)
+
+                username = str(attr['sAMAccountName'])
+                fullname = str(attr['displayName']) if 'displayName' in attr else ""
+
+                if not 'description' in attr:
+                    comment = ""
+                elif type(attr['description']) == list:
+                    comment = ",".join([str(s) for s in attr['description']])
+                else:
+                    comment = str(attr['description'])
+
+                sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical() if 'objectSid' in attr else None
+                if sid:
+                    rid = int(sid.split('-')[-1])
+                else:
+                    rid = None
+                dn = str(attr['distinguishedName'])
+
+                primaryGID = int(str(attr["primaryGroupID"]))
+
+                try:
+                    created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+                except KeyError:
+                    created_date = None
+                try:
+                    last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
+                except KeyError:
+                    last_logon_date = None
+                try:
+                    last_password_change_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['pwdLastSet']))))
+                except KeyError:
+                    last_password_change_date = None
+
+                tags = []
+                if 'userAccountControl' in attr:
+                    attr['userAccountControl'] = int(str(attr['userAccountControl']))
+
+                    #if attr['userAccountControl'] & 0x0200 == 0:
+                    #    # not a user account
+                    #    continue
+
+                    if attr['userAccountControl'] & 2 != 0:
+                        tags.append('Account disabled')
+                    if attr['userAccountControl'] & 0x0020 != 0:
+                        tags.append('Password not required')
+                    if attr['userAccountControl'] & 0x0080 != 0:
+                        tags.append('Encrypted text password allowed')
+                    if attr['userAccountControl'] & 0x0800 != 0:
+                        tags.append('Interdomain trust account')
+                    if attr['userAccountControl'] & 0x1000 != 0:
+                        tags.append('Workstation trust account')
+                    if attr['userAccountControl'] & 0x2000 != 0:
+                        tags.append('Server trust account')
+                    if attr['userAccountControl'] & 0x10000 != 0:
+                        tags.append('Password never expire')
+                    if attr['userAccountControl'] & 0x40000 != 0:
+                        tags.append('Smartcard required')
+                    if attr['userAccountControl'] & 0x80000 != 0:
+                        tags.append('Trusted for delegation')
+                    if attr['userAccountControl'] & 0x100000 != 0:
+                        tags.append('Account is sensitive and cannot be delegated')
+                    if attr['userAccountControl'] & 0x200000 != 0:
+                        tags.append('Use DES key only')
+                    if attr['userAccountControl'] & 0x400000 != 0:
+                        tags.append('Do not require pre-auth')
+                    if attr['userAccountControl'] & 0x1000000 != 0:
+                        tags.append('Trusted to auth for delegation')
+                    if attr['userAccountControl'] & 0x4000000 != 0:
+                        tags.append('Partial secrets account')
+                else:
+                    pass
+
+                if 'adminCount' in attr and int(str(attr['adminCount'])) > 0:
+                    tags.append('adminCount>0')
+
+                user_details = {
+                    'domain': domain,
+                    'username': username,
+                    'fullname': fullname,
+                    'comment': comment,
+                    'created_date': created_date,
+                    'last_logon': last_logon_date,
+                    'last_password_change': last_password_change_date,
+                    'sid': sid,
+                    'rid': rid,
+                    'primary_gid': primaryGID,
+                    'dn': dn,
+                    'tags': tags,
+                }
+
+                if not domain_username in users:
+                    users[domain_username] = user_details
+            elif 'group' in object_class:
+
+                sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
+
+                if not sid in processed_groups:
+                    processed_groups.append(sid)
+
+                    if 'member' in attr:
+                        if type(attr['member']) == list:
+                            for member in attr['member']:
+                                users, _ = self._get_members_recursive(str(member), users=users, processed_groups=processed_groups)
+                        else:
+                            users, _ = self._get_members_recursive(str(attr['member']), users=users, processed_groups=processed_groups)
+
+                    group_gid = int(sid.split('-')[-1])
+                    users, _ = self._get_members_recursive(group_gid, users=users)
+
+        sbase = self.defaultdomainnamingcontext
+        attributes = ['distinguishedName', 'objectClass', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'member']
+
+        self.query(partial(process, users=users, processed_groups=processed_groups, group_info=group_info), sbase, search_filter, attributes, query_sd=False)
+
+        return users, "%s\\%s" % (group_info['domain'], group_info['name'])
+
+    def _get_groups_recursive(self, name, groups={}, processed=[], group_only=False):
+        if name.startswith('S-'):
+            search_filter="(objectsid=%s)" % name
+        elif name.startswith('CN='):
+            name = name.replace('(', '\\28')
+            name = name.replace(')', '\\29')
+            search_filter="(distinguishedName=%s)" % name
+        else:
+            #search_filter="(&(objectClass=user)(sAMAccountName=%s))" % name
+            search_filter="(sAMAccountName=%s)" % name
+
+        # First, get all related groups
+        new_groups = []
+
+        sc = ldap.SimplePagedResultsControl(size=10)
+        attributes = ['objectSid', 'distinguishedName', 'sAMAccountName', 'objectClass', 'primaryGroupID', 'memberOf']
+        res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+        for item in res:
+            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                continue
+
+            attr = self.to_dict_impacket(item)
+
+            sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
+
+            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+            groupname = str(attr['sAMAccountName'])
+
+            if type(attr['objectClass']) in [SetOf, list]:
+                object_class = [str(c) for c in attr['objectClass']]
+            else:
+                object_class = [str(attr['objectClass'])]
+
+            # Processed, add it to list
+            if not group_only or group_only and 'group' in object_class:
+                if not sid in groups:
+                    groups[sid] = "%s\\%s" % (domain, groupname)
+                
+            if 'primaryGroupID' in attr:
+                obj_sid = sid.split('-')
+                obj_sid[-1] = str(attr['primaryGroupID'])
+                new_groups.append('-'.join(obj_sid))
+
+            if 'memberOf' in attr:
+                if type(attr['memberOf']) == list:
+                    for memberOf in attr['memberOf']:
+                        new_groups.append(str(memberOf))
+                else:
+                    new_groups.append(str(attr['memberOf']))
+
+        for g in new_groups:
+            if not g in processed:
+                processed.append(g)
+
+                self._get_groups_recursive(g, groups=groups, processed=processed, group_only=group_only)
+
+        return groups
+
+    def resolve_dn_to_sid(self, dn_list):
+        to_resolve = []
+        sid_list = []
+
+        for dn in dn_list:
+            if dn in self.dn_to_sid_dict:
+                sid_list.append(self.dn_to_sid_dict[dn])
+            else:
+                to_resolve.append(dn)
+
+        if len(to_resolve) != 0:
+            
+            search_filter = "(|%s)" % "".join(["(distinguishedName=%s)" % dn.replace('(', '\\28').replace(')', '\\29') for dn in to_resolve])
+
+            sc = ldap.SimplePagedResultsControl(size=10)
+            attributes = ['distinguishedName', 'objectSid']
+            try:
+                res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+            except LDAPSearchError:
+                print('retry')
+                res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+            domain = None
+            for item in res:
+                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                    continue
+
+                attr = self.to_dict_impacket(item)
+
+                if 'objectSid' in attr and 'distinguishedName' in attr:
+                    sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
+                    self.dn_to_sid_dict[attr['distinguishedName']] = sid
+                    sid_list.append(sid)
+
+        return sid_list
+
+    def dn_to_domain(self, dn):
+        return ".".join([item.split("=", 1)[-1] for item in dn.split(',') if item.split("=",1)[0].lower() == "dc"])
+
+    # ====================================
+    # === Active Directory Enumeration ===
+    # ====================================
+
+    def list_domains(self, smbscan, callback):
+
+        for domain in Domain.list_domains(self, smbscan):
+            callback(domain.to_json())
+
+        """
+        schema_guid_dict = self._get_schema_guid_dict(['domain', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
+
+        def process(attr):
+
+            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+            domain_sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical() if 'objectSid' in attr else None
+            dn = str(attr['distinguishedName'])
+
+            parameters = {}
+            if 'ms-DS-MachineAccountQuota' in attr:
+                parameters['ms-DS-MachineAccountQuota'] = int(attr['ms-DS-MachineAccountQuota'])
+            if 'msDS-ExpirePasswordsOnSmartCardOnlyAccounts' in attr:
+                parameters['msDS-ExpirePasswordsOnSmartCardOnlyAccounts'] = str(attr['msDS-ExpirePasswordsOnSmartCardOnlyAccounts'])
+
+            trusts = self._resolve_trusts(domain)
+
+            links = {}
+            gpo_paths = []
+            for l in str(attr['gPLink']).split(']'):
+                if len(l) == 0:
+                    continue
+                # Remove initial [
+                l = l[1:]
+                # Take after ://
+                l = l.split('://')[-1]
+                # Take before ;
+                status = l.split(';')[1]
+                link = l.split(';')[0]
+
+                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
+                if status in ['1', '3']:
+                    continue
+
+                links[link.lower()] = {'IsEnforced': False if status == '0' else True}
+
+            for link_dn, link_guid_path in self._resolve_links(links.keys()).items():
+                links[link_dn.lower()]['GUID'] = link_guid_path[0].upper()
+                gpo_paths.append((link_guid_path[1], link_dn))
+
+            # Resolve GPO effects
+            gpo_effect = {}
+            for sid in OU.privileged_sid_dict:
+                gpo_effect[sid] = {}
+                for t in ['Memberof', 'Members', 'Localgroup']:
+                    gpo_effect[sid][t] = []
+
+            for gpo_path, gpo_dn in gpo_paths:
+                GPO.resolve_effect(smbscan, self, gpo_dn, gpo_path, gpo_effect)
+            gpo_effect = GPO.merge_gpo_effect(gpo_effect)
+
+            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'domain', schema_guid_dict)
+
+            if 'msDS-Behavior-Version' in attr:
+                level = int(str(attr['msDS-Behavior-Version']))
+                functional_levels = {
+                    0: "2000 Mixed/Native",
+                    1: "2003 Interim",
+                    2: "2003",
+                    3: "2008",
+                    4: "2008 R2",
+                    5: "2012",
+                    6: "2012 R2",
+                    7: "2016"
+                }
+                if level in functional_levels:
+                    functional_level = functional_levels[level]
+                else:
+                    functional_level = "Unknown"
+            else:
+                functional_level = "Unknown"
+
+            name = str(attr['name'])
+
+            # dSHeuristics
+            try:
+                dSHeuristics = ""
+                parameters['dSHeuristics'] = ""
+
+                search_filter = "(dsHeuristics=*)"
+                search_base = "CN=Directory Service,CN=Windows NT,CN=Services,%s" % self.configurationnamingcontext
+
+                sc = ldap.SimplePagedResultsControl(size=10)
+                attributes = ['distinguishedName', 'dsHeuristics']
+                res = self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+                for item in res:
+                    if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                        continue
+
+                    attr = self.to_dict_impacket(item)
+
+                    parameters['dSHeuristics'] = str(attr['dSHeuristics'])
+
+                    break
+            except impacket.ldap.ldap.LDAPSearchError:
+                pass
+
+            callback({
+                'domain': domain,
+                'name': name,
+                'parameters': parameters,
+                'sid': domain_sid,
+                'dn': dn,
+                'functionallevel': functional_level,
+                'trusts': trusts,
+                'links': list(links.values()),
+                'gpo_effect': gpo_effect,
+                'aces': aces,
+            })
+
+        sbase = "%s" % self.defaultdomainnamingcontext
+        search_filter = '(objectCategory=domain)'
+        attributes = ['distinguishedName', 'name', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version', 'msDS-ExpirePasswordsOnSmartCardOnlyAccounts']
+
+        self.query(process, sbase, search_filter, attributes, query_sd=True)
+        """
+
+
+    def list_containers(self, domain, callback):
+
+        schema_guid_dict = self._get_schema_guid_dict(['container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
+
+        def process(attr):
+            container_domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+
+            if container_domain.lower() != domain.lower():
+                return
+
+            dn = str(attr['distinguishedName'])
+
+            b = bytes(attr['objectGUID'])
+            guid = b[0:4][::-1].hex() + '-'
+            guid += b[4:6][::-1].hex() + '-'
+            guid += b[6:8][::-1].hex() + '-'
+            guid += b[8:10].hex() + '-'
+            guid += b[10:16].hex()
+
+            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'container', schema_guid_dict)
+
+            callback({
+                'domain': domain,
+                'name': str(attr['name']),
+                'dn': dn,
+                'guid': guid,
+                'aces': aces,
+            })
+
+        sbase = "%s" % self.defaultdomainnamingcontext
+        search_filter='(objectCategory=container)'
+        attributes = ['name', 'distinguishedName', 'nTSecurityDescriptor', 'objectGUID']
+
+        self.query(process, sbase, search_filter, attributes, query_sd=True)
+
+
+    def list_ous(self, smbscan, domain, domain_sid, callback):
+        OU.list(self, smbscan, domain, domain_sid, callback)
+
+    def list_gpos(self, callback):
+        GPO.list(self, callback)
 
     def list_users(self, callback):
+        for user in User.list_users(self):
+            callback(user.to_json())
 
+        """
         schema_guid_dict = self._get_schema_guid_dict(['user', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
 
         def process(attr):
@@ -933,6 +1208,7 @@ class LDAPScan:
         attributes = ['objectClass', 'distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName', 'msDS-AllowedToDelegateTo', 'msDS-SupportedEncryptionTypes', 'sIDHistory']
 
         self.query(process, sbase, search_filter, attributes, query_sd=True)
+        """
 
     def list_admins(self):
 
@@ -981,192 +1257,6 @@ class LDAPScan:
 
         for user in users_dict:
             yield {'user': user, 'details': users_dict[user]['user'], 'groups': users_dict[user]['groups']}
-
-    def _get_members_recursive(self, name, users={}, processed_groups=[]):
-        if type(name) == int:
-            search_filter="(primaryGroupID=%d)" % name
-        elif name.startswith('S-'):
-            search_filter="(objectsid=%s)" % name
-        elif name.startswith('CN='):
-            name = name.replace('(', '\\28')
-            name = name.replace(')', '\\29')
-            search_filter="(distinguishedName=%s)" % name
-        else:
-            search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
-
-        group_info = {'domain': None, 'name': None}
-        def process(attr, users={}, processed_groups=[], group_info={}):
-
-            sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            try:
-                name = str(attr['sAMAccountName'])
-            except KeyError:
-                return
-            
-            group_info['domain'] = domain
-            group_info['name'] = name
-
-            if type(attr['objectClass']) in [SetOf, list]:
-                object_class = [str(c) for c in attr['objectClass']]
-            else:
-                object_class = [str(attr['objectClass'])]
-
-            if 'user' in object_class:
-                domain_username = "%s\\%s" % (domain, name)
-
-                username = str(attr['sAMAccountName'])
-                fullname = str(attr['displayName']) if 'displayName' in attr else ""
-
-                if not 'description' in attr:
-                    comment = ""
-                elif type(attr['description']) == list:
-                    comment = ",".join([str(s) for s in attr['description']])
-                else:
-                    comment = str(attr['description'])
-
-                sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical() if 'objectSid' in attr else None
-                if sid:
-                    rid = int(sid.split('-')[-1])
-                else:
-                    rid = None
-                dn = str(attr['distinguishedName'])
-
-                primaryGID = int(str(attr["primaryGroupID"]))
-
-                try:
-                    created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
-                except KeyError:
-                    created_date = None
-                try:
-                    last_logon_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['lastLogon']))))
-                except KeyError:
-                    last_logon_date = None
-                try:
-                    last_password_change_date = datetime.fromtimestamp(self.getUnixTime(int(str(attr['pwdLastSet']))))
-                except KeyError:
-                    last_password_change_date = None
-
-                tags = []
-                if 'userAccountControl' in attr:
-                    attr['userAccountControl'] = int(str(attr['userAccountControl']))
-
-                    #if attr['userAccountControl'] & 0x0200 == 0:
-                    #    # not a user account
-                    #    continue
-
-                    if attr['userAccountControl'] & 2 != 0:
-                        tags.append('Account disabled')
-                    if attr['userAccountControl'] & 0x0020 != 0:
-                        tags.append('Password not required')
-                    if attr['userAccountControl'] & 0x0080 != 0:
-                        tags.append('Encrypted text password allowed')
-                    if attr['userAccountControl'] & 0x0800 != 0:
-                        tags.append('Interdomain trust account')
-                    if attr['userAccountControl'] & 0x1000 != 0:
-                        tags.append('Workstation trust account')
-                    if attr['userAccountControl'] & 0x2000 != 0:
-                        tags.append('Server trust account')
-                    if attr['userAccountControl'] & 0x10000 != 0:
-                        tags.append('Password never expire')
-                    if attr['userAccountControl'] & 0x40000 != 0:
-                        tags.append('Smartcard required')
-                    if attr['userAccountControl'] & 0x80000 != 0:
-                        tags.append('Trusted for delegation')
-                    if attr['userAccountControl'] & 0x100000 != 0:
-                        tags.append('Account is sensitive and cannot be delegated')
-                    if attr['userAccountControl'] & 0x200000 != 0:
-                        tags.append('Use DES key only')
-                    if attr['userAccountControl'] & 0x400000 != 0:
-                        tags.append('Do not require pre-auth')
-                    if attr['userAccountControl'] & 0x1000000 != 0:
-                        tags.append('Trusted to auth for delegation')
-                    if attr['userAccountControl'] & 0x4000000 != 0:
-                        tags.append('Partial secrets account')
-                else:
-                    pass
-
-                if 'adminCount' in attr and int(str(attr['adminCount'])) > 0:
-                    tags.append('adminCount>0')
-
-                user_details = {
-                    'domain': domain,
-                    'username': username,
-                    'fullname': fullname,
-                    'comment': comment,
-                    'created_date': created_date,
-                    'last_logon': last_logon_date,
-                    'last_password_change': last_password_change_date,
-                    'sid': sid,
-                    'rid': rid,
-                    'primary_gid': primaryGID,
-                    'dn': dn,
-                    'tags': tags,
-                }
-
-                if not domain_username in users:
-                    users[domain_username] = user_details
-            elif 'group' in object_class:
-
-                sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
-
-                if not sid in processed_groups:
-                    processed_groups.append(sid)
-
-                    if 'member' in attr:
-                        if type(attr['member']) == list:
-                            for member in attr['member']:
-                                users, _ = self._get_members_recursive(str(member), users=users, processed_groups=processed_groups)
-                        else:
-                            users, _ = self._get_members_recursive(str(attr['member']), users=users, processed_groups=processed_groups)
-
-                    group_gid = int(sid.split('-')[-1])
-                    users, _ = self._get_members_recursive(group_gid, users=users)
-
-        sbase = self.defaultdomainnamingcontext
-        attributes = ['distinguishedName', 'objectClass', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'member']
-
-        self.query(partial(process, users=users, processed_groups=processed_groups, group_info=group_info), sbase, search_filter, attributes, query_sd=False)
-
-        return users, "%s\\%s" % (group_info['domain'], group_info['name'])
-
-    def resolve_dn_to_sid(self, dn_list):
-        to_resolve = []
-        sid_list = []
-
-        for dn in dn_list:
-            if dn in self.dn_to_sid_dict:
-                sid_list.append(self.dn_to_sid_dict[dn])
-            else:
-                to_resolve.append(dn)
-
-        if len(to_resolve) != 0:
-            
-            search_filter = "(|%s)" % "".join(["(distinguishedName=%s)" % dn.replace('(', '\\28').replace(')', '\\29') for dn in to_resolve])
-
-            sc = ldap.SimplePagedResultsControl(size=10)
-            attributes = ['distinguishedName', 'objectSid']
-            try:
-                res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
-            except LDAPSearchError:
-                print('retry')
-                res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
-
-            domain = None
-            for item in res:
-                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                    continue
-
-                attr = self.to_dict_impacket(item)
-
-                if 'objectSid' in attr and 'distinguishedName' in attr:
-                    sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
-                    self.dn_to_sid_dict[attr['distinguishedName']] = sid
-                    sid_list.append(sid)
-
-        return sid_list
-
 
     def list_groups(self, callback):
 
@@ -1735,159 +1825,6 @@ class LDAPScan:
         attributes = ['distinguishedName', 'name', 'pKIExtendedKeyUsage', 'msPKI-Certificate-Name-Flag', 'msPKI-Enrollment-Flag', 'msPKI-RA-Signature', 'nTSecurityDescriptor']
         self.query(process, sbase, search_filter, attributes, query_sd=False)
 
-    def check_esc1(self, username, callback):
-        sid_groups = list(self._get_groups_recursive(username).keys())
-        sid_groups.append('S-1-1-0')
-        sid_groups.append('S-1-5-11')
-
-        def process(entry):
-            # Exploitable EKU: Client Authentication (OID 1.3.6.1.5.5.7.3.2), PKINIT Client Authentication (1.3.6.1.5.2.3.4), Smart Card Logon (OID 1.3.6.1.4.1.311.20.2.2), Any Purpose (OID 2.5.29.37.0), or no EKU (SubCA).
-            exploitable_eku_list = [
-                "Client Authentication",
-                "PKINIT Client Authentication",
-                "Smart Card Logon",
-                "Any Purpose",
-            ]
-
-            found = False
-            e_eku = []
-            for exploitable_eku in exploitable_eku_list:
-                if exploitable_eku in entry['eku']:
-                    found = True
-                    e_eku.append(exploitable_eku)
-
-            if len(entry['eku']) == 0:
-                entry['eku'].append('no EKU')
-                found = True
-            else:
-                entry['eku'] = e_eku
-
-            if not found:
-                return
-
-            if not 'ENROLLEE_SUPPLIES_SUBJECT' in entry['cert_name_flag']:
-                return
-
-            # Requires Manger approval
-            if 'PEND_ALL_REQUESTS' in entry['enrollment_flag']:
-                return
-
-            if entry['authorized_signature_required']:
-                return
-
-            for ace in entry['enrollment_rights']:
-                if ace['sid'] in sid_groups:
-                    entry['enrollment_right'] = ace
-                    callback(entry)
-
-        self.list_cert_templates(process)
-
-    def check_esc2(self, username, callback):
-        sid_groups = list(self._get_groups_recursive(username).keys())
-        sid_groups.append('S-1-1-0')
-        sid_groups.append('S-1-5-11')
-
-        def process(entry):
-            # Exploitable EKU: Any Purpose (OID 2.5.29.37.0), or no EKU (SubCA).
-            exploitable_eku_list = [
-                "Any Purpose",
-            ]
-
-            found = False
-            e_eku = []
-            for exploitable_eku in exploitable_eku_list:
-                if exploitable_eku in entry['eku']:
-                    found = True
-                    e_eku.append(exploitable_eku)
-
-            if len(entry['eku']) == 0:
-                entry['eku'].append('no EKU')
-                found = True
-            else:
-                entry['eku'] = e_eku
-
-            if not found:
-                return
-
-            if len(entry['eku']) == 0:
-                entry['eku'].append('no EKU')
-
-            # Requires Manger approval
-            if 'PEND_ALL_REQUESTS' in entry['enrollment_flag']:
-                return
-
-            if entry['authorized_signature_required']:
-                return
-
-            for ace in entry['enrollment_rights']:
-                if ace['sid'] in sid_groups:
-                    entry['enrollment_right'] = ace
-                    callback(entry)
-
-        self.list_cert_templates(process)
-
-    def check_esc3(self, username, callback):
-        sid_groups = list(self._get_groups_recursive(username).keys())
-        sid_groups.append('S-1-1-0')
-        sid_groups.append('S-1-5-11')
-
-        def process(entry):
-            # Exploitable EKU: Certificate Request Agent OID (1.3.6.1.4.1.311.20.2.1)
-            exploitable_eku_list = [
-                "Certificate Request Agent",
-            ]
-
-            found = False
-            e_eku = []
-            for exploitable_eku in exploitable_eku_list:
-                if exploitable_eku in entry['eku']:
-                    found = True
-                    e_eku.append(exploitable_eku)
-
-            if not found:
-                return
-
-            if len(entry['eku']) == 0:
-                entry['eku'].append('no EKU')
-
-            # Requires Manger approval
-            if 'PEND_ALL_REQUESTS' in entry['enrollment_flag']:
-                return
-
-            if entry['authorized_signature_required']:
-                return
-
-            for ace in entry['enrollment_rights']:
-                if ace['sid'] in sid_groups:
-                    entry['enrollment_right'] = ace
-                    callback(entry)
-
-        self.list_cert_templates(process)
-
-
-    def check_esc4(self, username, callback):
-        sid_groups = list(self._get_groups_recursive(username).keys())
-        sid_groups.append('S-1-1-0')
-        sid_groups.append('S-1-5-11')
-
-        def process(entry):
-            for ace in entry['privileges']:
-                if ace['sid'] in sid_groups:
-                    entry['ace'] = ace
-                    callback(entry)
-
-        self.list_cert_templates(process)
-
-    def check_esc11(self, username, callback):
-        sid_groups = list(self._get_groups_recursive(username).keys())
-        sid_groups.append('S-1-1-0')
-        sid_groups.append('S-1-5-11')
-
-        def process(entry):
-            print(entry['enrollment_flag'])
-
-        self.list_cert_templates(process)
-
     def list_writable_GPOs(self, smbscan, callback):
 
         attributes = ['distinguishedName', 'gPCFileSysPath', 'displayName']
@@ -2246,65 +2183,6 @@ class LDAPScan:
 
         for user, details in users.items():
             callback(details)
-
-    def _get_groups_recursive(self, name, groups={}, processed=[], group_only=False):
-        if name.startswith('S-'):
-            search_filter="(objectsid=%s)" % name
-        elif name.startswith('CN='):
-            name = name.replace('(', '\\28')
-            name = name.replace(')', '\\29')
-            search_filter="(distinguishedName=%s)" % name
-        else:
-            #search_filter="(&(objectClass=user)(sAMAccountName=%s))" % name
-            search_filter="(sAMAccountName=%s)" % name
-
-        # First, get all related groups
-        new_groups = []
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        attributes = ['objectSid', 'distinguishedName', 'sAMAccountName', 'objectClass', 'primaryGroupID', 'memberOf']
-        res = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
-
-        for item in res:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                continue
-
-            attr = self.to_dict_impacket(item)
-
-            sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            groupname = str(attr['sAMAccountName'])
-
-            if type(attr['objectClass']) in [SetOf, list]:
-                object_class = [str(c) for c in attr['objectClass']]
-            else:
-                object_class = [str(attr['objectClass'])]
-
-            # Processed, add it to list
-            if not group_only or group_only and 'group' in object_class:
-                if not sid in groups:
-                    groups[sid] = "%s\\%s" % (domain, groupname)
-                
-            if 'primaryGroupID' in attr:
-                obj_sid = sid.split('-')
-                obj_sid[-1] = str(attr['primaryGroupID'])
-                new_groups.append('-'.join(obj_sid))
-
-            if 'memberOf' in attr:
-                if type(attr['memberOf']) == list:
-                    for memberOf in attr['memberOf']:
-                        new_groups.append(str(memberOf))
-                else:
-                    new_groups.append(str(attr['memberOf']))
-
-        for g in new_groups:
-            if not g in processed:
-                processed.append(g)
-
-                self._get_groups_recursive(g, groups=groups, processed=processed, group_only=group_only)
-
-        return groups
 
     # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
     def dump_gMSA(self, callback):
