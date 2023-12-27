@@ -81,7 +81,7 @@ class LDAPScan:
             if not connected:
                 return False, None
         except ldap3.core.exceptions.LDAPSocketOpenError:
-            pass
+            return False, None
 
         self.defaultdomainnamingcontext = c.server.info.other['defaultNamingContext'][0]
         self.configurationnamingcontext = c.server.info.other['configurationNamingContext'][0]
