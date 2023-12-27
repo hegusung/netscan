@@ -2,38 +2,33 @@ from datetime import datetime
 from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
-class User:
-    attributes = ['objectClass', 'distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName', 'msDS-AllowedToDelegateTo', 'msDS-SupportedEncryptionTypes', 'sIDHistory']
-    schema_guid_attributes = ['user', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
-    schema_guid_dict = None
+class Host:
+    attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'pwdLastSet', 'msDS-AllowedToDelegateTo', 'msDS-AllowedToActOnBehalfOfOtherIdentity', 'msDS-SupportedEncryptionTypes']
+    schema_guid_attributes = ['computer', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
 
     @classmethod
-    def get_schema_guid_dict(self):
-        if self.schema_guid_dict == None:
-            self.schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
-
-        return self.schema_guid_dict
-
-    @classmethod
-    def list_users(self, ldap):
+    def list_hosts(self, ldap):
+        schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
         sbase = "%s" % ldap.defaultdomainnamingcontext
-        search_filter = '(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,%s)(objectCategory=CN=ms-DS-Managed-Service-Account,%s))' % (ldap.schemanamingcontext, ldap.schemanamingcontext)
+        search_filter = '(objectCategory=computer)'
 
         for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
             if not 'sAMAccountName' in attr:
                 continue
 
-            user = User(ldap, attr)
+            host = Host(ldap, attr, schema_guid_dict)
 
-            yield user
+            yield host
 
     # ===================
-    # === User object ===
+    # === Host object ===
     # ===================
 
-    def __init__(self, ldap, attr):
+    def __init__(self, ldap, attr, schema_guid_dict):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
-        self.username = str(attr['sAMAccountName'])
+        self.dns = str(attr["dNSHostName"]) if 'dNSHostName' in attr else ''
+        self.hostname = str(attr['name'])
+        self.os = str(attr['operatingSystem']) if 'operatingSystem' in attr else ''
         self.fullname = str(attr['displayName']) if 'displayName' in attr else ""
         
         if not 'description' in attr:
@@ -65,15 +60,7 @@ class User:
         except KeyError:
             self.last_password_change_date = None
 
-        self.object_class = [str(c) for c in attr['objectClass']] 
         self.tags = []
-        if 'msDS-GroupManagedServiceAccount' in self.object_class:
-            self.tags.append('gMSA')
-        elif 'msDS-ManagedServiceAccount' in self.object_class:
-            self.tags.append('sMSA')
-        elif 'user' in self.object_class:
-            self.tags.append('User')
-
         if 'userAccountControl' in attr:
             attr['userAccountControl'] = int(str(attr['userAccountControl']))
 
@@ -105,9 +92,6 @@ class User:
                 self.tags.append('Trusted to auth for delegation')
             if attr['userAccountControl'] & 0x4000000 != 0:
                 self.tags.append('Partial secrets account')
-        else:
-            pass
-            #return
 
         if 'msDS-SupportedEncryptionTypes' in attr:
             attr['msDS-SupportedEncryptionTypes'] = int(str(attr['msDS-SupportedEncryptionTypes']))
@@ -125,36 +109,11 @@ class User:
         else:
             self.tags.append('KRB-RC4')
 
-        # Not returned in the Global Catalog
-        if 'adminCount' in attr and int(str(attr['adminCount'])) > 0:
-            self.tags.append('adminCount>0')
-
-        self.groups = [] 
-        if 'memberOf' in attr:
-            if type(attr['memberOf']) != list:
-                attr['memberOf'] = [attr['memberOf']]
-
-            for memberOf in attr['memberOf']:
-                memberOf = str(memberOf)
-
-                groupname = memberOf.split(',')[0].split('=')[-1]
-                groupdomain = ldap.dn_to_domain(memberOf)
-
-                self.groups.append("%s\\%s" % (groupdomain, groupname))
-
         # Check the ACEs
         try:
-            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'user', self.get_schema_guid_dict())
+            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'computer', schema_guid_dict)
         except KeyError:
             self.aces = {}
-
-        # Check the ACEs to access the gMSA account password
-        if 'msDS-GroupMSAMembership' in attr:
-            aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), self.domain.upper(), 'user', schema_guid_dict)
-            for rule in aces2['aces']:
-                if rule['RightName'] in ['GenericAll', 'Owns']:
-                    rule['RightName'] = 'ReadGMSAPassword'
-                    self.aces['aces'].append(rule)
 
         # Check the SPNs
         self.spns = []
@@ -174,33 +133,37 @@ class User:
             for item in attr['msDS-AllowedToDelegateTo']:
                 self.allowed_to_delegate_to.append("%s" % item)
 
-        # SID History
-        self.sid_history = []
-        if 'sIDHistory' in attr:
-            if type(attr['sIDHistory']) != list:
-                attr['sIDHistory'] = [attr['sIDHistory']]
+        # Ressourse-Based Constrained delegation
+        self.allowed_to_act_on_behalf_of_other_identity_sids = []
+        if 'msDS-AllowedToActOnBehalfOfOtherIdentity' in attr:
+            aces = parse_sd(bytes(attr['msDS-AllowedToActOnBehalfOfOtherIdentity']), self.domain.upper(), 'computer', schema_guid_dict)
+            for ace in aces['aces']:
+                if ace['RightName'] == 'GenericAll':
+                    self.allowed_to_act_on_behalf_of_other_identity_sids.append(ace['PrincipalSID'])
 
-            for item in attr['sIDHistory']:
-                self.sid_history.append(LDAP_SID(bytes(item)).formatCanonical())
+        self.allowed_to_act_on_behalf_of_other_identity = []
+        for sid_obj in self.allowed_to_act_on_behalf_of_other_identity_sids:
+            name = ldap._resolve_sid_to_name(self.domain, sid_obj)
+            self.allowed_to_act_on_behalf_of_other_identity.append(name)
 
     def to_json(self):
         return {
             'domain': self.domain,
-            'username': self.username,
-            'fullname': self.fullname,
-            'comment': self.comment,
-            'created_date': self.created_date,
-            'last_logon': self.last_logon_date,
-            'last_password_change': self.last_password_change_date,
+            'hostname': self.hostname,
+            'dns': self.dns,
+            'os': self.os,
             'sid': self.sid,
             'rid': self.rid,
             'primary_gid': self.primaryGID,
             'dn': self.dn,
             'tags': self.tags,
-            'group': self.groups,
+            'comment': self.comment,
             'aces': self.aces,
             'spns': self.spns,
             'allowed_to_delegate_to': self.allowed_to_delegate_to,
-            'sid_history': self.sid_history,
+            'allowed_to_act_on_behalf_of_other_identity': self.allowed_to_act_on_behalf_of_other_identity,
+            'allowed_to_act_on_behalf_of_other_identity_sids': self.allowed_to_act_on_behalf_of_other_identity_sids,
+            'created_date': self.created_date,
+            'last_logon': self.last_logon_date,
+            'last_password_change': self.last_password_change_date,
         }
-

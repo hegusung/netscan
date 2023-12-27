@@ -107,9 +107,9 @@ class Domain:
         search_base = "CN=Directory Service,CN=Windows NT,CN=Services,%s" % ldap.configurationnamingcontext
         attributes = ['distinguishedName', 'dsHeuristics']
 
-        for attr in ldap.query_generator(search_base, search_filter, self.attributes, query_sd=False):
+        for attr in ldap.query_generator(search_base, search_filter, attributes, query_sd=False):
 
-            if 'dsHeuristics' in attr:
+            if 'dSHeuristics' in attr:
                 dSHeuristics = str(attr['dSHeuristics'])
                 break
 

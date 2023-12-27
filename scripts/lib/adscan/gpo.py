@@ -7,6 +7,8 @@ from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
 from lib.adscan.accesscontrol import parse_accesscontrol, parse_sd, process_sid
 
 class GPO:
+    attributes = ['name', 'displayName', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPCFileSysPath']
+    schema_guid_attributes = ['Group-Policy-Container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
 
     name_to_sid = {
         'administrators': 'S-1-5-32-544',
@@ -16,46 +18,15 @@ class GPO:
     }
 
     @classmethod
-    def list(self, ldap_obj, callback):
+    def list_gpos(self, ldap):
+        schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = '(objectCategory=groupPolicyContainer)'
 
-        schema_guid_dict = ldap_obj._get_schema_guid_dict(['Group-Policy-Container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            gpo = GPO(ldap, attr, schema_guid_dict)
 
-        def process(item):
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
-
-            attr = ldap_obj.to_dict_impacket(item)
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            domain_dn = ",".join(["DC=%s" % p for p in domain.split('.')])
-            domain_sid = ldap_obj.resolve_dn_to_sid([domain_dn])[0]
-
-            dn = str(attr['distinguishedName'])
-
-            b = bytes(attr['objectGUID'])
-            guid = b[0:4][::-1].hex() + '-'
-            guid += b[4:6][::-1].hex() + '-'
-            guid += b[6:8][::-1].hex() + '-'
-            guid += b[8:10].hex() + '-'
-            guid += b[10:16].hex()
-
-            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'group-policy-container', schema_guid_dict)
-
-            callback({
-                'domain': domain,
-                'domain_sid': domain_sid,
-                'name': str(attr['displayName']),
-                'dn': dn,
-                'guid': guid,
-                'gpcpath': str(attr['gPCFileSysPath']),
-                'aces': aces,
-            })
-
-        sc = ldap.SimplePagedResultsControl(size=100)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['name', 'displayName', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPCFileSysPath']
-        sbase = "%s" % ldap_obj.defaultdomainnamingcontext
-        ldap_obj.conn.search(searchBase=sbase, searchFilter='(objectCategory=groupPolicyContainer)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
+            yield gpo
 
     @classmethod
     def resolve_effect(self, smbscan, ldap_obj, gpo_dn, gpo_path, gpo_effect):
@@ -248,4 +219,34 @@ class GPO:
             out[localgroup_key] = entries
 
         return out
+
+    # ==================
+    # === GPO object ===
+    # ==================
+
+    def __init__(self, ldap, attr, schema_guid_dict):
+        self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
+        self.domain_dn = ",".join(["DC=%s" % p for p in self.domain.split('.')])
+        self.domain_sid = ldap.resolve_dn_to_sid([self.domain_dn])[0]
+        self.gpcpath = str(attr['gPCFileSysPath'])
+        self.name = str(attr['displayName'])
+
+        self.dn = str(attr['distinguishedName'])
+
+        self.guid = ldap.parse_guid(bytes(attr['objectGUID']))
+
+        self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'group-policy-container', schema_guid_dict)
+
+
+    def to_json(self):
+        return {
+            'domain': self.domain,
+            'domain_sid': self.domain_sid,
+            'name': self.name,
+            'dn': self.dn,
+            'guid': self.guid,
+            'gpcpath': self.gpcpath,
+            'aces': self.aces,
+        }
+
 
