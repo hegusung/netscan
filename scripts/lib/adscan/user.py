@@ -8,7 +8,7 @@ class User:
     schema_guid_dict = None
 
     @classmethod
-    def get_schema_guid_dict(self):
+    def get_schema_guid_dict(self, ldap):
         if self.schema_guid_dict == None:
             self.schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
 
@@ -144,7 +144,7 @@ class User:
 
         # Check the ACEs
         try:
-            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'user', self.get_schema_guid_dict())
+            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'user', self.get_schema_guid_dict(ldap))
         except KeyError:
             self.aces = {}
 

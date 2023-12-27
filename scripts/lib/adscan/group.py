@@ -8,7 +8,7 @@ class Group:
     schema_guid_dict = None
 
     @classmethod
-    def get_schema_guid_dict(self):
+    def get_schema_guid_dict(self, ldap):
         if self.schema_guid_dict == None:
             self.schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
 
@@ -79,7 +79,7 @@ class Group:
     # === Group object ===
     # ====================
 
-    def __init__(self, ldap, attr, schema_guid_dict):
+    def __init__(self, ldap, attr):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.groupname = str(attr['sAMAccountName'])
         self.fullname = str(attr['displayName']) if 'displayName' in attr else ""
@@ -113,7 +113,7 @@ class Group:
 
         # Check the ACEs
         try:
-            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'group', self.get_schema_guid_dict())
+            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'group', self.get_schema_guid_dict(ldap))
         except KeyError:
             self.aces = {}
 
