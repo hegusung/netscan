@@ -588,6 +588,135 @@ class LDAPScan:
 
         return data
 
+    def generate_guid_dict(self, all=False, parameters=['ms-Mcs-AdmPwd', 'msDS-ManagedPassword']):
+
+        guid_dict = {}
+        rev_guid_dict = {}
+
+        property_sets = {
+            "c7407360-20bf-11d0-a768-00aa006e0529": "General Information",
+            "59ba2f42-79a2-11d0-9020-00c04fc2d3cf": "Account Restrictions",
+            "4c164200-20c0-11d0-a768-00aa006e0529": "Logon Information",
+            "5f202010-79a5-11d0-9020-00c04fc2d4cf": "Group Membership",
+            "bc0ac240-79a9-11d0-9020-00c04fc2d4cf": "Phone and Mail Options",
+            "e45795b2-9455-11d1-aebd-0000f80367c1": "Personal Information",
+            "77b5b886-944a-11d1-aebd-0000f80367c1": "Web Information",
+            "e45795b3-9455-11d1-aebd-0000f80367c1": "Public Information",
+            "e48d0154-bcf8-11d1-8702-00c04fb96050": "Remote Access Information",
+            "037088f8-0ae1-11d2-b422-00a0c968f939": "Other Domain Parameters",
+        }
+
+        if all:
+            for guid, prop_set in property_sets.items():
+                guid_dict[guid] = {'name': prop_set, 'type': 'PropertySet'}
+                rev_guid_dict[prop_set] = {'guid': guid, 'type': 'PropertySet'}
+
+        if all:
+            search_filter = "(objectCategory=CN=Attribute-Schema,%s)" % self.schemanamingcontext
+            searchBase = self.schemanamingcontext
+
+            sc = ldap.SimplePagedResultsControl(size=10)
+            attributes = ['schemaIDGUID', 'rightsGuid', 'name']
+            res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+            for item in res:
+                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                    continue
+
+                attr = self.to_dict_impacket(item)
+
+                if 'schemaIDGUID' in attr:
+                    b = bytes(attr['schemaIDGUID'])
+                    guid = b[0:4][::-1].hex() + '-'
+                    guid += b[4:6][::-1].hex() + '-'
+                    guid += b[6:8][::-1].hex() + '-'
+                    guid += b[8:10].hex() + '-'
+                    guid += b[10:16].hex()
+
+                    guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
+                    rev_guid_dict[str(attr['name'])] = {'guid': guid, 'type': 'attribute'}
+
+            #search_filter = "(objectCategory=CN=Attribute-Schema,CN=Schema,CN=Configuration,%s)" % self.root_namingcontext
+            search_filter = "(objectCategory=CN=Control-Access-Right,%s)" % self.schemanamingcontext
+            searchBase = self.configurationnamingcontext
+
+            sc = ldap.SimplePagedResultsControl(size=10)
+            attributes = ['schemaIDGUID', 'rightsGuid', 'name']
+            res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+            for item in res:
+                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                    continue
+
+                attr = self.to_dict_impacket(item)
+
+                if 'rightsGuid' in attr:
+                    guid = str(attr['rightsGuid'])
+                elif 'schemaIDGUID' in attr:
+                    b = bytes(attr['schemaIDGUID'])
+                    guid = b[0:4][::-1].hex() + '-'
+                    guid += b[4:6][::-1].hex() + '-'
+                    guid += b[6:8][::-1].hex() + '-'
+                    guid += b[8:10].hex() + '-'
+                    guid += b[10:16].hex()
+
+
+                guid_dict[guid] = {'name': str(attr['name']), 'type': 'AccessControlRight'}
+                rev_guid_dict[str(attr['name']).lower()] = guid
+
+        else:
+            searchBase = self.schemanamingcontext
+            search_filter = "(|%s)" % "".join(["(name=%s)" % s for s in parameters])
+
+            sc = ldap.SimplePagedResultsControl(size=10)
+            attributes = ['name', 'schemaIDGUID']
+            res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
+
+            for item in res:
+                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                    continue
+
+                attr = self.to_dict_impacket(item)
+
+                if 'rightsGuid' in attr:
+                    guid = str(attr['rightsGuid'])
+                elif 'schemaIDGUID' in attr:
+                    b = bytes(attr['schemaIDGUID'])
+                    guid = b[0:4][::-1].hex() + '-'
+                    guid += b[4:6][::-1].hex() + '-'
+                    guid += b[6:8][::-1].hex() + '-'
+                    guid += b[8:10].hex() + '-'
+                    guid += b[10:16].hex()
+                else:
+                    continue
+
+                guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
+                rev_guid_dict[str(attr['name']).lower()] = guid
+
+        return guid_dict, rev_guid_dict
+
+
+    # Impacket LDAP does not support binary search
+    def resolve_guid(self, guid):
+        guid = guid.hex()
+
+        guid_ldap = ''.join(['\\%s' % guid[i:i+2] for i in range(0, len(guid), 2)])
+
+        search_filter = "(schemaIDGUID=%s)" % guid_ldap
+        searchBase = self.schemanamingcontext
+
+        sc = ldap.SimplePagedResultsControl(size=10)
+        res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=['name'])
+
+        for item in res:
+            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                continue
+
+            attr = self.to_dict_impacket(item)
+
+
+
+    """
     def _get_members_recursive(self, name, users={}, processed_groups=[]):
         if type(name) == int:
             search_filter="(primaryGroupID=%d)" % name
@@ -795,6 +924,7 @@ class LDAPScan:
                 self._get_groups_recursive(g, groups=groups, processed=processed, group_only=group_only)
 
         return groups
+    """
 
     def resolve_dn_to_sid(self, dn_list):
         to_resolve = []
@@ -1217,13 +1347,11 @@ class LDAPScan:
         users_dict = {}
 
         for admin_group in admin_groups:
-            users, groupname = self._get_members_recursive(admin_group, users={})
-            #users, groupname = Group.get_members_recursive(admin_group, users={})
+            users, groupname = Group.get_members_recursive(self, admin_group, users={})
 
             for user in users:
-                #print(user)
                 if not user in users_dict:
-                    users_dict[user] = {"user": users[user], "groups": []}
+                    users_dict[user] = {"user": users[user].to_json(), "groups": []}
 
                 users_dict[user]['groups'].append(groupname)
 
@@ -1239,11 +1367,11 @@ class LDAPScan:
         users_dict = {}
 
         for rdp_group in rdp_groups:
-            users, groupname = self._get_members_recursive(rdp_group, users={})
+            users, groupname = Group.get_members_recursive(self, rdp_group, users={})
 
             for user in users:
                 if not user in users_dict:
-                    users_dict[user] = {"user": users[user], "groups": []}
+                    users_dict[user] = {"user": users[user].to_json(), "groups": []}
 
                 users_dict[user]['groups'].append(groupname)
 
@@ -1432,145 +1560,19 @@ class LDAPScan:
                             callback(ace)
 
 
-    def generate_guid_dict(self, all=False, parameters=['ms-Mcs-AdmPwd', 'msDS-ManagedPassword']):
-
-        guid_dict = {}
-        rev_guid_dict = {}
-
-        property_sets = {
-            "c7407360-20bf-11d0-a768-00aa006e0529": "General Information",
-            "59ba2f42-79a2-11d0-9020-00c04fc2d3cf": "Account Restrictions",
-            "4c164200-20c0-11d0-a768-00aa006e0529": "Logon Information",
-            "5f202010-79a5-11d0-9020-00c04fc2d4cf": "Group Membership",
-            "bc0ac240-79a9-11d0-9020-00c04fc2d4cf": "Phone and Mail Options",
-            "e45795b2-9455-11d1-aebd-0000f80367c1": "Personal Information",
-            "77b5b886-944a-11d1-aebd-0000f80367c1": "Web Information",
-            "e45795b3-9455-11d1-aebd-0000f80367c1": "Public Information",
-            "e48d0154-bcf8-11d1-8702-00c04fb96050": "Remote Access Information",
-            "037088f8-0ae1-11d2-b422-00a0c968f939": "Other Domain Parameters",
-        }
-
-        if all:
-            for guid, prop_set in property_sets.items():
-                guid_dict[guid] = {'name': prop_set, 'type': 'PropertySet'}
-                rev_guid_dict[prop_set] = {'guid': guid, 'type': 'PropertySet'}
-
-        if all:
-            search_filter = "(objectCategory=CN=Attribute-Schema,%s)" % self.schemanamingcontext
-            searchBase = self.schemanamingcontext
-
-            sc = ldap.SimplePagedResultsControl(size=10)
-            attributes = ['schemaIDGUID', 'rightsGuid', 'name']
-            res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
-
-            for item in res:
-                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                    continue
-
-                attr = self.to_dict_impacket(item)
-
-                if 'schemaIDGUID' in attr:
-                    b = bytes(attr['schemaIDGUID'])
-                    guid = b[0:4][::-1].hex() + '-'
-                    guid += b[4:6][::-1].hex() + '-'
-                    guid += b[6:8][::-1].hex() + '-'
-                    guid += b[8:10].hex() + '-'
-                    guid += b[10:16].hex()
-
-                    guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
-                    rev_guid_dict[str(attr['name'])] = {'guid': guid, 'type': 'attribute'}
-
-            #search_filter = "(objectCategory=CN=Attribute-Schema,CN=Schema,CN=Configuration,%s)" % self.root_namingcontext
-            search_filter = "(objectCategory=CN=Control-Access-Right,%s)" % self.schemanamingcontext
-            searchBase = self.configurationnamingcontext
-
-            sc = ldap.SimplePagedResultsControl(size=10)
-            attributes = ['schemaIDGUID', 'rightsGuid', 'name']
-            res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
-
-            for item in res:
-                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                    continue
-
-                attr = self.to_dict_impacket(item)
-
-                if 'rightsGuid' in attr:
-                    guid = str(attr['rightsGuid'])
-                elif 'schemaIDGUID' in attr:
-                    b = bytes(attr['schemaIDGUID'])
-                    guid = b[0:4][::-1].hex() + '-'
-                    guid += b[4:6][::-1].hex() + '-'
-                    guid += b[6:8][::-1].hex() + '-'
-                    guid += b[8:10].hex() + '-'
-                    guid += b[10:16].hex()
-
-
-                guid_dict[guid] = {'name': str(attr['name']), 'type': 'AccessControlRight'}
-                rev_guid_dict[str(attr['name']).lower()] = guid
-
-        else:
-            searchBase = self.schemanamingcontext
-            search_filter = "(|%s)" % "".join(["(name=%s)" % s for s in parameters])
-
-            sc = ldap.SimplePagedResultsControl(size=10)
-            attributes = ['name', 'schemaIDGUID']
-            res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=attributes)
-
-            for item in res:
-                if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                    continue
-
-                attr = self.to_dict_impacket(item)
-
-                if 'rightsGuid' in attr:
-                    guid = str(attr['rightsGuid'])
-                elif 'schemaIDGUID' in attr:
-                    b = bytes(attr['schemaIDGUID'])
-                    guid = b[0:4][::-1].hex() + '-'
-                    guid += b[4:6][::-1].hex() + '-'
-                    guid += b[6:8][::-1].hex() + '-'
-                    guid += b[8:10].hex() + '-'
-                    guid += b[10:16].hex()
-                else:
-                    continue
-
-                guid_dict[guid] = {'name': str(attr['name']), 'type': 'attribute'}
-                rev_guid_dict[str(attr['name']).lower()] = guid
-
-        return guid_dict, rev_guid_dict
-
-
-    # Impacket LDAP does not support binary search
-    def resolve_guid(self, guid):
-        guid = guid.hex()
-
-        guid_ldap = ''.join(['\\%s' % guid[i:i+2] for i in range(0, len(guid), 2)])
-
-        search_filter = "(schemaIDGUID=%s)" % guid_ldap
-        searchBase = self.schemanamingcontext
-
-        sc = ldap.SimplePagedResultsControl(size=10)
-        res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=['name'])
-
-        for item in res:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                continue
-
-            attr = self.to_dict_impacket(item)
-
     def list_user_groups(self, username, callback):
 
-        groups = list(self._get_groups_recursive(username, group_only=True).values())
+        groups = list(User.get_groups_recursive(self, username, group_only=True).values())
 
         for group in groups:
-            callback(group)
+            callback(group.to_json())
 
     def list_group_users(self, groupname, callback):
 
-        users, _ = self._get_members_recursive(groupname, users={})
+        users, _ = Group.get_members_recursive(self, groupname, users={})
 
         for user, details in users.items():
-            callback(details)
+            callback(details.to_json())
 
     # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
     def dump_gMSA(self, callback):

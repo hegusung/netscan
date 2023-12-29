@@ -330,6 +330,8 @@ class SMBScan:
                 ccache = CCache()
 
                 ccache.fromTGT(tgt, oldSessionKey, oldSessionKey)
+                print(tgt)
+                print(oldSessionKey)
                 ticket_file = "%s_%s.ccache" % (domain, username)
                 Output.highlight({'target': self.url(), 'message': "Saving TGT to %s" % ticket_file})
                 ccache.saveFile(ticket_file)

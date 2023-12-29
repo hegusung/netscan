@@ -37,7 +37,6 @@ def main():
     user_group.add_argument("--groups", action='store_true', help='dump groups from the Active Directory (Bloodhound)')
     user_group.add_argument("--hosts", action='store_true', help='dump hosts from the Active Directory, list if it has trusted for delegation enabled (Bloodhound)')
     user_group.add_argument("--dns", action='store_true', help='dump DNS entries from the Active Directory')
-    user_group.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
     user_group.add_argument("--passpol", action='store_true', help='dump password policy from the Active Directory')
     user_group.add_argument("--trusts", action='store_true', help='dump trusts from the Active Directory')
     user_group.add_argument("--gpos", action='store_true', help='dump GPOs from the Active Directory (Bloodhound)', dest='gpos')
@@ -62,6 +61,8 @@ def main():
     # Attack
     attk_group = parser.add_argument_group("Attacks")
     attk_group.add_argument("--kerberoasting", action='store_true', help='Execute a kerberoasting attack on the accounts with a SPN')
+    attk_group.add_argument("--asreproasting", action='store_true', help='Execute a ASREP-roasting attack on the accounts with "Dot not require pre-auth" flag enabled')
+    attk_group.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
 
     acls_group = parser.add_argument_group("Enumerate ACLs/ACEs")
     acls_group.add_argument("--vuln-gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory', dest='vuln_gpos')
@@ -191,6 +192,8 @@ def main():
         actions['gpps'] ={}
     if args.kerberoasting:
         actions['kerberoasting'] ={}
+    if args.asreproasting:
+        actions['asreproasting'] ={}
     if args.passpol:
         actions['passpol'] = {}
     if args.trusts:

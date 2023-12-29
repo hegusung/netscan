@@ -27,6 +27,95 @@ class User:
 
             yield user
 
+    @classmethod
+    def list_spns(self, ldap):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = '(&(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,%s)(objectCategory=CN=ms-DS-Managed-Service-Account,%s))(servicePrincipalName=*))' % (ldap.schemanamingcontext, ldap.schemanamingcontext)
+
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            if not 'sAMAccountName' in attr:
+                continue
+
+            user = User(ldap, attr)
+
+            yield user
+
+    @classmethod
+    def list_donotrequirepreauth(self, ldap):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = '(&(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,%s)(objectCategory=CN=ms-DS-Managed-Service-Account,%s))(useraccountcontrol:1.2.840.113556.1.4.803:=4194304))' % (ldap.schemanamingcontext, ldap.schemanamingcontext)
+
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            if not 'sAMAccountName' in attr:
+                continue
+
+            user = User(ldap, attr)
+
+            yield user
+
+
+    @classmethod
+    def get_groups_recursive(self, ldap, name, groups={}, processed=[], group_only=False):
+        from lib.adscan.group import Group
+
+        sbase = ldap.defaultdomainnamingcontext
+        attributes = list(set(Group.attributes + ['objectClass', 'memberOf']))
+        if name.startswith('S-'):
+            search_filter="(objectsid=%s)" % name
+        elif name.startswith('CN='):
+            name = name.replace('(', '\\28')
+            name = name.replace(')', '\\29')
+            search_filter="(distinguishedName=%s)" % name
+        else:
+            #search_filter="(&(objectClass=user)(sAMAccountName=%s))" % name
+            search_filter="(sAMAccountName=%s)" % name
+
+        # First, get all related groups
+        new_groups = []
+
+        for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
+
+            sid = LDAP_SID(bytes(attr['objectSid'])).formatCanonical()
+
+            domain = ldap.dn_to_domain(str(attr['distinguishedName']))
+            groupname = str(attr['sAMAccountName'])
+
+            if type(attr['objectClass']) is list:
+                object_class = [str(c) for c in attr['objectClass']]
+            else:
+                object_class = [str(attr['objectClass'])]
+
+            # Processed, add it to list
+            if not group_only: # get users and groups, basically includes the initial user queried
+                raise NotImplementedError("group_only = False")
+            elif group_only and 'group' in object_class:
+                if not sid in groups:
+                    groups[sid] = Group(ldap, attr)
+                
+            # Add the group specified by the "primaryGroupID" attribute to the list
+            if 'primaryGroupID' in attr:
+                obj_sid = sid.split('-')
+                obj_sid[-1] = str(attr['primaryGroupID'])
+                new_groups.append('-'.join(obj_sid))
+
+            # Add the group specified by the "memberOf" attribute to the list
+            if 'memberOf' in attr:
+                if type(attr['memberOf']) == list:
+                    for memberOf in attr['memberOf']:
+                        new_groups.append(str(memberOf))
+                else:
+                    new_groups.append(str(attr['memberOf']))
+
+        for g in new_groups:
+            if not g in processed:
+                processed.append(g)
+
+                User.get_groups_recursive(ldap, g, groups=groups, processed=processed, group_only=group_only)
+
+        return groups
+
+
+
     # ===================
     # === User object ===
     # ===================
@@ -150,7 +239,7 @@ class User:
 
         # Check the ACEs to access the gMSA account password
         if 'msDS-GroupMSAMembership' in attr:
-            aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), self.domain.upper(), 'user', schema_guid_dict)
+            aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), self.domain.upper(), 'user', self.get_schema_guid_dict(ldap))
             for rule in aces2['aces']:
                 if rule['RightName'] in ['GenericAll', 'Owns']:
                     rule['RightName'] = 'ReadGMSAPassword'

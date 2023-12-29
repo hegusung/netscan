@@ -31,7 +31,7 @@ class Group:
     def get_members_recursive(self, ldap, name, users={}, processed_groups=[]):
         from lib.adscan.user import User
 
-        sbase = self.defaultdomainnamingcontext
+        sbase = ldap.defaultdomainnamingcontext
         attributes = list(set(User.attributes + ['objectClass', 'member']))
         if type(name) == int:
             search_filter="(primaryGroupID=%d)" % name
@@ -44,14 +44,19 @@ class Group:
         else:
             search_filter="(&(objectClass=group)(sAMAccountName=%s))" % name
 
-        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+        domain = None
+        name = None
+        for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
             if not 'sAMAccountName' in attr:
                 continue
 
-            if type(attr['objectClass']) in [SetOf, list]:
+            if type(attr['objectClass']) is list:
                 object_class = [str(c) for c in attr['objectClass']]
             else:
                 object_class = [str(attr['objectClass'])]
+
+            domain = ldap.dn_to_domain(str(attr['distinguishedName']))
+            name = str(attr['sAMAccountName'])
 
             if 'user' in object_class:
                 user = User(ldap, attr) 
@@ -66,14 +71,14 @@ class Group:
                 if 'member' in attr:
                     if type(attr['member']) == list:
                         for member in attr['member']:
-                            users, _ = self._get_members_recursive(str(member), users=users, processed_groups=processed_groups)
+                            users, _ = self.get_members_recursive(ldap, str(member), users=users, processed_groups=processed_groups)
                     else:
-                        users, _ = self._get_members_recursive(str(attr['member']), users=users, processed_groups=processed_groups)
+                        users, _ = self.get_members_recursive(ldap, str(attr['member']), users=users, processed_groups=processed_groups)
 
                 group_gid = int(sid.split('-')[-1])
-                users, _ = self._get_members_recursive(group_gid, users=users, processed_groups=processed_groups)
+                users, _ = self.get_members_recursive(ldap, group_gid, users=users, processed_groups=processed_groups)
 
-        return users, "%s\\%s" % (group_info['domain'], group_info['name'])
+        return users, "%s\\%s" % (domain, name)
 
     # ====================
     # === Group object ===
