@@ -1,6 +1,7 @@
 import datetime
 import random
 import impacket
+import struct
 from binascii import hexlify, unhexlify
 
 from pyasn1.codec.der import decoder, encoder
@@ -8,15 +9,17 @@ from pyasn1.type.univ import noValue
 from impacket.krb5 import constants
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
-from impacket.krb5.asn1 import TGS_REP
-from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, KRB_ERROR, AS_REP, seq_set, seq_set_iter
+from impacket.krb5.asn1 import KERB_PA_PAC_REQUEST, AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, PA_PAC_OPTIONS, KRB_ERROR
 from impacket.krb5.kerberosv5 import sendReceive, KerberosError
-from impacket.krb5.types import KerberosTime, Principal
+from impacket.krb5.types import Principal, KerberosTime, Ticket
 from impacket.dcerpc.v5.samr import UF_ACCOUNTDISABLE, UF_DONT_REQUIRE_PREAUTH
 from impacket.ntlm import compute_lmhash, compute_nthash
 from impacket.krb5.kerberosv5 import KerberosError
+from impacket.krb5.crypto import Key, _enctype_table, _HMACMD5
+from six import b
 
 from utils.utils import open
+from utils.output import Output
 
 # Mostly taken from: https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetNPUsers.py
 
@@ -37,6 +40,9 @@ class Kerberos:
             self.nthash = ntlm.split(':')[-1]
         # TODO : use AESKey ?
         self.aesKey = aesKey
+
+    def url(self):
+        return 'krb://%s' % self.hostname
 
     def check_users_dump_asreq(self, ldap, username_file='nofile'):
         def file_gen(username_file):
@@ -458,7 +464,6 @@ class Kerberos:
         seq_set_iter(reqBody, 'etype',
                       (int(cipher.enctype),int(constants.EncryptionTypes.rc4_hmac.value)))
 
-        logging.info('\tRequesting S4U2self')
         Output.highlight({'target': self.url(), 'message': "Requesting S4U2self"})
         message = encoder.encode(tgsReq)
 
@@ -559,7 +564,6 @@ class Kerberos:
                      )
         message = encoder.encode(tgsReq)
 
-        logging.info('\tRequesting S4U2Proxy')
         Output.highlight({'target': self.url(), 'message': "Requesting S4U2Proxy"})
         r = sendReceive(message, domain, kdcHost)
 
