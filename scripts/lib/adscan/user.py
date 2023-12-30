@@ -1,4 +1,7 @@
+import binascii
 from datetime import datetime
+from Cryptodome.Hash import MD4
+from utils.structure import Structure
 from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
@@ -52,6 +55,46 @@ class User:
             user = User(ldap, attr)
 
             yield user
+
+    @classmethod
+    # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
+    def dump_gMSA(self, ldap):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
+        attributes = self.attributes + ['msDS-ManagedPassword']
+
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            user = User(ldap, attr)
+
+            try:
+                data = bytes(attr['msDS-ManagedPassword'])
+                blob = MSDS_MANAGEDPASSWORD_BLOB()
+                blob.fromString(data)
+                hash = MD4.new ()
+                hash.update (blob['CurrentPassword'][:-2])
+                passwd = binascii.hexlify(hash.digest()).decode("utf-8")
+            except KeyError:
+                passwd = 'Error: No msDS-ManagedPassword entry in LDAP'
+            except IndexError:
+                passwd = 'Error: No msDS-ManagedPassword entry in LDAP'
+
+            yield user, passwd
+
+    @classmethod
+    def dump_sMSA(self, ldap):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = "(objectClass=msDS-ManagedServiceAccount)"
+        attributes = self.attributes + ['msDS-HostServiceAccountBL']
+
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            user = User(ldap, attr)
+
+            if 'msDS-HostServiceAccountBL' in attr:
+                target_host = str(attr['msDS-HostServiceAccountBL'])
+            else:
+                target_host = "Not linked to a host"
+
+            yield user, target_host
 
 
     @classmethod
@@ -292,4 +335,39 @@ class User:
             'allowed_to_delegate_to': self.allowed_to_delegate_to,
             'sid_history': self.sid_history,
         }
+ 
+# Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
 
+class MSDS_MANAGEDPASSWORD_BLOB(Structure):
+    structure = (
+        ('Version','<H'),
+        ('Reserved','<H'),
+        ('Length','<L'),
+        ('CurrentPasswordOffset','<H'),
+        ('PreviousPasswordOffset','<H'),
+        ('QueryPasswordIntervalOffset','<H'),
+        ('UnchangedPasswordIntervalOffset','<H'),
+        ('CurrentPassword',':'),
+        ('PreviousPassword',':'),
+        #('AlignmentPadding',':'),
+        ('QueryPasswordInterval',':'),
+        ('UnchangedPasswordInterval',':'),
+    )
+
+    def __init__(self, data = None):
+        Structure.__init__(self, data = data)
+
+    def fromString(self, data):
+        Structure.fromString(self,data)
+
+        if self['PreviousPasswordOffset'] == 0:
+            endData = self['QueryPasswordIntervalOffset']
+        else:
+            endData = self['PreviousPasswordOffset']
+
+        self['CurrentPassword'] = self.rawData[self['CurrentPasswordOffset']:][:endData - self['CurrentPasswordOffset']]
+        if self['PreviousPasswordOffset'] != 0:
+            self['PreviousPassword'] = self.rawData[self['PreviousPasswordOffset']:][:self['QueryPasswordIntervalOffset']-self['PreviousPasswordOffset']]
+
+        self['QueryPasswordInterval'] = self.rawData[self['QueryPasswordIntervalOffset']:][:self['UnchangedPasswordIntervalOffset']-self['QueryPasswordIntervalOffset']]
+        self['UnchangedPasswordInterval'] = self.rawData[self['UnchangedPasswordIntervalOffset']:]
