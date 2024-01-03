@@ -3,12 +3,19 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
 class Host:
-    attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'pwdLastSet', 'msDS-AllowedToDelegateTo', 'msDS-AllowedToActOnBehalfOfOtherIdentity', 'msDS-SupportedEncryptionTypes']
+    attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'pwdLastSet', 'msDS-AllowedToDelegateTo', 'msDS-AllowedToActOnBehalfOfOtherIdentity', 'msDS-SupportedEncryptionTypes', 'ms-Mcs-AdmPwdExpirationTime']
     schema_guid_attributes = ['computer', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
+    schema_guid_dict = None
+
+    @classmethod
+    def get_schema_guid_dict(self, ldap):
+        if self.schema_guid_dict == None:
+            self.schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
+
+        return self.schema_guid_dict
 
     @classmethod
     def list_hosts(self, ldap):
-        schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(objectCategory=computer)'
 
@@ -16,15 +23,57 @@ class Host:
             if not 'sAMAccountName' in attr:
                 continue
 
-            host = Host(ldap, attr, schema_guid_dict)
+            host = Host(ldap, attr)
 
             yield host
+
+    @classmethod
+    def list_constrained_delegations(self, ldap):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = "(msDS-AllowedToDelegateTo=*)"
+        attributes = self.attributes
+
+        for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
+            host = Host(ldap, attr)
+
+            for spn in host.allowed_to_delegate_to:
+                yield host, str(spn)
+
+    @classmethod
+    def list_rbcd(self, ldap):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = "(msDS-AllowedToActOnBehalfOfOtherIdentity=*)"
+        attributes = self.attributes
+
+        for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
+            host = Host(ldap, attr)
+
+            for name in host.allowed_to_act_on_behalf_of_other_identity:
+                yield host, name
+
+
+    @classmethod
+    # Taken from https://github.com/n00py/LAPSDumper/blob/main/laps.py
+    def dump_laps(self, ldap):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = "(&(objectCategory=computer)(ms-Mcs-AdmPwdExpirationTime=*))"
+        attributes = self.attributes + ['ms-Mcs-AdmPwd']
+
+        for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
+            host = Host(ldap, attr)
+
+            if 'ms-Mcs-AdmPwd' in attr:
+                password = str(attr['ms-Mcs-AdmPwd'])
+            else:
+                password = "Error: Unabled to retreive the LAPS password"
+
+            yield host, password
 
     # ===================
     # === Host object ===
     # ===================
 
-    def __init__(self, ldap, attr, schema_guid_dict):
+    def __init__(self, ldap, attr):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.dns = str(attr["dNSHostName"]) if 'dNSHostName' in attr else ''
         self.hostname = str(attr['name'])
@@ -109,9 +158,12 @@ class Host:
         else:
             self.tags.append('KRB-RC4')
 
+        if 'ms-Mcs-AdmPwdExpirationTime' in attr:
+            self.tags.append('LAPS')
+
         # Check the ACEs
         try:
-            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'computer', schema_guid_dict)
+            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'computer', self.get_schema_guid_dict(ldap))
         except KeyError:
             self.aces = {}
 
@@ -136,7 +188,7 @@ class Host:
         # Ressourse-Based Constrained delegation
         self.allowed_to_act_on_behalf_of_other_identity_sids = []
         if 'msDS-AllowedToActOnBehalfOfOtherIdentity' in attr:
-            aces = parse_sd(bytes(attr['msDS-AllowedToActOnBehalfOfOtherIdentity']), self.domain.upper(), 'computer', schema_guid_dict)
+            aces = parse_sd(bytes(attr['msDS-AllowedToActOnBehalfOfOtherIdentity']), self.domain.upper(), 'computer', self.get_schema_guid_dict(ldap))
             for ace in aces['aces']:
                 if ace['RightName'] == 'GenericAll':
                     self.allowed_to_act_on_behalf_of_other_identity_sids.append(ace['PrincipalSID'])

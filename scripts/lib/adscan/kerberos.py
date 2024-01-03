@@ -2,6 +2,7 @@ import datetime
 import random
 import impacket
 import struct
+import os
 from binascii import hexlify, unhexlify
 
 from pyasn1.codec.der import decoder, encoder
@@ -9,7 +10,7 @@ from pyasn1.type.univ import noValue
 from impacket.krb5 import constants
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
-from impacket.krb5.asn1 import KERB_PA_PAC_REQUEST, AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, PA_PAC_OPTIONS, KRB_ERROR
+from impacket.krb5.asn1 import KERB_PA_PAC_REQUEST, AS_REQ, AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, PA_PAC_OPTIONS, KRB_ERROR
 from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 from impacket.krb5.types import Principal, KerberosTime, Ticket
 from impacket.dcerpc.v5.samr import UF_ACCOUNTDISABLE, UF_DONT_REQUIRE_PREAUTH
@@ -38,7 +39,6 @@ class Kerberos:
         else:
             self.lmhash = ntlm.split(':')[0]
             self.nthash = ntlm.split(':')[-1]
-        # TODO : use AESKey ?
         self.aesKey = aesKey
 
     def url(self):
@@ -186,23 +186,24 @@ class Kerberos:
 
     def getFromEnv(self):
         if os.getenv('KRB5CCNAME') == None:
-            return domain, username, None, None
+            return None, None
         ccache = CCache.loadFile(os.getenv('KRB5CCNAME'))
         if ccache is None:
-            return domain, username, None, None
+            return None, None
 
-        if domain == '':
-            domain = ccache.principal.realm['data'].decode('utf-8')
+        self.domain = ccache.principal.realm['data'].decode('utf-8')
 
         creds = None
+        """
         if target != '':
             principal = '%s@%s' % (target.upper(), domain.upper())
             creds = ccache.getCredential(principal)
+        """
 
         TGT = None
         TGS = None
         if creds is None:
-            principal = 'krbtgt/%s@%s' % (domain.upper(), domain.upper())
+            principal = 'krbtgt/%s@%s' % (self.domain.upper(), self.domain.upper())
             creds = ccache.getCredential(principal)
             if creds is not None:
                 TGT = creds.toTGT()
@@ -211,12 +212,12 @@ class Kerberos:
         else:
             TGS = creds.toTGS(principal)
 
-        if username == '' and creds is not None:
-            username = creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
-        elif username == '' and len(ccache.principal.components) > 0:
-            username = ccache.principal.components[0]['data'].decode('utf-8')
+        if self.username == '' and creds is not None:
+            self.username = creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
+        elif self.username == '' and len(ccache.principal.components) > 0:
+            self.username = ccache.principal.components[0]['data'].decode('utf-8')
 
-        return domain, username, TGT, TGS
+        return TGT, TGS
 
     def getTGT(self):
         TGT = None
@@ -228,17 +229,11 @@ class Kerberos:
             # In order to maximize the probability of getting session tickets with RC4 etype, we will convert the
             # password to ntlm hashes (that will force to use RC4 for the TGT). If that doesn't work, we use the
             # cleartext password.
-            # If no clear text password is provided, we just go with the defaults.
-            if self.password != '' and (self.lmhash == '' and self.nthash == ''):
-                    tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(userName, '', self.domain,
-                                                                    compute_lmhash(self.password),
-                                                                    compute_nthash(self.password), self.aesKey,
-                                                                    kdcHost=self.hostname)
-            else:
-                tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(userName, self.password, self.domain,
+            tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(userName, self.password, self.domain,
                                                                     unhexlify(self.lmhash),
                                                                     unhexlify(self.nthash), self.aesKey,
                                                                     kdcHost=self.hostname)
+
             TGT = {}
             TGT['KDC_REP'] = tgt
             TGT['cipher'] = cipher

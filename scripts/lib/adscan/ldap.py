@@ -7,6 +7,7 @@ import traceback
 import base64
 import sys
 import time
+from uuid import UUID
 from datetime import datetime
 from utils.structure import Structure
 from Cryptodome.Hash import MD4
@@ -88,6 +89,8 @@ class LDAPScan:
             if not connected:
                 return False, None
         except ldap3.core.exceptions.LDAPSocketOpenError:
+            return False, None
+        except ldap3.core.exceptions.LDAPInvalidPortError:
             return False, None
 
         self.defaultdomainnamingcontext = c.server.info.other['defaultNamingContext'][0]
@@ -696,23 +699,30 @@ class LDAPScan:
         return guid_dict, rev_guid_dict
 
 
+    
     # Impacket LDAP does not support binary search
+    guid_dict = {}
     def resolve_guid(self, guid):
-        guid = guid.hex()
+        if guid in self.guid_dict:
+            return self.guid_dict[guid]
 
-        guid_ldap = ''.join(['\\%s' % guid[i:i+2] for i in range(0, len(guid), 2)])
+        # Resolve as a Control access right:
+        searchBase = self.configurationnamingcontext
+        search_filter = "(RightsGUID=%s)" % guid 
 
-        search_filter = "(schemaIDGUID=%s)" % guid_ldap
+        for attr in self.query_ldap3_generator(searchBase, search_filter, ['name']):
+            self.guid_dict[guid] = attr['name']
+            return attr['name']
+
+        guid_ldap = ''.join(['\\%02x' % d for d in UUID(guid).bytes_le])
         searchBase = self.schemanamingcontext
+        search_filter = "(schemaIDGUID=%s)" % guid_ldap
 
-        sc = ldap.SimplePagedResultsControl(size=10)
-        res = self.conn.search(searchBase=searchBase, searchFilter=search_filter, searchControls=[sc], attributes=['name'])
+        for attr in self.query_ldap3_generator(searchBase, search_filter, ['name', 'lDAPDisplayName']):
+            self.guid_dict[guid] = attr['lDAPDisplayName']
+            return attr['lDAPDisplayName']
 
-        for item in res:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                continue
-
-            attr = self.to_dict_impacket(item)
+        return None
 
     def resolve_dn_to_sid(self, dn_list):
         to_resolve = []
@@ -794,401 +804,7 @@ class LDAPScan:
                 'applies_to': applies_to,
             }
 
-    # TODO : add to a adcs.py file
-    def list_casrv(self, callback):
-
-        def process(attr):
-            name = str(attr['name'])
-            dns = str(attr['dNSHostName'])
-
-            callback({"name": name, "hostname": dns})
-
-        sbase = "CN=Enrollment Services,CN=Public Key Services,CN=Services,%s" % self.configurationnamingcontext
-        search_filter="(objectClass=pKIEnrollmentService)"
-        attributes = ['distinguishedName', 'name', 'dNSHostName']
-        self.query(process, sbase, search_filter, attributes, query_sd=False)
-
-    # TODO : add to a adcs.py file
-    def list_cacerts(self, callback):
-
-
-        def process(attr):
-
-            if type(attr['cACertificate']) != list:
-                attr['cACertificate'] = [attr['cACertificate']]
-            for cert_bytes in attr['cACertificate']:
-                cert_bytes = bytes(cert_bytes)
-                cert = x509.load_der_x509_certificate(cert_bytes)
-
-                common_names = [cn.value for cn in cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)]
-
-                public_key = cert.public_key()
-                if type(public_key) in [RSAPublicKey, _RSAPublicKey]:
-                    cert_algo = "RSA %d" % public_key.key_size
-                    #elif type(public_key) in [DSAPublicKey, _DSAPublicKey]:
-                    #cert_algo = "DSA %d" % public_key.key_size
-                elif type(public_key) in [EllipticCurvePublicKey, _EllipticCurvePublicKey]:
-                    cert_algo = "EC %d" % public_key.key_size
-                else:
-                    cert_algo = "Unknown: %s" % type(public_key)
-
-                callback({
-                    'algo': cert_algo,
-                    'common_names': common_names,
-                })
-
-        sbase = 'CN=NTAuthCertificates,CN=Public Key Services,CN=Services,%s' % self.configurationnamingcontext
-        search_filter = '(cn=*)'
-        attributes = ['distinguishedName', 'cACertificate']
-        self.query(process, sbase, search_filter, attributes, query_sd=False)
-
-    # TODO : add to a adcs.py file
-    def list_enrollment_services(self, callback, username=None):
-        if username:
-            sid_groups = list(self._get_groups_recursive(username).keys())
-            sid_groups.append('S-1-1-0')
-            sid_groups.append('S-1-5-11')
-        else:
-            sid_groups = None
-
-        def process(attr):
-
-            name = str(attr['name'])
-            dns = str(attr['dNSHostName'])
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-
-            if 'certificateTemplates' in attr:
-                if not type(attr['certificateTemplates']) == list:
-                    attr['certificateTemplates'] = [attr['certificateTemplates']]
-
-                templates = [str(t) for t in attr['certificateTemplates']]
-            else:
-                templates = []
-
-            output = {
-                'name': name,
-                'domain': domain,
-                'dns': dns, 
-                'templates': templates,
-            }
-
-
-            if sid_groups:
-                # Check if the user has enrollment rights
-                if 'nTSecurityDescriptor' in attr:
-                    sd = bytes(attr['nTSecurityDescriptor'])
-                else:
-                    return
-
-                output['can_enroll'] = False
-
-                for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
-                    if ace['type'] == 'ALLOWED' and 'Certificate-Enrollment' in ace['rights'] and ace['sid'] in sid_groups:
-                        output['can_enroll'] = True
-
-            callback(output)
-
-        sbase = 'CN=Enrollment Services,CN=Public Key Services,CN=Services,%s' % self.configurationnamingcontext
-        search_filter = '(objectClass=pKIEnrollmentService)'
-        attributes = ['distinguishedName', 'name', 'dNSHostName', 'certificateTemplates', 'nTSecurityDescriptor']
-        self.query(process, sbase, search_filter, attributes, query_sd=False)
-
-    # TODO : add to a adcs.py file
-    def list_cert_templates(self, callback):
-
-        # https://www.pkisolutions.com/object-identifiers-oid-in-pki/
-        oid_map = {
-            "1.3.6.1.4.1.311.76.6.1": "Windows Update",
-            "1.3.6.1.4.1.311.10.3.11": "Key Recovery",
-            "1.3.6.1.4.1.311.10.3.25": "Windows Third Party Application Component",
-            "1.3.6.1.4.1.311.21.6": "Key Recovery Agent",
-            "1.3.6.1.4.1.311.10.3.6": "Windows System Component Verification",
-            "1.3.6.1.4.1.311.61.4.1": "Early Launch Antimalware Drive",
-            "1.3.6.1.4.1.311.10.3.23": "Windows TCB Component",
-            "1.3.6.1.4.1.311.61.1.1": "Kernel Mode Code Signing",
-            "1.3.6.1.4.1.311.10.3.26": "Windows Software Extension Verification",
-            "2.23.133.8.3": "Attestation Identity Key Certificate",
-            "1.3.6.1.4.1.311.76.3.1": "Windows Store",
-            "1.3.6.1.4.1.311.10.6.1": "Key Pack Licenses",
-            "1.3.6.1.4.1.311.20.2.2": "Smart Card Logon",
-            "1.3.6.1.5.2.3.5": "KDC Authentication",
-            "1.3.6.1.5.5.7.3.7": "IP security use",
-            "1.3.6.1.4.1.311.10.3.8": "Embedded Windows System Component Verification",
-            "1.3.6.1.4.1.311.10.3.20": "Windows Kits Component",
-            "1.3.6.1.5.5.7.3.6": "IP security tunnel termination",
-            "1.3.6.1.4.1.311.10.3.5": "Windows Hardware Driver Verification",
-            "1.3.6.1.5.5.8.2.2": "IP security IKE intermediate",
-            "1.3.6.1.4.1.311.10.3.39": "Windows Hardware Driver Extended Verification",
-            "1.3.6.1.4.1.311.10.6.2": "License Server Verification",
-            "1.3.6.1.4.1.311.10.3.5.1": "Windows Hardware Driver Attested Verification",
-            "1.3.6.1.4.1.311.76.5.1": "Dynamic Code Generato",
-            "1.3.6.1.5.5.7.3.8": "Time Stamping",
-            "1.3.6.1.4.1.311.10.3.4.1": "File Recovery",
-            "1.3.6.1.4.1.311.2.6.1": "SpcRelaxedPEMarkerCheck",
-            "2.23.133.8.1": "Endorsement Key Certificate",
-            "1.3.6.1.4.1.311.2.6.2": "SpcEncryptedDigestRetryCount",
-            "1.3.6.1.4.1.311.10.3.4": "Encrypting File System",
-            "1.3.6.1.5.5.7.3.1": "Server Authentication",
-            "1.3.6.1.4.1.311.61.5.1": "HAL Extension",
-            "1.3.6.1.5.5.7.3.4": "Secure Email",
-            "1.3.6.1.5.5.7.3.5": "IP security end system",
-            "1.3.6.1.4.1.311.10.3.9": "Root List Signe",
-            "1.3.6.1.4.1.311.10.3.30": "Disallowed List",
-            "1.3.6.1.4.1.311.10.3.19": "Revoked List Signe",
-            "1.3.6.1.4.1.311.10.3.21": "Windows RT Verification",
-            "1.3.6.1.4.1.311.10.3.10": "Qualified Subordination",
-            "1.3.6.1.4.1.311.10.3.12": "Document Signing",
-            "1.3.6.1.4.1.311.10.3.24": "Protected Process Verification",
-            "1.3.6.1.4.1.311.80.1": "Document Encryption",
-            "1.3.6.1.4.1.311.10.3.22": "Protected Process Light Verification",
-            "1.3.6.1.4.1.311.21.19": "Directory Service Email Replication",
-            "1.3.6.1.4.1.311.21.5": "Private Key Archival",
-            "1.3.6.1.4.1.311.10.5.1": "Digital Rights",
-            "1.3.6.1.4.1.311.10.3.27": "Preview Build Signing",
-            "1.3.6.1.4.1.311.20.2.1": "Certificate Request Agent",
-            "2.23.133.8.2": "Platform Certificate",
-            "1.3.6.1.4.1.311.20.1": "CTL Usage",
-            "1.3.6.1.5.5.7.3.9": "OCSP Signing",
-            "1.3.6.1.5.5.7.3.3": "Code Signing",
-            "1.3.6.1.4.1.311.10.3.1": "Microsoft Trust List Signing",
-            "1.3.6.1.4.1.311.10.3.2": "Microsoft Time Stamping",
-            "1.3.6.1.4.1.311.76.8.1": "Microsoft Publishe",
-            "1.3.6.1.5.5.7.3.2": "Client Authentication",
-            "1.3.6.1.5.2.3.4": "PKIINIT Client Authentication",
-            "1.3.6.1.4.1.311.10.3.13": "Lifetime Signing",
-            "2.5.29.37.0": "Any Purpose",
-            "1.3.6.1.4.1.311.64.1.1": "Server Trust",
-            "1.3.6.1.4.1.311.10.3.7": "OEM Windows System Component Verification",
-        }
-
-        certificate_name_flag_map = {
-            0x1: 'ENROLLEE_SUPPLIES_SUBJECT',
-            0x2: 'ADD_EMAIL',
-            0x4: 'ADD_OBJ_GUID',
-            0x8: 'OLD_CERT_SUPPLIES_SUBJECT_AND_ALT_NAME',
-            0x100: 'ADD_DIRECTORY_PATH',
-            0x10000: 'ENROLLEE_SUPPLIES_SUBJECT_ALT_NAME',
-            0x400000: 'SUBJECT_ALT_REQUIRE_DOMAIN_DNS',
-            0x800000: 'SUBJECT_ALT_REQUIRE_SPN',
-            0x1000000: 'SUBJECT_ALT_REQUIRE_DIRECTORY_GUID',
-            0x2000000: 'SUBJECT_ALT_REQUIRE_UPN',
-            0x4000000: 'SUBJECT_ALT_REQUIRE_EMAIL',
-            0x8000000: 'SUBJECT_ALT_REQUIRE_DNS',
-            0x10000000: 'SUBJECT_REQUIRE_DNS_AS_CN',
-            0x20000000: 'SUBJECT_REQUIRE_EMAIL',
-            0x40000000: 'SUBJECT_REQUIRE_COMMON_NAME',
-            0x80000000: 'SUBJECT_REQUIRE_DIRECTORY_PATH',
-        }
-
-        enrollment_flag_map = {
-            0x1: 'INCLUDE_SYMMETRIC_ALGORITHMS',
-            0x2: 'PEND_ALL_REQUESTS',
-            0x4: 'PUBLISH_TO_KRA_CONTAINER',
-            0x8: 'PUBLISH_TO_DS',
-            0x10: 'AUTO_ENROLLMENT_CHECK_USER_DS_CERTIFICATE',
-            0x20: 'AUTO_ENROLLMENT',
-            0x80: 'CT_FLAG_DOMAIN_AUTHENTICATION_NOT_REQUIRED',
-            0x40: 'PREVIOUS_APPROVAL_VALIDATE_REENROLLMENT',
-            0x100: 'USER_INTERACTION_REQUIRED',
-            0x200: 'ADD_TEMPLATE_NAME',
-            0x400: 'REMOVE_INVALID_CERTIFICATE_FROM_PERSONAL_STORE',
-            0x800: 'ALLOW_ENROLL_ON_BEHALF_OF',
-            0x1000: 'ADD_OCSP_NOCHECK',
-            0x2000: 'ENABLE_KEY_REUSE_ON_NT_TOKEN_KEYSET_STORAGE_FULL',
-            0x4000: 'NOREVOCATIONINFOINISSUEDCERTS',
-            0x8000: 'INCLUDE_BASIC_CONSTRAINTS_FOR_EE_CERTS',
-            0x10000: 'ALLOW_PREVIOUS_APPROVAL_KEYBASEDRENEWAL_VALIDATE_REENROLLMENT',
-            0x20000: 'ISSUANCE_POLICIES_FROM_REQUEST',
-            0x40000: 'SKIP_AUTO_RENEWAL',
-        }
-
-        schema_guid_dict = self.generate_guid_dict(all=False)
-
-        def process(attr):
-
-            name = str(attr['name'])
-
-            eku = []
-            if 'pKIExtendedKeyUsage' in attr:
-                if type(attr['pKIExtendedKeyUsage']) != list:
-                    attr['pKIExtendedKeyUsage'] = [attr['pKIExtendedKeyUsage']]
-
-                for oid in attr['pKIExtendedKeyUsage']:
-                    if str(oid) in oid_map:
-                        eku.append(oid_map[str(oid)])
-                    else:
-                        eku.append(str(oid))
-
-            cert_name_flag = []
-            if 'msPKI-Certificate-Name-Flag' in attr:
-                for val, n in certificate_name_flag_map.items():
-                    if val & int(attr['msPKI-Certificate-Name-Flag']) == val:
-                        cert_name_flag.append(n)
-
-            enrollment_flag = []
-            if 'msPKI-Enrollment-Flag' in attr:
-                for val, n in enrollment_flag_map.items():
-                    if val & int(attr['msPKI-Enrollment-Flag']) == val:
-                        enrollment_flag.append(n)
-
-            authorized_signature_required = False
-            if 'msPKI-RA-Signature' in attr:
-                if int(attr['msPKI-RA-Signature']) > 0:
-                    authorized_signature_required = True
-
-            enrollment_rights = []
-            privileges = []
-            if 'nTSecurityDescriptor' in attr:
-                sd = bytes(attr['nTSecurityDescriptor'])
-            else:
-                return
-
-            for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
-                ace['target'] = name
-                if 'Certificate-Enrollment' in ace['rights']:
-                    if ace['type'] == 'ALLOWED':
-                        enrollment_rights.append(ace)
-
-                    continue
-
-                if 'guid' in ace and ace['guid'] in schema_guid_dict:
-                    ace['parameter'] = schema_guid_dict[ace['guid']]
-
-                privileges.append(ace)
-
-            callback({
-                'name': name,
-                'eku': eku, 
-                'cert_name_flag': cert_name_flag,
-                'enrollment_flag': enrollment_flag,
-                'enrollment_rights': enrollment_rights,
-                'authorized_signature_required': authorized_signature_required,
-                'privileges': privileges,
-            })
-
-        sbase = 'CN=Certificate Templates,CN=Public Key Services,CN=Services,%s' % self.configurationnamingcontext
-        search_filter = '(objectClass=pKICertificateTemplate)'
-        attributes = ['distinguishedName', 'name', 'pKIExtendedKeyUsage', 'msPKI-Certificate-Name-Flag', 'msPKI-Enrollment-Flag', 'msPKI-RA-Signature', 'nTSecurityDescriptor']
-        self.query(process, sbase, search_filter, attributes, query_sd=False)
-
-    def list_acls(self, username, callback, all=False):
-
-        # First, get all related groups
-        sid_groups = list(self._get_groups_recursive(username).keys())
-        sid_groups.append('S-1-1-0')
-        sid_groups.append('S-1-5-11')
-
-        schema_guid_dict = self.generate_guid_dict(all=all)
-
-        class SdFlags(Sequence):
-             # SDFlagsRequestValue ::= SEQUENCE {
-             #     Flags    INTEGER
-             # }
-            componentType = NamedTypes(NamedType('Flags', Integer())
-        )
-
-        def get_sd_controls(sdflags=0x04):
-            sdcontrol = SdFlags()
-            sdcontrol.setComponentByName('Flags', sdflags)
-            controls = [build_control('1.2.840.113556.1.4.801', True, sdcontrol)]
-            return controls
-
-        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(|(objectClass=user)(objectClass=group)(objectClass=computer))", attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership'], searchControls=[sc], sizeLimit=0)
-
-        for item in resp:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
-
-            attr = self.to_dict_impacket(item)
-
-            if 'nTSecurityDescriptor' in attr:
-                sd = bytes(attr['nTSecurityDescriptor'])
-            else:
-                return
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            name = str(attr['sAMAccountName'])
-
-            for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
-                if ace['sid'] in sid_groups:
-                    ace['target'] = '%s\\%s' % (domain, name)
-                    if 'guid' in ace and ace['guid'] in schema_guid_dict:
-                        ace['parameter'] = schema_guid_dict[ace['guid']]
-
-                    if all:
-                        callback(ace)
-                    else:
-                        # Only send results with  no guid or specific guids (returned by the function generate_guid_dict)
-                        if not 'guid' in ace:
-                            callback(ace)
-                        if 'parameter' in ace:
-                            callback(ace)
-
-            if 'msDS-GroupMSAMembership' in attr:
-                sd = bytes(attr['msDS-GroupMSAMembership'])
-
-                for ace in parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext)):
-                    ace['target'] = '%s\\%s' % (domain, name)
-                    if 'guid' in ace and ace['guid'] in schema_guid_dict:
-                        ace['parameter'] = schema_guid_dict[ace['guid']]
-
-                    if all:
-                        callback(ace)
-                    else:
-                        # Only send results with  no guid or specific guids (returned by the function generate_guid_dict)
-                        if not 'guid' in ace:
-                            callback(ace)
-                        if 'parameter' in ace:
-                            callback(ace)
-
-    def list_constrained_delegations(self, callback):
-
-        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(msDS-AllowedToDelegateTo=*)", attributes=['distinguishedName', 'sAMAccountName', 'msDS-AllowedToDelegateTo'], sizeLimit=0)
-
-        for item in resp:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
-
-            attr = self.to_dict_impacket(item)
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            name = str(attr['sAMAccountName'])
-            spn = str(attr['msDS-AllowedToDelegateTo'])
-
-            callback({
-                'domain': domain,
-                'name': name,
-                'spn': spn,
-            })
-
-
-
-    def list_object_acl(self, object_acl, callback, all=False):
-        if object_acl.startswith('S-'):
-            search_filter="(objectsid=%s)" % object_acl
-        elif object_acl.lower().startswith('cn=') or object_acl.lower().startswith('dc='):
-            search_filter="(distinguishedName=%s)" % object_acl
-        elif object_acl.startswith('(') and object_acl.endswith(')'):
-            search_filter=object_acl
-        else:
-            search_filter="(|(sAMAccountName=%s)(name=%s))" % (object_acl, object_acl)
-
-        class SdFlags(Sequence):
-             # SDFlagsRequestValue ::= SEQUENCE {
-             #     Flags    INTEGER
-             # }
-            componentType = NamedTypes(NamedType('Flags', Integer())
-        )
-
-        def get_sd_controls(sdflags=0x04):
-            sdcontrol = SdFlags()
-            sdcontrol.setComponentByName('Flags', sdflags)
-            controls = [build_control('1.2.840.113556.1.4.801', True, sdcontrol)]
-            return controls
-
-        #schema_guid_dict = self.generate_guid_dict(all=all)
-
+    def list_object_acl(self, object_acl):
         if self.schemanamingcontext.lower() in object_acl.lower():
             searchBase = self.schemanamingcontext
         elif self.configurationnamingcontext.lower() in object_acl.lower():
@@ -1200,17 +816,23 @@ class LDAPScan:
         else:
             searchBase = self.defaultdomainnamingcontext
 
-        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        resp = self.conn.search(searchBase=searchBase, searchFilter=search_filter, attributes=['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'name', 'msDS-GroupMSAMembership', 'objectClass'], searchControls=[sc], sizeLimit=0)
+        if object_acl.startswith('S-'):
+            search_filter="(objectsid=%s)" % object_acl
+        elif object_acl.startswith('CN='):
+            object_acl = object_acl.replace('(', '\\28')
+            object_acl = object_acl.replace(')', '\\29')
+            search_filter="(distinguishedName=%s)" % object_acl
+        else:
+            search_filter="(sAMAccountName=%s)" % object_acl
 
-        for item in resp:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
+        attributes = ['distinguishedName', 'sAMAccountName', 'nTSecurityDescriptor', 'name', 'msDS-GroupMSAMembership', 'objectClass']
 
-            attr = self.to_dict_impacket(item)
+        guid_to_name = {}
+        ace_list = []
 
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
+        for attr in self.query_generator(searchBase, search_filter, attributes, query_sd=True):
 
+            domain = self.dn_to_domain(str(attr['distinguishedName']))
 
             if 'sAMAccountName' in attr:
                 target = "%s\\%s" % (domain, str(attr['sAMAccountName']))
@@ -1222,152 +844,34 @@ class LDAPScan:
                 parsed_ace = parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext))
                 for ace in parsed_ace:
                     ace['target'] = target
-                    if 'guid' in ace and ace['guid'] in extended_rights:
-                        ace['parameter'] = extended_rights[ace['guid']]
+                    if 'guid' in ace:
+                        guid_to_name[ace['guid']] = None
 
-                    if all:
-                        callback(ace)
-                    else:
-                        # Only send results with  no guid or specific guids (returned by the function generate_guid_dict)
-                        if not 'guid' in ace:
-                            callback(ace)
-                        if 'parameter' in ace:
-                            callback(ace)
+                    ace_list.append(ace)
 
             if 'msDS-GroupMSAMembership' in attr:
                 sd = bytes(attr['msDS-GroupMSAMembership'])
 
-                parsed_ace = parse_sd(sd, domain, object_type, schema_guid_dict)
+                parsed_ace = parse_accesscontrol(sd, (self.conn, self.defaultdomainnamingcontext))
                 for ace in parsed_ace:
                     ace['target'] = target
-                    if 'guid' in ace and ace['guid'] in schema_guid_dict:
-                        ace['parameter'] = schema_guid_dict[ace['guid']]
 
-                    if all:
-                        callback(ace)
-                    else:
-                        # Only send results with  no guid or specific guids (returned by the function generate_guid_dict)
-                        if not 'guid' in ace:
-                            callback(ace)
-                        if 'parameter' in ace:
-                            callback(ace)
+                    if 'GenericAll' in ace['rights']:
+                        ace['rights'] = ['ReadGMSAPassword']
+                        ace_list.append(ace)
 
+            # Return only the first result
+            break
 
-    """
-    def dump_gMSA(self, callback):
+        for guid in guid_to_name:
+            guid_to_name[guid] = self.resolve_guid(guid)
 
-        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectClass=msDS-GroupManagedServiceAccount)", attributes=['distinguishedName', 'sAMAccountName','msDS-ManagedPassword'], sizeLimit=0)
+        for ace in ace_list:
+            if 'guid' in ace and guid_to_name[ace['guid']] != None:
+                ace['parameter'] = guid_to_name[ace['guid']]
 
-        for item in resp:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
+        # Send the owner first
+        yield ace_list[0]
+        for ace in sorted(ace_list[1:], key=lambda d: d['name']):       
+            yield ace
 
-            attr = self.to_dict_impacket(item)
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            username = str(attr['sAMAccountName'])
-            try:
-                data = bytes(attr['msDS-ManagedPassword'])
-                blob = MSDS_MANAGEDPASSWORD_BLOB()
-                blob.fromString(data)
-                hash = MD4.new ()
-                hash.update (blob['CurrentPassword'][:-2])
-                passwd = binascii.hexlify(hash.digest()).decode("utf-8")
-            except KeyError:
-                passwd = 'Error: No msDS-ManagedPassword entry in LDAP'
-            except IndexError:
-                passwd = 'Error: No msDS-ManagedPassword entry in LDAP'
-
-            callback({
-                'domain': domain,
-                'username': username,
-                'password': passwd,
-            })
-
-    def dump_sMSA(self, callback):
-
-        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(objectClass=msDS-ManagedServiceAccount)", attributes=['distinguishedName', 'sAMAccountName','msDS-HostServiceAccountBL'], sizeLimit=0)
-
-        for item in resp:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
-
-            attr = self.to_dict_impacket(item)
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            username = str(attr['sAMAccountName'])
-            if 'msDS-HostServiceAccountBL' in attr:
-                target_host = str(attr['msDS-HostServiceAccountBL'])
-            else:
-                target_host = "Not linked to a host"
-
-            callback({
-                'domain': domain,
-                'username': username,
-                'target_host': target_host,
-            })
-    """
-
-
-
-    # Taken from https://github.com/n00py/LAPSDumper/blob/main/laps.py
-    def dump_LAPS(self, callback):
-        
-        sc = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        resp = self.conn.search(searchBase=self.defaultdomainnamingcontext, searchFilter="(&(objectCategory=computer)(ms-Mcs-AdmPwdExpirationTime=*))", searchControls=[sc], attributes=['distinguishedName', 'dNSHostName', 'sAMAccountName', 'ms-Mcs-AdmPwd', 'Set-AdmPwdReadPasswordPermission'], sizeLimit=0)
-
-        for item in resp:
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
-
-            attr = self.to_dict_impacket(item)
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            dns = str(attr['dNSHostName'])
-            username = str(attr['sAMAccountName'])
-            data = {
-                    'domain': domain,
-                    'username': username,
-                    'dns': dns,
-            }
-
-            if 'ms-Mcs-AdmPwd' in attr: 
-                data['password'] = str(attr['ms-Mcs-AdmPwd'])
-
-            callback(data)
-     
-# Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
-
-class MSDS_MANAGEDPASSWORD_BLOB(Structure):
-    structure = (
-        ('Version','<H'),
-        ('Reserved','<H'),
-        ('Length','<L'),
-        ('CurrentPasswordOffset','<H'),
-        ('PreviousPasswordOffset','<H'),
-        ('QueryPasswordIntervalOffset','<H'),
-        ('UnchangedPasswordIntervalOffset','<H'),
-        ('CurrentPassword',':'),
-        ('PreviousPassword',':'),
-        #('AlignmentPadding',':'),
-        ('QueryPasswordInterval',':'),
-        ('UnchangedPasswordInterval',':'),
-    )
-
-    def __init__(self, data = None):
-        Structure.__init__(self, data = data)
-
-    def fromString(self, data):
-        Structure.fromString(self,data)
-
-        if self['PreviousPasswordOffset'] == 0:
-            endData = self['QueryPasswordIntervalOffset']
-        else:
-            endData = self['PreviousPasswordOffset']
-
-        self['CurrentPassword'] = self.rawData[self['CurrentPasswordOffset']:][:endData - self['CurrentPasswordOffset']]
-        if self['PreviousPasswordOffset'] != 0:
-            self['PreviousPassword'] = self.rawData[self['PreviousPasswordOffset']:][:self['QueryPasswordIntervalOffset']-self['PreviousPasswordOffset']]
-
-        self['QueryPasswordInterval'] = self.rawData[self['QueryPasswordIntervalOffset']:][:self['UnchangedPasswordIntervalOffset']-self['QueryPasswordIntervalOffset']]
-        self['UnchangedPasswordInterval'] = self.rawData[self['UnchangedPasswordIntervalOffset']:]

@@ -63,7 +63,7 @@ class User:
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
         attributes = self.attributes + ['msDS-ManagedPassword']
 
-        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+        for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
             user = User(ldap, attr)
 
             try:
@@ -86,7 +86,7 @@ class User:
         search_filter = "(objectClass=msDS-ManagedServiceAccount)"
         attributes = self.attributes + ['msDS-HostServiceAccountBL']
 
-        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+        for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
             user = User(ldap, attr)
 
             if 'msDS-HostServiceAccountBL' in attr:
@@ -98,7 +98,7 @@ class User:
 
 
     @classmethod
-    def get_groups_recursive(self, ldap, name, groups={}, processed=[], group_only=False):
+    def get_groups_recursive(self, ldap, name, groups={}, processed=[]):
         from lib.adscan.group import Group
 
         sbase = ldap.defaultdomainnamingcontext
@@ -129,9 +129,7 @@ class User:
                 object_class = [str(attr['objectClass'])]
 
             # Processed, add it to list
-            if not group_only: # get users and groups, basically includes the initial user queried
-                raise NotImplementedError("group_only = False")
-            elif group_only and 'group' in object_class:
+            if 'group' in object_class:
                 if not sid in groups:
                     groups[sid] = Group(ldap, attr)
                 
@@ -153,7 +151,7 @@ class User:
             if not g in processed:
                 processed.append(g)
 
-                User.get_groups_recursive(ldap, g, groups=groups, processed=processed, group_only=group_only)
+                User.get_groups_recursive(ldap, g, groups=groups, processed=processed)
 
         return groups
 

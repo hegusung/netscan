@@ -98,6 +98,7 @@ def process_sid(domain_name, sid):
 
     return sid
 
+# Puts the security descriptor in the bloodhound format
 def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
     sd = SR_SECURITY_DESCRIPTOR()
     sd.fromString(sd_bytes)
@@ -267,15 +268,15 @@ def parse_object_ace(mask, ace):
         guid = calculate_guid(ace['ObjectType'])
         #guid = bytes(ace['ObjectType'])
 
-        if guid in extended_rights:
-            out.append(extended_rights[guid])
+        #if guid in extended_rights:
+        #    out.append(extended_rights[guid])
     else:
-        guid = 'N/A'
+        guid = None
 
     if len(ace['InheritedObjectType']) == 16:
         i_guid = calculate_guid(ace['InheritedObjectType'])
     else:
-        i_guid = 'N/A'
+        i_guid = None
 
     return out, guid, i_guid, flags
 

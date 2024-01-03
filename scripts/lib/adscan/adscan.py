@@ -29,6 +29,7 @@ from .group import Group
 from .host import Host
 from .dns import DNS
 from .trust import Trust
+from .adcs import ADCS
 
 from utils.output import Output
 from utils.utils import check_ip, AuthFailure
@@ -664,13 +665,15 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 if ldap_authenticated:
                     # First, get our TGT
                     if 'kerberos' in creds:
-                        raise NotImplementedError("kerberoasting using a Kerberos ticket")
+                        kerberos = Kerberos(target['hostname'], "")
+                        TGT, _ = kerberos.getFromEnv()
                     elif 'password' in creds_smb:
                         kerberos = Kerberos(target['hostname'], domain, username=username, password=password)
+                        TGT = kerberos.getTGT()
                     elif 'hash' in creds_smb:
                         kerberos = Kerberos(target['hostname'], domain, username=username, ntlm=ntlm)
+                        TGT = kerberos.getTGT()
 
-                    TGT = kerberos.getTGT()
                     if TGT != None:
 
                         for user_spn in User.list_spns(ldapscan):
@@ -865,23 +868,19 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 else:
                     raise NotImplementedError('Dumping GPOs through SMB')
 
-            # TODO: create ca.py file
             if 'casrv' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'ADCS servers:'})
                 if ldap_authenticated:
-                    def callback(entry):
-                        Output.write({'target': ldapscan.url(), 'message': '- %s %s' % (entry['name'].ljust(30), entry['hostname'])})
-                    ldapscan.list_casrv(callback)
+                    for entry in ADCS.list_adcs_servers(ldapscan):
+                        Output.write({'target': ldapscan.url(), 'message': '- %s %s' % (entry['name'].ljust(30), entry['dns'])})
                 else:
                     raise NotImplementedError('Dumping CA servers through SMB')
 
-            # TODO: create ca.py file
             if 'ca_certs' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'CA certs:'})
                 if ldap_authenticated:
-                    def callback(entry):
+                    for entry in ADCS.list_adcs_certs(ldapscan):
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['algo'].ljust(30), ','.join(entry['common_names']))})
-                    ldapscan.list_cacerts(callback)
                 else:
                     raise NotImplementedError('Dumping CA Cert through SMB')
 
@@ -912,18 +911,16 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'description': vuln['description'],
                         })
 
-            # TODO: create ca.py file
             if 'cert_templates' in actions:
                 if ldap_authenticated:
                     enrollment_services = []
-                    def callback(entry):
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
+                    for entry in ADCS.list_adcs_servers(ldapscan):
                         enrollment_services.append(entry)
                         Output.write({'target': ldapscan.url(), 'message': "- %s   %s" % (entry['name'].ljust(30), entry['dns'])})
 
-                    Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
-                    ldapscan.list_enrollment_services(callback)
-
-                    def callback(entry):
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Certificate templates:'})
+                    for entry in ADCS.list_adcs_templates(ldapscan):
                         enabled = False
                         enrollment_service = None
                         for e_s in enrollment_services:
@@ -938,8 +935,6 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)" % (entry['name'].ljust(30),)})
 
 
-                    Output.highlight({'target': ldapscan.url(), 'message': 'Certificate templates:'})
-                    ldapscan.list_cert_templates(callback)
                 else:
                     raise NotImplementedError('Dumping hosts through LDAP')
 
@@ -971,14 +966,27 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             if writable:
                                 Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(40), entry['gpcpath'])})
 
-            # TODO: add list_constrained_delegation and list_rbcd in host.py
             if 'constrained_delegation' in actions:
-                Output.highlight({'target': ldapscan.url(), 'message': 'Constrained delegation (S4U2Proxy):'})
+                Output.highlight({'target': ldapscan.url(), 'message': 'Constrained delegation:'})
                 if ldap_authenticated:
-                    def callback(entry):
-                        account = '%s\\%s' % (entry['domain'], entry['name'])
-                        Output.write({'target': ldapscan.url(), 'message': '- %s  -> %s' % (account.ljust(40), entry['spn'])})
-                    ldapscan.list_constrained_delegations(callback)
+                    for host, spn in Host.list_constrained_delegations(ldapscan):
+                        entry = host.to_json()
+                        account = '%s\\%s' % (entry['domain'], entry['hostname'])
+
+                        if 'Trusted to auth for delegation' in entry['tags']:
+                            cd_type = "S4U2Self + S4U2Proxy"
+                        else:
+                            cd_type = "S4U2Proxy"
+                        Output.write({'target': ldapscan.url(), 'message': '- %s  -> %s (%s)' % (account.ljust(40), spn.ljust(50), cd_type)})
+
+            if 'rbcd' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Ressource-based Contrained Delegation (RBCD):'})
+                if ldap_authenticated:
+                    for host, name in Host.list_rbcd(ldapscan):
+                        entry = host.to_json()
+                        account = '%s\\%s' % (entry['domain'], entry['hostname'])
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s  -> %s' % (name.ljust(40), account)})
 
             if 'list_groups' in actions:
 
@@ -992,7 +1000,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 for user in username.split(','):
                     Output.highlight({'target': ldapscan.url(), 'message': 'Account %s groups:' % user})
                     if ldap_authenticated:
-                        groups = list(User.get_groups_recursive(ldapscan, username, group_only=True).values())
+                        groups = list(User.get_groups_recursive(ldapscan, username).values())
                         for group in groups:
                             entry = group.to_json()
                             group = '%s\\%s' % (entry['domain'], entry['groupname'])
@@ -1054,51 +1062,11 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             })
                             Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
 
-            # TODO: use bloodhound security descriptor parser ?
-            if 'acls' in actions:
+            if 'acl' in actions:
 
-                if len(actions['acls']['user']) == 0:
-                    #domain = creds['domain']
-                    username = creds['username']
-                elif not '\\' in actions['acls']['user']:
-                    #domain = creds['domain']
-                    username = actions['acls']['user']
-                else:
-                    #domain = actions['acls']['user'].split('\\')[0]
-                    username = actions['acls']['user'].split('\\')[-1]
-
-                if 'all' in actions['acls']:
-                    all = True
-                else:
-                    all = False
-
-                Output.highlight({'target': ldapscan.url(), 'message': 'ACLs of the user %s:' % username})
+                Output.highlight({'target': ldapscan.url(), 'message': 'ACL of the object %s:' % actions['acl']['object']})
                 if ldap_authenticated:
-                    def callback(entry):
-                        if len(entry['rights']) > 0:
-                            if 'parameter' in entry:
-                                parameter = entry['parameter'] if 'parameter' in entry else entry['guid']
-                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] %s:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), parameter['type'], parameter['name'])})
-                            elif 'guid' in entry:
-                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] guid:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), entry['guid'])})
-                            else:
-                                Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s]' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']))})
-
-
-                    ldapscan.list_acls(username, callback, all=all)
-
-
-            # TODO: use bloodhound security descriptor parser ?
-            if 'object_acl' in actions:
-
-                if 'all' in actions['object_acl']:
-                    all = True
-                else:
-                    all = False
-
-                Output.highlight({'target': ldapscan.url(), 'message': 'ACL of the object %s:' % actions['object_acl']['object']})
-                if ldap_authenticated:
-                    def callback(entry):
+                    for entry in ldapscan.list_object_acl(actions['acl']['object']):
                         if len(entry['rights']) > 0:
                             if 'parameter' in entry:
                                 parameter = entry['parameter'] if 'parameter' in entry else entry['guid']
@@ -1107,9 +1075,6 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s] guid:%s' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']), entry['guid'])})
                             else:
                                 Output.write({'target': ldapscan.url(), 'message': '- (%s) %s ->   %s   [%s]' % (entry['type'], entry['name'].ljust(30), entry['target'].ljust(30), ','.join(entry['rights']))})
-
-
-                    ldapscan.list_object_acl(actions['object_acl']['object'], callback, all=all)
 
             if 'gettgt' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'Dumping the TGT of the current user...'})
@@ -1121,6 +1086,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         kerberos = Kerberos(target['hostname'], domain, username=username, password=password)
                     elif 'hash' in creds_smb:
                         kerberos = Kerberos(target['hostname'], domain, username=username, ntlm=ntlm)
+                    elif 'aes_key' in creds:
+                        kerberos = Kerberos(target['hostname'], domain, username=username, aesKey=creds['aes_key'])
 
                     # First, get our TGT
                     TGT = kerberos.getTGT()
@@ -1140,9 +1107,9 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         impersonate = None
                  
                     if 'kerberos' in creds:
-                        raise NotImplementedError("--gettgs with a kerberos tgt")
+                        kerberos = Kerberos(target['hostname'], "")
+                        TGT, _ = kerberos.getFromEnv()
 
-                        TGT = TODO
                     else:
                         if 'password' in creds_smb:
                             kerberos = Kerberos(target['hostname'], domain, username=username, password=password)
@@ -1165,15 +1132,14 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         ticket_file = "%s_%s.ccache" % (spn.replace('/', '_'), ticket_username)
                         Output.highlight({'target': smbscan.url(), 'message': "Saving TGS to %s" % ticket_file})
                         kerberos.saveTGS(TGS, ticket_file)
+                    else:
+                        Output.error({'target': smbscan.url(), 'message': "No TGT supplied"})
                 except impacket.krb5.kerberosv5.KerberosError as e:
                     if 'KDC_ERR_BADOPTION' in str(e) and impersonate != None:
                         Output.error({'target': smbscan.url(), 'message': 'KDC_ERR_BADOPTION received, probably SPN is not allowed to delegate by user %s or initial TGT not forwardable' % username})
                     else:
                         Output.error({'target': smbscan.url(), 'message': 'KDC_ERR_BADOPTION received, %s' % str(e)})
 
-
-                #Output.highlight({'target': smbscan.url(), 'message': 'Dumping the TGS of the SPN %s...' % spn})
-                #smbscan.gettgs(spn, impersonate)
 
             if 'users_brute' in actions:
                 # Technically only needs kerberos but well....
@@ -1225,7 +1191,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
             if 'dump_gmsa' in actions:
                 if ldap_authenticated:
                     if ldapscan.ssl:
-                        Output.highlight({'target': smbscan.url(), 'message': 'gMSA entries:'})
+                        Output.highlight({'target': ldapscan.url(), 'message': 'gMSA entries:'})
                         for user, password in User.dump_gMSA(ldapscan):
                             entry = user.to_json()
                             user = '%s\\%s' % (entry['domain'], entry['username'])
@@ -1236,7 +1202,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                     'domain': entry['domain'],
                                     'username': entry['username'],
                                     'type': 'password',
-                                    'password': entry['password'],
+                                    'password': password,
                                 }
                                 DB.insert_domain_credential(cred_info)
                     else:
@@ -1244,34 +1210,30 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
             if 'dump_smsa' in actions:
                 if ldap_authenticated:
-                    if ldapscan.ssl:
-                        Output.highlight({'target': smbscan.url(), 'message': 'sMSA entries:'})
-                        for user, target_host in User.dump_sMSA(ldapscan):
-                            entry = user.to_json()
-                            user = '%s\\%s' % (entry['domain'], entry['username'])
-                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), target_host)})
-                    else:
-                        Output.error({'target': ldapscan.url(), 'message': '--smsa requires to connect to LDAP using SSL, it is probably not available here :('})
+                    Output.highlight({'target': ldapscan.url(), 'message': 'sMSA entries:'})
+                    for user, target_host in User.dump_sMSA(ldapscan):
+                        entry = user.to_json()
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(40), target_host)})
 
-            # TODO: Put this part in host.py
             if 'dump_laps' in actions:
                 if ldap_authenticated:
-                    Output.highlight({'target': smbscan.url(), 'message': 'LAPS entries:'})
-                    def callback(entry):
+                    Output.highlight({'target': ldapscan.url(), 'message': 'LAPS entries:'})
+                    for host, password in Host.dump_laps(ldapscan):
+                        entry = host.to_json()
                         user = '%s\\%s' % (entry['domain'], entry['username'])
-                        if 'password' in entry:
-                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (user.ljust(40), entry['dns'].ljust(40), entry['password'])})
+                        if not 'Error: ' in password:
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (user.ljust(40), entry['dns'].ljust(40), password)})
 
                             cred_info = {
                                 'domain': entry['domain'],
                                 'username': entry['username'],
                                 'type': 'password',
-                                'password': entry['password'],
+                                'password': password,
                             }
                             DB.insert_domain_credential(cred_info)
                         else:
                             Output.write({'target': ldapscan.url(), 'message': '- %s   %s   Unable to retreive password, unsufficient rights' % (user.ljust(40), entry['dns'].ljust(40))})
-                    ldapscan.dump_LAPS(callback)
 
             if 'dump_ntds' in actions:
                 if smb_authenticated:
