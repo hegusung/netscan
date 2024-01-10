@@ -25,17 +25,17 @@ from impacket.dcerpc.v5 import transport, scmr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.examples.secretsdump import RemoteOperations, SAMHashes, LSASecrets, NTDSHashes
 
-import random
-from six import b
-from impacket.krb5.ccache import CCache
-from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS, sendReceive
-from impacket.krb5 import constants
-from impacket.krb5.types import Principal
-from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, PA_PAC_OPTIONS
-from impacket.krb5.types import Principal, KerberosTime, Ticket
-from impacket.krb5.crypto import Key, _enctype_table, _HMACMD5
-from pyasn1.codec.der import decoder, encoder
-from pyasn1.type.univ import noValue
+#import random
+#from six import b
+#from impacket.krb5.ccache import CCache
+#from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS, sendReceive
+#from impacket.krb5 import constants
+#from impacket.krb5.types import Principal
+#from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, PA_PAC_OPTIONS
+#from impacket.krb5.types import Principal, KerberosTime, Ticket
+#from impacket.krb5.crypto import Key, _enctype_table, _HMACMD5
+#from pyasn1.codec.der import decoder, encoder
+#from pyasn1.type.univ import noValue
 # DCERPC
 from impacket.dcerpc.v5 import transport, samr, wkst, srvs, lsat, lsad
 from impacket.dcerpc.v5.dtypes import RPC_SID, MAXIMUM_ALLOWED
@@ -46,7 +46,7 @@ from .exec.smbexec import SMBEXEC
 from .exec.wmiexec import WMIEXEC
 from .exec.mmcexec import MMCEXEC
 from .enum import Enum
-from .spns import GetUserSPNs
+#from .spns import GetUserSPNs
 from .wmi import WMI
 from utils.output import Output
 from utils.utils import AuthFailure, sizeof_fmt, gen_random_string
@@ -302,6 +302,7 @@ class SMBScan:
 
         return admin_privs
 
+    """
     def gettgt(self):
         if self.authenticated:
             try:
@@ -643,6 +644,7 @@ class SMBScan:
         cipher = _enctype_table[encTGSRepPart['key']['keytype']]
 
         return r, cipher, sessionKey, newSessionKey
+    """
 
     def list_shares(self):
         temp_dir = ntpath.normpath("\\" + gen_random_string())
@@ -776,9 +778,11 @@ class SMBScan:
                     break
                 except Exception as e:
                     if 'access_denied' in str(e):
-                        Output.write({'target': self.url(), 'message': "Error execution command via wmiexec: Access denied"})
+                        Output.error({'target': self.url(), 'message': "Error: command execution via wmiexec: Access denied"})
+                    elif 'stringBinding' in str(e):
+                        Output.error({'target': self.url(), 'message': "Error: command execution via wmiexec: %s" % str(e)})
                     else:
-                        Output.write({'target': self.url(), 'message': "Error execution command via wmiexec:\n%s" % traceback.format_exc()})
+                        Output.error({'target': self.url(), 'message': "Error: command execution via wmiexec:\n%s" % traceback.format_exc()})
                     continue
             elif method == 'smbexec':
                 try:
@@ -786,9 +790,9 @@ class SMBScan:
                     break
                 except Exception as e:
                     if 'STATUS_ACCESS_DENIED' in str(e):
-                        Output.write({'target': self.url(), 'message': "Error execution command via smbexec: Access denied"})
+                        Output.error({'target': self.url(), 'message': "Error: command execution via smbexec: Access denied"})
                     else:
-                        Output.write({'target': self.url(), 'message': "Error execution command via smbexec:\n%s" % traceback.format_exc()})
+                        Output.error({'target': self.url(), 'message': "Error: command execution via smbexec:\n%s" % traceback.format_exc()})
                     continue
             elif method == 'mmcexec':
                 try:
@@ -796,12 +800,12 @@ class SMBScan:
                     break
                 except Exception as e:
                     if 'access_denied' in str(e):
-                        Output.write({'target': self.url(), 'message': "Error execution command via mmcexec: Access denied"})
+                        Output.error({'target': self.url(), 'message': "Error: command execution via mmcexec: Access denied"})
                     else:
-                        Output.write({'target': self.url(), 'message': "Error execution command via mmcexec:\n%s" % traceback.format_exc()})
+                        Output.error({'target': self.url(), 'message': "Error: command execution via mmcexec:\n%s" % traceback.format_exc()})
                     continue
             else:
-                Output.write({'target': self.url(), 'message': "Unknown execution method: %s" % method})
+                Output.error({'target': self.url(), 'message': "Unknown execution method: %s" % method})
 
         if exec == None:
             return None
@@ -809,7 +813,7 @@ class SMBScan:
         output = exec.execute(command, get_output, code_page)
         if output == None:
             return None
-        return output
+        return output, method
 
     def enable_remoteops(self):
         if self.remote_ops is not None and self.bootkey is not None:
@@ -1052,33 +1056,6 @@ class SMBScan:
             else:
                 raise e
 
-    def list_spns(self, baseDN=None):
-        if self.conn == None:
-            return
-        if self.creds == None:
-            return
-
-        username = self.creds['username'] if 'username' in self.creds else ''
-        domain = self.creds['domain'] if 'domain' in self.creds else ''
-        password = self.creds['password'] if 'password' in self.creds else ''
-        hash = self.creds['hash'] if 'hash' in self.creds else ''
-        do_kerberos = self.creds['kerberos'] if 'kerberos' in self.creds else False
-
-        lm_hash = ''
-        nt_hash = ''
-        if len(hash) != 0:
-            if not ':' in hash:
-                nt_hash = hash
-                lm_hash = 'aad3b435b51404eeaad3b435b51404ee'
-            else:
-                nt_hash = hash.split(':')[1]
-                lm_hash = hash.split(':')[0]
-
-        get_spns = GetUserSPNs(self.hostname, username, password, domain, nt_hash, lm_hash, do_kerberos, baseDN)
-
-        for spn in get_spns.run():
-            yield spn
-
     def rid_bruteforce(self, start, end):
         if self.conn == None:
             return
@@ -1137,19 +1114,6 @@ class SMBScan:
                     task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
                     for task in task_nodes:
                         for property in task.getElementsByTagName("Properties"):
-                            """
-                            print({
-                                "tagName": xmltype,
-                                "attributes": [
-                                    ("name", read_or_empty(task, "name")),
-                                    ("runAs", read_or_empty(property, "runAs")),
-                                    ("cpassword", read_or_empty(property, "cpassword")),
-                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
-                                    ("changed", read_or_empty(property.parentNode, "changed")),
-                                ],
-                                "file": path
-                            })
-                            """
                             newname = read_or_empty(property, "newName")
                             username = read_or_empty(property, "userName")
                             password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
@@ -1166,19 +1130,6 @@ class SMBScan:
                     task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
                     for task in task_nodes:
                         for property in task.getElementsByTagName("Properties"):
-                            """
-                            print({
-                                "tagName": xmltype,
-                                "attributes": [
-                                    ("newName", read_or_empty(property, "newName")),
-                                    ("userName", read_or_empty(property, "userName")),
-                                    ("cpassword", read_or_empty(property, "cpassword")),
-                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
-                                    ("changed", read_or_empty(property.parentNode, "changed")),
-                                ],
-                                "file": path
-                            })
-                            """
                             newname = read_or_empty(property, "newName")
                             username = read_or_empty(property, "userName")
                             password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
@@ -1195,20 +1146,6 @@ class SMBScan:
                     task_nodes = [c for c in topnode.childNodes if isinstance(c, minidom.Element)]
                     for task in task_nodes:
                         for property in task.getElementsByTagName("Properties"):
-                            """
-                            print({
-                                "tagName": xmltype,
-                                "attributes": [
-                                    ("newName", read_or_empty(property, "newName")),
-                                    ("userName", read_or_empty(property, "userName")),
-                                    ("cpassword", read_or_empty(property, "cpassword")),
-                                    ("password", self.__decrypt_cpassword(read_or_empty(property, "cpassword"))),
-                                    ("changed", read_or_empty(property.parentNode, "changed")),
-                                ],
-                                "file": path
-                            })
-                            """
-
                             newname = read_or_empty(property, "newName")
                             username = read_or_empty(property, "userName")
                             password = self.__decrypt_cpassword(read_or_empty(property, "cpassword"))
@@ -1220,49 +1157,6 @@ class SMBScan:
                                     'password': password,
                                     'path': path,
                                 }
-
-
-            """
-            xml = ET.fromstring(buf.getvalue())
-
-            tag = xml.tag
-
-            if tag == 'Groups':
-                xml_section = xml.findall("./User/Properties")
-
-            elif tag == 'ScheduledTasks':
-                xml_section = xml.findall('./Task/Properties')
-
-            elif 'Services.xml' in path:
-                xml_section = xml.findall('./NTService/Properties')
-
-            elif 'DataSources.xml' in path:
-                xml_section = xml.findall('./DataSource/Properties')
-
-            elif 'Printers.xml' in path:
-                xml_section = xml.findall('./SharedPrinter/Properties')
-
-            elif 'Drives.xml' in path:
-                xml_section = xml.findall('./Drive/Properties')
-
-            for attr in xml_section:
-                props = attr.attrib
-                print(str(props))
-
-                if 'cpassword' in props:
-
-                    for user_tag in ['userName', 'accountName', 'runAs', 'username']:
-                        if user_tag in props:
-                            username = props[user_tag]
-
-                    password = self.__decrypt_cpassword(props['cpassword'])
-
-                    yield {
-                        'username': username,
-                        'password': password,
-                        'path': path,
-                    }
-            """
 
     def __decrypt_cpassword(self, cpassword):
         if len(cpassword) != 0:

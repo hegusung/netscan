@@ -43,6 +43,21 @@ class User:
 
             yield user
 
+
+    @classmethod
+    def get_from_spn(self, ldap, spn):
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = '(servicePrincipalName=%s)' % (spn,)
+
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            if not 'sAMAccountName' in attr:
+                continue
+
+            user = User(ldap, attr)
+
+            return user
+        return None
+
     @classmethod
     def list_donotrequirepreauth(self, ldap):
         sbase = "%s" % ldap.defaultdomainnamingcontext

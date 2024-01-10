@@ -62,8 +62,8 @@ def main():
 
     # Attack
     attk_group = parser.add_argument_group("Attacks")
-    attk_group.add_argument("--kerberoasting", action='store_true', help='Execute a kerberoasting attack on the accounts with a SPN')
-    attk_group.add_argument("--asreproasting", action='store_true', help='Execute a ASREP-roasting attack on the accounts with "Dot not require pre-auth" flag enabled')
+    attk_group.add_argument("--kerberoasting", metavar='SPN', type=str, nargs='?', help='Execute a kerberoasting attack on the accounts with a SPN', default=None, const='all', dest='kerberoasting')
+    attk_group.add_argument("--asreproasting", metavar='user', type=str, nargs='?', help='Execute a ASREP-roasting attack on the accounts with "Dot not require pre-auth" flag enabled', default=None, const='all', dest='asreproasting')
     attk_group.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
 
     # ACLs / ACEs
@@ -195,9 +195,9 @@ def main():
     if args.gpp:
         actions['gpps'] ={}
     if args.kerberoasting:
-        actions['kerberoasting'] ={}
+        actions['kerberoasting'] = {'spns': args.kerberoasting.split(',')}
     if args.asreproasting:
-        actions['asreproasting'] ={}
+        actions['asreproasting'] = {'users': args.asreproasting.split(',')}
     if args.passpol:
         actions['passpol'] = {}
     if args.trusts:
