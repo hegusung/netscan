@@ -37,7 +37,7 @@ else
 
     echo -e "${GREEN}[+] Configuring Kibana...${ENDCOLOR}"
     until curl -s -I http://127.0.0.1:5601 | grep -q 'HTTP/1.1 302 Found'; do sleep 10; done;
-    curl -u "elastic:$ELASTIC_PASSWORD" -s 'http://127.0.0.1:5601/api/saved_objects/_import?createNewCopies=false' -H "kbn-xsrf: true" --form "file=@$(pwd)/kibana/kibana_dashboards.ndjson" > /dev/null
+    curl -u "elastic:$ELASTIC_PASSWORD" -s 'http://127.0.0.1:5601/api/saved_objects/_import?overwrite=true' -H "kbn-xsrf: true" --form "file=@$(pwd)/kibana/kibana_dashboards.ndjson" > /dev/null
 
     echo -e "${GREEN}[+] Configuring Netscan...${ENDCOLOR}"
     if [ ! -f "config.cfg" ]; then
