@@ -22,6 +22,8 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
             # Gather info
             mssql_info = mssqlscan.get_server_info()
+            if mssql_info == None:
+                return
             mssql_info['target'] = mssqlscan.url()
             mssql_info['message_type'] = 'mssql'
             Output.write(mssql_info)

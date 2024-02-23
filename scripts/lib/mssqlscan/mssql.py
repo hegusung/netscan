@@ -1,6 +1,7 @@
 import socket
 import traceback
 import logging
+import struct
 from impacket.tds import MSSQL
 from .mssqlexec import MSSQLEXEC
 
@@ -53,7 +54,10 @@ class MSSQLScan:
         return self.mssql.disconnect()
 
     def get_server_info(self):
-        server_info = self.mssql.preLogin()
+        try:
+            server_info = self.mssql.preLogin()
+        except struct.error:
+            return None
 
         version_tuple = (server_info["Version"][0], server_info["Version"][1], server_info["Version"][2]*256+server_info["Version"][3])
         version_number = "%d.%d.%d" % version_tuple

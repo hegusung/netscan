@@ -23,6 +23,9 @@ urllib3.disable_warnings()
 
 auth_pattern = re.compile(r'''\s*(.*)\s+realm=['"]?([^'"]+)['"]?''', re.IGNORECASE)
 
+import collections
+collections.Callable = collections.abc.Callable
+
 class HTTP:
 
     def __init__(self, method, hostname, port, useragent, proxy, connect_timeout, headers=None, auth=None, cookies={}, read_timeout=60):

@@ -39,6 +39,9 @@ class MySQLScan:
             version = ""
             version_start = data[5:]
 
+            if len(data) == 0:
+                raise NotMysql()
+
             if not data[4] in [10, 0xff]:
                 raise NotMysql()
 

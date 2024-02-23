@@ -1104,7 +1104,10 @@ class SMBScan:
             self.conn.getFile(gpp_share, path, buf.write)
 
             root = minidom.parseString(buf.getvalue())
-            xmltype = root.childNodes[0].tagName
+            try:
+                xmltype = root.childNodes[0].tagName
+            except AttributeError:
+                continue
             # function to get attribute if it exists, returns "" if empty
             read_or_empty = lambda element, attribute: (element.getAttribute(attribute) if element.getAttribute(attribute) is not None else "")
 

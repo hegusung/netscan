@@ -113,7 +113,7 @@ class PortScan:
             xml_dir = tempfile.mkdtemp()
             xml_output = os.path.join(xml_dir, next(tempfile._get_candidate_names()))
 
-            nmap_command = "%s -sV -Pn -T3 -p %d %s -oX %s" % (nmap_bin, self.port, self.hostname, xml_output)
+            nmap_command = "%s -sV -Pn -sT -T3 -p %d %s -oX %s" % (nmap_bin, self.port, self.hostname, xml_output)
             if scripts != None:
                 nmap_command += " --script=\"%s\"" % scripts
                 if args != None:
