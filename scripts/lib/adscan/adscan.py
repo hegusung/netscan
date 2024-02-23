@@ -333,7 +333,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s:' % (entry['domain'],)})
                         Output.write({'target': ldapscan.url(), 'message': '   Forest fonctional level: %s' % entry['functionallevel']})
-                        if entry['functionallevel'].strip() != '2016':
+                        if not entry['functionallevel'].strip() in ['2016', '2019', '2022']:
                                 DB.insert_domain_vulnerability({
                                     'hostname': ldapscan.hostname,
                                     'domain': entry['domain'],
