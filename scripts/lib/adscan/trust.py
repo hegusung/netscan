@@ -60,10 +60,6 @@ class Trust:
             self.tags.append('Intra-Forest Trust (trust within the forest)')
         if attr['trustAttributes'] & 0x40 != 0: # TRUST_ATTRIBUTE_TREAT_AS_EXTERNAL 
             self.tags.append('Treat as external')
-        if attr['trustAttributes'] & 0x200 != 0: # TRUST_ATTRIBUTE_CROSS_ORGANIZATION_NO_TGT_DELEGATION
-            self.tags.append('No cross-organization TGT delegation')
-        if attr['trustAttributes'] & 0x800 != 0: # TRUST_ATTRIBUTE_CROSS_ORGANIZATION_ENABLE_TGT_DELEGATION 
-            self.tags.append('Cross-organization TGT delegation enabled')
 
         # Get the trust flavor
         if self.trust_type == 'MIT/KRB realm trust':
@@ -78,6 +74,15 @@ class Trust:
             else:
                 self.trust_flavor = "External"
 
+        # TGT delegation
+        if attr['trustAttributes'] & 0x200 != 0: # TRUST_ATTRIBUTE_CROSS_ORGANIZATION_NO_TGT_DELEGATION
+            self.tags.append('TGT delegation disabled')
+        elif 'Quarantined Domain (External)' in self.tags:
+            self.tags.append('TGT delegation disabled')
+        elif attr['trustAttributes'] & 0x800 != 0: # TRUST_ATTRIBUTE_CROSS_ORGANIZATION_ENABLE_TGT_DELEGATION 
+            self.tags.append('TGT delegation enabled')
+        elif self.trust_flavor == 'Intra-Forest':
+            self.tags.append('TGT delegation enabled')
 
         # Check SID filtering
         if 'Quarantined Domain (External)' in self.tags:
