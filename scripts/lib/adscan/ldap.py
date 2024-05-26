@@ -10,14 +10,6 @@ import time
 from uuid import UUID
 from datetime import datetime
 from utils.structure import Structure
-from Cryptodome.Hash import MD4
-from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
-from cryptography.hazmat.backends.openssl.rsa import _RSAPublicKey
-#from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
-#from cryptography.hazmat.backends.openssl.dsa import _DSAPublicKey
-from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
-from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePublicKey
 import impacket
 from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
 from pyasn1.type.namedtype import NamedTypes, NamedType

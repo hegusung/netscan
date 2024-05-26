@@ -2,11 +2,8 @@ from datetime import datetime
 from impacket.ldap.ldaptypes import LDAP_SID
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
-from cryptography.hazmat.backends.openssl.rsa import _RSAPublicKey
-#from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
-#from cryptography.hazmat.backends.openssl.dsa import _DSAPublicKey
+from cryptography.hazmat.primitives.asymmetric.dsa import DSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
-from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePublicKey
 
 from lib.adscan.accesscontrol import parse_accesscontrol, parse_sd, process_sid
 
@@ -162,11 +159,11 @@ class ADCS:
                 common_names = [cn.value for cn in cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)]
 
                 public_key = cert.public_key()
-                if type(public_key) in [RSAPublicKey, _RSAPublicKey]:
+                if type(public_key) in [RSAPublicKey]:
                     cert_algo = "RSA %d" % public_key.key_size
-                    #elif type(public_key) in [DSAPublicKey, _DSAPublicKey]:
-                    #cert_algo = "DSA %d" % public_key.key_size
-                elif type(public_key) in [EllipticCurvePublicKey, _EllipticCurvePublicKey]:
+                elif type(public_key) in [DSAPublicKey]:
+                    cert_algo = "DSA %d" % public_key.key_size
+                elif type(public_key) in [EllipticCurvePublicKey]:
                     cert_algo = "EC %d" % public_key.key_size
                 else:
                     cert_algo = "Unknown: %s" % type(public_key)
