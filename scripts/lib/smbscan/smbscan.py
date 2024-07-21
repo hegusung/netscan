@@ -13,6 +13,7 @@ from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
+from utils.utils import open as open_docker
 from lib.search_secret.search_secret import SearchSecret
 
 """
@@ -116,6 +117,7 @@ def smbscan_worker(target, actions, creds, timeout):
                     ticket = os.environ['KRB5CCNAME']
 
                     from impacket.krb5.ccache import CCache
+
                     ccache = CCache.loadFile(ticket)
                     domain = ccache.principal.realm['data'].decode('utf-8')
                     principal = 'cifs/%s@%s' % (smb_info['hostname'].upper(), domain.upper())

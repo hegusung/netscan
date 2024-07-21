@@ -139,7 +139,7 @@ def main():
             creds['hash'] = args.hash
     if args.kerberos != None:
         if len(args.kerberos) != 0:
-            os.environ['KRB5CCNAME'] = args.kerberos
+            os.environ['KRB5CCNAME'] = normalize_path(args.kerberos)
         if not 'KRB5CCNAME' in os.environ:
             Output.error("Cannot use -k without KRB5CCNAME environment variable set")
             sys.exit()
