@@ -51,6 +51,8 @@ def tlsscan_worker(target, tls_config, timeout):
 
             res = new_res
 
+        certificate_domain = res.scan_result.certificate_info.result.hostname_used_for_server_name_indication
+
         mozilla_checker = MozillaTlsConfigurationChecker.get_default()
         try:
             if tls_config == 'old':
@@ -64,9 +66,9 @@ def tlsscan_worker(target, tls_config, timeout):
             
             mozilla_checker.check_server(against_config=mozilla_config, server_scan_result=res)
 
-            Output.success({'target': 'ssl://%s:%d' % (target['hostname'], target['port']), 'message': 'TLS: Certificate compliant with Mozilla\'s %s configuration' % tls_config}) 
+            Output.success({'target': 'ssl://%s:%d' % (target['hostname'], target['port']), 'message': '%s\t\t\tTLS: Certificate compliant with Mozilla\'s %s configuration' % (certificate_domain, tls_config)}) 
         except ServerNotCompliantWithMozillaTlsConfiguration as e:
-            Output.vuln({'target': 'ssl://%s:%d' % (target['hostname'], target['port']), 'message': 'TLS: Certificate not compliant with Mozilla\'s %s configuration' % tls_config}) 
+            Output.vuln({'target': 'ssl://%s:%d' % (target['hostname'], target['port']), 'message': '%s\t\t\tTLS: Certificate not compliant with Mozilla\'s %s configuration' % (certificate_domain, tls_config)}) 
 
             for criteria, error_description in e.issues.items():
                 Output.vuln({'target': 'ssl://%s:%d' % (target['hostname'], target['port']), 'message': '  - %s: %s' % (criteria, error_description)}) 
