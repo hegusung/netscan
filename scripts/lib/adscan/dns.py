@@ -1,3 +1,5 @@
+import impacket
+import traceback
 from datetime import datetime
 from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
@@ -7,13 +9,21 @@ class DNS:
 
     @classmethod
     def list_dns(self, ldap):
-        sbase = 'CN=MicrosoftDNS,DC=DomainDnsZones,%s' % ldap.defaultdomainnamingcontext
+        sbase_list = ['CN=MicrosoftDNS,DC=DomainDnsZones,%s' % ldap.defaultdomainnamingcontext, 'CN=MicrosoftDNS,DC=ForestDnsZones,%s' % ldap.forestnamingcontext, 'CN=MicrosoftDNS,CN=System,%s' % ldap.defaultdomainnamingcontext]
         search_filter='(objectClass=dnsNode)'
 
-        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
-            dns = DNS(ldap, attr)
+        for sbase in sbase_list:
+            print(sbase)
+            try:
+                for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+                    dns = DNS(ldap, attr)
 
-            yield dns
+                    yield dns
+
+                break
+            except impacket.ldap.ldap.LDAPSearchError:
+                traceback.print_exc()
+                pass
 
     # ==================
     # === DNS object ===

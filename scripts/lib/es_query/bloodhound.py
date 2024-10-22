@@ -10,7 +10,7 @@ from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
 
 BLOODHOUND_VERSION = 5
 
-def export_bloodhound_domains(session, output_dir, output):
+def export_bloodhound_domains(session, links_dict, output_dir, output):
 
     query = {
       "query": {
@@ -27,8 +27,9 @@ def export_bloodhound_domains(session, output_dir, output):
 
     domains = []
     domain_fqdn_to_name = {}
+    domain_name_to_sid = {}
 
-    filename = os.path.join(output_dir, '%s_bloodhound_domains.txt' % session)
+    filename = os.path.join(output_dir, '%s_bloodhound_domains.json' % session)
     file = open(filename, 'w')
 
     # Create output files in dir if non existant
@@ -50,6 +51,7 @@ def export_bloodhound_domains(session, output_dir, output):
             'sid': source['sid'],
         })
         domain_fqdn_to_name[source['domain'].upper()] = source['name'].upper()
+        domain_name_to_sid[source['domain'].upper()] = source['sid']
 
         object_identifier = source['sid']
         properties = {
@@ -64,9 +66,42 @@ def export_bloodhound_domains(session, output_dir, output):
         # Query child objects
         child_objects = get_child_objects(session, source['dn'])
 
-        gpo_changes = source['gpo_effect']
+        # Links
+        links = []
+        if 'links' in source:
+            links = source['links']
+        elif 'gplink' in source:
+            links = {}
+            for l in str(source['gplink']).split(']'):
+                if len(l) == 0:
+                    continue
+                # Remove initial [
+                l = l[1:]
+                # Take after ://
+                l = l.split('://')[-1]
+                # Take before ;
+                status = l.split(';')[1]
+                link = l.split(';')[0]
+
+                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
+                if status in ['1', '3']:
+                    continue
+
+                links[link.lower()] = {'IsEnforced': False if status == '0' else True}
+
+            for link_dn in links:
+                if link_dn in links_dict:
+                    links[link_dn]['GUID'] = links_dict[link_dn]
+                else:
+                    links[link_dn]['GUID'] = "Unknown"
+
+            links = list(links.values())
+
+
+        # TODO recreate gpo_effect
+        gpo_changes = {}
+        #gpo_changes = source['gpo_effect']
         gpo_changes["AffectedComputers"] = get_affected_computers(session, source['dn'], source['sid'])
-        # OLD gpo_changes["AffectedComputers"] = source['affected_computers']
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
         acl_info = source['aces']
@@ -75,14 +110,28 @@ def export_bloodhound_domains(session, output_dir, output):
         is_acl_protected = acl_info['is_acl_protected']
         is_deleted = False
 
+        TRUST_DIRECTIONS = {
+            0: 'Disabled',
+            1: 'Inbound',
+            2: 'Outbound',
+            3: 'Bidirectional',
+        }
+
+        trust_list = []
+        for trust in source['trusts']:
+            if type(trust['TrustDirection']) == int:
+                trust['TrustDirection'] = TRUST_DIRECTIONS[trust['TrustDirection']]
+            trust_list.append(trust)
+
+
         data.append({
             'ObjectIdentifier': object_identifier,
             'Properties': properties,
-            'Links': source['links'],
+            'Links': links,
             'Aces': ace_list,
             'GPOChanges': gpo_changes,
             'ChildObjects': child_objects,
-            'Trusts': source['trusts'],
+            'Trusts': trust_list,
             'IsACLProtected': is_acl_protected,
             'IsDeleted': is_deleted,
         })
@@ -105,9 +154,9 @@ def export_bloodhound_domains(session, output_dir, output):
 
     file.close()
 
-    return domains, domain_fqdn_to_name, output
+    return domains, domain_fqdn_to_name, domain_name_to_sid, output
 
-def export_bloodhound_containers(session, output_dir, output):
+def export_bloodhound_containers(session, domain_name_to_sid, output_dir, output):
 
     query = {
       "query": {
@@ -122,7 +171,7 @@ def export_bloodhound_containers(session, output_dir, output):
       },
     }
 
-    filename = os.path.join(output_dir, '%s_bloodhound_containers.txt' % session)
+    filename = os.path.join(output_dir, '%s_bloodhound_containers.json' % session)
     file = open(filename, 'w')
 
     # Create output files in dir if non existant
@@ -144,8 +193,18 @@ def export_bloodhound_containers(session, output_dir, output):
             'domain': source['domain'].upper(),
             'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
             'distinguishedname': source['dn'].upper(),
-            'domainsid': source['domain_sid'],
         }
+
+        # Domain sid
+        if 'domain_sid' in source:
+            properties['domainsid'] = source['domain_sid']
+        else:
+            if source['domain'].upper() in domain_name_to_sid:
+                properties['domainsid'] = domain_name_to_sid[source['domain'].upper()]
+            else:
+                properties['domainsid'] = 'Unknown'
+
+
 
         # Query child objects
         child_objects = get_child_objects(session, source['dn'])
@@ -185,7 +244,7 @@ def export_bloodhound_containers(session, output_dir, output):
 
     return output
 
-def export_bloodhound_ous(session, output_dir, output):
+def export_bloodhound_ous(session, domain_name_to_sid, links_dict, output_dir, output):
 
     query = {
       "query": {
@@ -200,7 +259,7 @@ def export_bloodhound_ous(session, output_dir, output):
       },
     }
 
-    filename = os.path.join(output_dir, '%s_bloodhound_ous.txt' % session)
+    filename = os.path.join(output_dir, '%s_bloodhound_ous.json' % session)
     file = open(filename, 'w')
 
     # Create output files in dir if non existant
@@ -222,14 +281,56 @@ def export_bloodhound_ous(session, output_dir, output):
             'domain': source['domain'].upper(),
             'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
             'distinguishedname': source['dn'].upper(),
-            'domainsid': source['domain_sid'],
         }
+
+        # Domain sid
+        if 'domain_sid' in source:
+            properties['domainsid'] = source['domain_sid']
+        else:
+            if source['domain'].upper() in domain_name_to_sid:
+                properties['domainsid'] = domain_name_to_sid[source['domain'].upper()]
+            else:
+                properties['domainsid'] = 'Unknown'
 
         # Query child objects
         child_objects = get_child_objects(session, source['dn'])
 
-        gpo_changes = source['gpo_effect']
-        gpo_changes["AffectedComputers"] = get_affected_computers(session, source['dn'], source['domain_sid'])
+        # Links
+        links = []
+        if 'links' in source:
+            links = source['links']
+        elif 'gplink' in source:
+            links = {}
+            for l in str(source['gplink']).split(']'):
+                if len(l) == 0:
+                    continue
+                # Remove initial [
+                l = l[1:]
+                # Take after ://
+                l = l.split('://')[-1]
+                # Take before ;
+                status = l.split(';')[1]
+                link = l.split(';')[0]
+
+                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
+                if status in ['1', '3']:
+                    continue
+
+                links[link.lower()] = {'IsEnforced': False if status == '0' else True}
+
+            # Get GUID for links
+            for link_dn in links:
+                if link_dn in links_dict:
+                    links[link_dn]['GUID'] = links_dict[link_dn]
+                else:
+                    links[link_dn]['GUID'] = "Unknown"
+
+            links = list(links.values())
+
+        # TODO : recreate gpo_changes
+        gpo_changes = {}
+        #gpo_changes = source['gpo_effect']
+        gpo_changes["AffectedComputers"] = get_affected_computers(session, source['dn'], properties['domainsid'])
 
         acl_info = source['aces']
 
@@ -242,7 +343,7 @@ def export_bloodhound_ous(session, output_dir, output):
             'Properties': properties,
             'Aces': ace_list,
             'GPOChanges': gpo_changes,
-            'Links': source['links'],
+            'Links': links,
             'ChildObjects': child_objects,
             'IsACLProtected': is_acl_protected,
             'IsDeleted': is_deleted,
@@ -285,7 +386,7 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
       },
     }
 
-    filename = os.path.join(output_dir, '%s_bloodhound_users.txt' % session)
+    filename = os.path.join(output_dir, '%s_bloodhound_users.json' % session)
     file = open(filename, 'w')
 
     # Create output files in dir if non existant
@@ -482,7 +583,7 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
       },
     }
 
-    filename = os.path.join(output_dir, '%s_bloodhound_group.txt' % session)
+    filename = os.path.join(output_dir, '%s_bloodhound_group.json' % session)
     file = open(filename, 'w')
 
     # Create output files in dir if non existant
@@ -570,7 +671,7 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
         }
         for domain_name, dc_info in domain_controlers.items():
             if domain_name.upper() == domain_info['name'].upper():
-                group["Members"].append(dc_info)
+                group["Members"] = dc_info
 
         data.append(group)
         c += 1
@@ -656,7 +757,7 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
       },
     }
 
-    filename = os.path.join(output_dir, '%s_bloodhound_computers.txt' % session)
+    filename = os.path.join(output_dir, '%s_bloodhound_computers.json' % session)
     file = open(filename, 'w')
 
     # Create output files in dir if non existant
@@ -877,7 +978,7 @@ def export_bloodhound_computers(session, output_dir, user_info, user_sid_list, g
     return domain_controlers, output
 
 
-def export_bloodhound_gpos(session, output_dir, output):
+def export_bloodhound_gpos(session, domain_name_to_sid, output_dir, output):
 
     query = {
       "query": {
@@ -892,7 +993,7 @@ def export_bloodhound_gpos(session, output_dir, output):
       },
     }
 
-    filename = os.path.join(output_dir, '%s_bloodhound_gpos.txt' % session)
+    filename = os.path.join(output_dir, '%s_bloodhound_gpos.json' % session)
     file = open(filename, 'w')
 
     # Create output files in dir if non existant
@@ -914,9 +1015,19 @@ def export_bloodhound_gpos(session, output_dir, output):
             'domain': source['domain'].upper(),
             'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
             'distinguishedname': source['dn'].upper(),
-            'domainsid': source['domain_sid'],
             'gpcpath': source['gpcpath'].upper(),
         }
+
+        # Domain sid
+        if 'domain_sid' in source:
+            properties['domainsid'] = source['domain_sid']
+        else:
+            if source['domain'].upper() in domain_name_to_sid:
+                properties['domainsid'] = domain_name_to_sid[source['domain'].upper()]
+            else:
+                properties['domainsid'] = 'Unknown'
+
+
 
         acl_info = source['aces']
 
@@ -951,4 +1062,29 @@ def export_bloodhound_gpos(session, output_dir, output):
     file.close()
 
     return output
+
+def get_gpos_links(session):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_gpo"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    links_dict = {}
+
+    res = Elasticsearch.search(query)
+    for item in res:
+        source = item['_source']
+
+        links_dict[source['dn'].lower()] = source['guid']
+
+    return links_dict
 

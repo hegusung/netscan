@@ -568,15 +568,17 @@ def export_bloodhound(session, output_dir):
 
     #output.append((format, hashfile_filename, count,  "hashes written"))
 
-    domains, domain_fqdn_to_name, output = export_bloodhound_domains(session, output_dir, output)
+    links_dict = get_gpos_links(session)
 
-    output = export_bloodhound_containers(session, output_dir, output)
+    domains, domain_fqdn_to_name, domain_name_to_sid, output = export_bloodhound_domains(session, links_dict, output_dir, output)
 
-    output = export_bloodhound_ous(session, output_dir, output)
+    output = export_bloodhound_containers(session, domain_name_to_sid, output_dir, output)
+
+    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, output_dir, output)
 
     user_info, user_sid, output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
 
-    output = export_bloodhound_gpos(session, output_dir, output)
+    output = export_bloodhound_gpos(session, domain_name_to_sid, output_dir, output)
 
     group_sid = get_group_sid(session)
 

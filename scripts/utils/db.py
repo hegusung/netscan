@@ -61,6 +61,15 @@ es_mapping = {
             "ip": {
                 "type": "ip"
             },
+            "id": {
+                "type": "text",
+                "fields": {
+                    "keyword":{
+                        "type": "keyword",
+                        "ignore_above": 15000
+                    }
+                }
+            },
             "hash": {
                 "type": "text",
                 "fields": {

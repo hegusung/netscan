@@ -111,6 +111,7 @@ sid_type_dict = {
     'S-1-3-1': 'User',
     'S-1-3-4': 'User',
     'S-1-5-7': 'User', 
+    'S-1-5-9': 'Group',
     'S-1-5-11': 'Group',
     'S-1-5-18': 'User',
 }

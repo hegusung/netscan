@@ -28,7 +28,7 @@ else
     sudo sysctl -w vm.max_map_count=262144 > /dev/null
     
     echo -e "${GREEN}[+] Building & Starting containers...${ENDCOLOR}"
-    docker-compose up --quiet-pull --build --remove-orphans -d > /dev/null
+    docker-compose up --build --remove-orphans -d > /dev/null
     docker build . -f docker/Dockerfile -t netscan:latest > /dev/null
     
     echo -e "${GREEN}[+] Configuring Elasticsearch...${ENDCOLOR}"

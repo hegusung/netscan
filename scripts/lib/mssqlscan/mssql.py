@@ -119,9 +119,13 @@ class MSSQLScan:
 
         return success, is_admin
 
-    def check_if_admin(self):
+    def check_if_admin(self, link=None):
         try:
-            res = self.mssql.sql_query("SELECT IS_SRVROLEMEMBER('sysadmin')")
+            query = "SELECT IS_SRVROLEMEMBER('sysadmin')"
+            if link:
+                query = "EXECUTE('%s') AT [%s]" % (query.replace("'", "''"), link)
+
+            res = self.mssql.sql_query(query)
             query_output = res[0]['']
 
             if int(query_output):
@@ -135,9 +139,11 @@ class MSSQLScan:
 
         return False
 
-    def list_admins(self):
+    def list_admins(self, link=None):
         try:
             query_output = self.mssql.sql_query("EXEC sp_helpsrvrolemember 'sysadmin'")
+            if link:
+                query_output = "EXECUTE('%s') AT [%s]" % (query_output, link)
             admins = []
             for item in query_output:
                 if "MemberName" in item:
@@ -146,9 +152,11 @@ class MSSQLScan:
         except:
             traceback.print_exc()
 
-    def list_databases(self):
+    def list_databases(self, link=None):
         #query = "SELECT name FROM master.dbo.sysdatabases WHERE dbid > 4"
         query = "SELECT name FROM master.dbo.sysdatabases"
+        if link:
+            query = "EXECUTE('%s') AT [%s]" % (query, link)
         output = self.mssql.sql_query(query)
 
         databases = []
@@ -156,6 +164,8 @@ class MSSQLScan:
         for db in output:
             db_info = {'name': db['name']}
             tables_query = "USE %s; SELECT name FROM sys.Tables" % db["name"]
+            if link:
+                tables_query = "EXECUTE('%s') AT [%s]" % (tables_query, link)
             tables_output = self.mssql.sql_query(tables_query)
             tables = []
             for table in tables_output:
@@ -166,15 +176,21 @@ class MSSQLScan:
 
         return databases
 
-    def list_links(self):
+    def list_links(self, link=None):
         query = "SELECT name,provider,data_source FROM sys.servers WHERE is_linked=1"
+        if link:
+            query = "EXECUTE('%s') AT [%s]" % (query, link)
         return self.mssql.sql_query(query)
 
-    def list_hashes(self):
+    def list_hashes(self, link=None):
         query = "SELECT name,password_hash FROM sys.sql_logins"
+        if link:
+            query = "EXECUTE('%s') AT [%s]" % (query, link)
         return self.mssql.sql_query(query)
 
-    def execute_sql(self, query):
+    def execute_sql(self, query, link = None):
+        if link:
+            query = "EXECUTE('%s') AT [%s]" % (query, link)
         return self.mssql.sql_query(query)
 
     def execute_cmd(self, command):

@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--hashes", action='store_true', help='Dump database hashes')
     parser.add_argument('--sql', metavar='query', type=str, nargs='?', help='Perform a SQL query', default=None, dest='sql')
     parser.add_argument('--cmd', metavar='command', type=str, nargs='?', help='Execute a command via xp_cmdshell', default=None, dest='cmd')
+    parser.add_argument('--link', metavar='LINK_NAME', type=str, nargs='?', help='Execute the command on a link (to combine with --sql)', default=None, dest='link')
+    parser.add_argument("--admin-check", action='store_true', help='Check if admin privileges', dest='admin_check')
     
     # Bruteforce
     parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
@@ -79,16 +81,32 @@ def main():
     actions = {}
     if args.dbs:
         actions['list_dbs'] = {}
+        if args.link:
+            actions['list_dbs']['link'] = args.link
     if args.links:
         actions['list_links'] = {}
+        if args.link:
+            actions['list_links']['link'] = args.link
     if args.admins:
         actions['list_admins'] = {}
+        if args.link:
+            actions['list_admins']['link'] = args.link
     if args.hashes:
         actions['list_hashes'] = {}
+        if args.link:
+            actions['list_hashes']['link'] = args.link
     if args.sql:
         actions['sql'] = {'query': args.sql}
+        if args.link:
+            actions['sql']['link'] = args.link
     if args.cmd:
         actions['cmd'] = {'command': args.cmd}
+        if args.link:
+            actions['cmd']['link'] = args.link
+    if args.admin_check:
+        actions['admin_check'] = {}
+        if args.link:
+            actions['admin_check']['link'] = args.link
     if args.bruteforce:
         actions['bruteforce'] ={'username_file': normalize_path(args.username_file), 'password_file': normalize_path(args.password_file), 'workers': args.bruteforce_workers}
 

@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   netscan-setup:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
     container_name: netscan-setup
     env_file:
       - docker/docker.env
@@ -52,7 +52,7 @@ services:
       - netscan-network
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
     container_name: netscan-elasticsearch
     env_file:
       - docker/docker.env    

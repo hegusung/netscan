@@ -88,6 +88,7 @@ class LDAPScan:
         self.defaultdomainnamingcontext = c.server.info.other['defaultNamingContext'][0]
         self.configurationnamingcontext = c.server.info.other['configurationNamingContext'][0]
         self.schemanamingcontext = c.server.info.other['schemaNamingContext'][0]
+        self.forestnamingcontext = c.server.info.other['rootDomainNamingContext'][0]
 
         lm_hash = ''
         nt_hash = ''

