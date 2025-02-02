@@ -3,7 +3,7 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
 class Host:
-    attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'pwdLastSet', 'msDS-AllowedToDelegateTo', 'msDS-AllowedToActOnBehalfOfOtherIdentity', 'msDS-SupportedEncryptionTypes', 'ms-Mcs-AdmPwdExpirationTime']
+    attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'lastLogonTimestamp', 'pwdLastSet', 'msDS-AllowedToDelegateTo', 'msDS-AllowedToActOnBehalfOfOtherIdentity', 'msDS-SupportedEncryptionTypes', 'ms-Mcs-AdmPwdExpirationTime']
     schema_guid_attributes = ['computer', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
     schema_guid_dict = None
 
@@ -112,6 +112,10 @@ class Host:
             self.last_logon_date = datetime.fromtimestamp(ldap.getUnixTime(int(str(attr['lastLogon']))))
         except KeyError:
             self.last_logon_date = None
+        try:
+            self.last_logon_timestamp_date = datetime.fromtimestamp(ldap.getUnixTime(int(str(attr['lastLogonTimestamp']))))
+        except KeyError:
+            self.last_logon_timestamp_date = None
         try:
             self.last_password_change_date = datetime.fromtimestamp(ldap.getUnixTime(int(str(attr['pwdLastSet']))))
         except KeyError:
@@ -226,5 +230,6 @@ class Host:
             'allowed_to_act_on_behalf_of_other_identity_sids': self.allowed_to_act_on_behalf_of_other_identity_sids,
             'created_date': self.created_date,
             'last_logon': self.last_logon_date,
+            'last_logon_timestamp': self.last_logon_timestamp_date,
             'last_password_change': self.last_password_change_date,
         }

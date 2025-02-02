@@ -665,6 +665,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'allowed_to_act_on_behalf_of_other_identity_sids': entry['allowed_to_act_on_behalf_of_other_identity_sids'],
                             'created_date': entry['created_date'],
                             'last_logon': entry['last_logon'],
+                            'last_logon_timestamp': entry['last_logon_timestamp'],
                             'last_password_change': entry['last_password_change'],
                         })
 

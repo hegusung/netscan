@@ -815,6 +815,8 @@ class DB:
             host_doc['created_date'] = int(host_doc['created_date'].timestamp()*1000)
         if 'last_logon' in host_doc and host_doc['last_logon'] != None:
             host_doc['last_logon'] = int(host_doc['last_logon'].timestamp()*1000)
+        if 'last_logon_timestamp' in host_doc and host_doc['last_logon_timestamp'] != None:
+            host_doc['last_logon_timestamp'] = int(host_doc['last_logon_timestamp'].timestamp()*1000)
         if 'last_password_change' in host_doc:
             host_doc['last_password_change'] = int(host_doc['last_password_change'].timestamp()*1000) if host_doc['last_password_change'] != None else None
 
