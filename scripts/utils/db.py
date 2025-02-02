@@ -94,6 +94,9 @@ es_mapping = {
             "last_logon": {
                 "type": "date"
             },
+            "last_logon_timestamp": {
+                "type": "date"
+            },
             "last_password_change": {
                 "type": "date"
             },
@@ -881,6 +884,8 @@ class DB:
             user_doc['created_date'] = int(user_doc['created_date'].timestamp()*1000)
         if 'last_logon' in user_doc and user_doc['last_logon'] != None:
             user_doc['last_logon'] = int(user_doc['last_logon'].timestamp()*1000)
+        if 'last_logon_timestamp' in user_doc and user_doc['last_logon_timestamp'] != None:
+            user_doc['last_logon_timestamp'] = int(user_doc['last_logon_timestamp'].timestamp()*1000)
         if 'last_password_change' in user_doc:
             user_doc['last_password_change'] = int(user_doc['last_password_change'].timestamp()*1000) if user_doc['last_password_change'] != None else None
 

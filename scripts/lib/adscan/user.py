@@ -6,7 +6,7 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
 class User:
-    attributes = ['objectClass', 'distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName', 'msDS-AllowedToDelegateTo', 'msDS-SupportedEncryptionTypes', 'sIDHistory']
+    attributes = ['objectClass', 'distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName', 'msDS-AllowedToDelegateTo', 'msDS-SupportedEncryptionTypes', 'sIDHistory']
     schema_guid_attributes = ['user', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
     schema_guid_dict = None
 
@@ -253,6 +253,10 @@ class User:
         except KeyError:
             self.last_logon_date = None
         try:
+            self.last_logon_timestamp_date = datetime.fromtimestamp(ldap.getUnixTime(int(str(attr['lastLogonTimestamp']))))
+        except KeyError:
+            self.last_logon_timestamp_date = None
+        try:
             self.last_password_change_date = datetime.fromtimestamp(ldap.getUnixTime(int(str(attr['pwdLastSet']))))
         except KeyError:
             self.last_password_change_date = None
@@ -383,6 +387,7 @@ class User:
             'comment': self.comment,
             'created_date': self.created_date,
             'last_logon': self.last_logon_date,
+            'last_logon_timestamp': self.last_logon_timestamp_date,
             'last_password_change': self.last_password_change_date,
             'sid': self.sid,
             'rid': self.rid,
