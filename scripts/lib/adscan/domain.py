@@ -7,10 +7,20 @@ from lib.adscan.gpo import GPO
 class Domain:
     attributes = ['distinguishedName', 'name', 'objectSid', 'nTSecurityDescriptor', 'ms-DS-MachineAccountQuota', 'gPLink', 'msDS-Behavior-Version', 'msDS-ExpirePasswordsOnSmartCardOnlyAccounts']
     schema_guid_attributes = ['domain', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
+    schema_guid_dict = None
+
+    @classmethod
+    def get_schema_guid_dict(self, ldap):
+        if self.schema_guid_dict == None:
+            self.schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
+
+        return self.schema_guid_dict
+
 
     @classmethod
     def list_domains(self, ldap, smb):
-        schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(objectCategory=domain)'
 
@@ -37,9 +47,12 @@ class Domain:
             self.parameters['msDS-ExpirePasswordsOnSmartCardOnlyAccounts'] = str(attr['msDS-ExpirePasswordsOnSmartCardOnlyAccounts'])
 
         # Get trusts
-        self.trusts = ldap._resolve_trusts(self.domain)
+        #self.trusts = ldap._resolve_trusts(self.domain)
+
+        self.gplink = str(attr['gPLink'])
 
         # Get links (GPOs)
+        """
         self.links = {}
         self.gpo_paths = []
         for l in str(attr['gPLink']).split(']'):
@@ -70,9 +83,16 @@ class Domain:
             for t in ['Memberof', 'Members', 'Localgroup']:
                 self.gpo_effect[sid][t] = []
 
+        print(self.gpo_paths)
+        print(self.gpo_effect)
+
         for gpo_path, gpo_dn in self.gpo_paths:
             GPO.resolve_effect(smb, ldap, gpo_dn, gpo_path, self.gpo_effect)
+        print("> %s" % self.gpo_effect)
         self.gpo_effect = GPO.merge_gpo_effect(self.gpo_effect)
+        print(">> %s" % self.gpo_effect)
+        """
+
 
         self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'domain', schema_guid_dict)
 
@@ -124,9 +144,10 @@ class Domain:
             'sid': self.domain_sid,
             'dn': self.dn,
             'functionallevel': self.functional_level,
-            'trusts': self.trusts,
-            'links': list(self.links.values()),
-            'gpo_effect': self.gpo_effect,
+            #'trusts': self.trusts,
+            #'links': list(self.links.values()),
+            #'gpo_effect': self.gpo_effect,
+            'gplink': self.gplink, 
             'aces': self.aces,
         }
 

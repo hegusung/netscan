@@ -122,15 +122,81 @@ services:
       timeout: 10s
       retries: 120
 
-  netscan-neo4j:
-    container_name: netscan-neo4j
-    hostname: neo4j
-    image: neo4j:4.4.19-community
+  bloodhound-postgres:
+    container_name: netscan-bloodhound-postgres
+    image: docker.io/library/postgres:13.2
+    #network_mode: "host"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE}
+    # Database ports are disabled by default. Please change your database password to something secure before uncommenting
+    # ports:
+    #   - ${POSTGRES_PORT:-5432}:5432
     volumes:
-      - neo4j_data:/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE} -h 127.0.0.1 -p 5432"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - netscan-network
+
+  bloodhound-neo4j:
+    container_name: netscan-bloodhound-neo4j
+    image: docker.io/library/neo4j:4.4
+    #network_mode: "host"
+    volumes:
+      - bloodhound_data:/data
     ports:
-      - 127.0.0.1:7474:7474
-      - 127.0.0.1:7687:7687
+      - "${NEO4J_WEB_PORT}:7474"
+      - "${NEO4J_DB_PORT}:7687"
+    environment:
+      - NEO4J_AUTH=${NEO4J_AUTH}
+      - NEO4J_dbms_memory_heap_initial__size=${NEO4J_dbms_memory_heap_initial__size}
+      - NEO4J_dbms_memory_heap_max__size=${NEO4J_dbms_memory_heap_max__size}
+      - NEO4J_dbms_memory_pagecache_size=${NEO4J_dbms_memory_pagecache_size}
+      - NEO4J_dbms_allow__upgrade=${NEO4J_ALLOW_UPGRADE:-true}
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${LOG_MAX_SIZE}"
+        max-file: "${LOG_MAX_FILE}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -O /dev/null -q http://localhost:${NEO4J_WEB_PORT:-7474} || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - netscan-network
+
+  bloodhound-app:
+    container_name: netscan-bloodhound-app
+    image: docker.io/specterops/bloodhound:${BLOODHOUND_TAG:-latest}
+    #network_mode: "host"
+    environment:
+      - bhe_disable_cypher_qc=${bhe_disable_cypher_qc:-false}
+    ports:
+      - ${BLOODHOUND_PORT}:8080
+    volumes:
+      - ./docker/bloodhound.config.json:/bloodhound.config.json:ro
+    depends_on:
+      bloodhound-postgres:
+        condition: service_healthy
+      bloodhound-neo4j:
+        condition: service_healthy
     networks:
       - netscan-network
 
@@ -141,7 +207,9 @@ volumes:
     driver: local
   kb_data:
     driver: local
-  neo4j_data:
+  bloodhound_data:
+    driver: local
+  postgres_data:
     driver: local
 
 networks:

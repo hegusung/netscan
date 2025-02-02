@@ -3,7 +3,7 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
 class Trust:
-    attributes = ['distinguishedName', 'name', 'trustDirection', 'trustType', 'trustAttributes']
+    attributes = ['distinguishedName', 'name', 'trustDirection', 'trustType', 'trustAttributes', 'securityIdentifier']
 
     @classmethod
     def list_trust(self, ldap):
@@ -20,7 +20,29 @@ class Trust:
     # ====================
 
     def __init__(self, ldap, attr):
-        self.domain = str(attr['name'])
+        self.domain = str(attr['name']).upper()
+        self.domain_sid = LDAP_SID(bytes(attr['securityIdentifier'])).formatCanonical() if 'securityIdentifier' in attr else None
+
+        self.trust_direction_int = int(str(attr['trustDirection']))
+
+        attr['trustAttributes'] = int(str(attr['trustAttributes']))
+        if attr['trustAttributes'] & 0x20 != 0: # Within forest
+            self.trusttype = 'ParentChild'
+            self.is_transitive = True
+            self.sid_filtering = (attr['trustAttributes'] & 0x4) != 0 # Qurantined domain
+        elif attr['trustAttributes'] & 0x8 != 0: # Forest transitive
+            self.trusttype = 'Forest'
+            self.is_transitive = True
+            self.sid_filtering = True
+        elif attr['trustAttributes'] & 0x40 != 0 or attr['trustAttributes'] & 0x10 != 0: # Treat as external or Cross organisation
+            self.trusttype = 'External'
+            self.is_transitive = False
+            self.sid_filtering = True
+        else:
+            self.trusttype = 'Unknown'
+            self.is_transitive = (attr['trustAttributes'] & 0x1) != 0 # Non_transitive
+            self.sid_filtering = True
+
 
         attr['trustDirection'] = int(str(attr['trustDirection']))
         if attr['trustDirection'] == 0:
@@ -34,6 +56,7 @@ class Trust:
         else:
             self.direction = 'Unknown'
 
+        """
         attr['trustType'] = int(str(attr['trustType']))
         if attr['trustType'] == 1:
             self.trust_type = 'Windows NT'
@@ -99,12 +122,20 @@ class Trust:
                 self.tags.append('SID filtering disabled')
             else:
                 pass
+        """
 
     def to_json(self):
         return {
-            'domain': self.domain,
+            #'domain': self.domain,
+            #'type': self.trust_flavor,
+            #'tags': self.tags,
+            # Bloodhound
+            "TargetDomainSid": self.domain_sid,
+            "TargetDomainName": self.domain,
+            "TrustDirection": self.trust_direction_int,
             'direction': self.direction,
-            'type': self.trust_flavor,
-            'tags': self.tags,
+            "TrustType": self.trusttype,
+            "SidFilteringEnabled": self.sid_filtering,
+            "IsTransitive": self.is_transitive,
         }
 

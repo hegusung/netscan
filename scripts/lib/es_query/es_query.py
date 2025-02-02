@@ -169,8 +169,8 @@ def export_ip_ports(session, service, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "ip"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "ip"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -191,8 +191,8 @@ def export_ip_ports(session, service, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -269,9 +269,9 @@ def export_domains(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "service":   "smb"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "service.keyword":   "smb"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -311,10 +311,10 @@ def export_domain_controllers(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "service":   "smb"        }},
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "service.keyword":   "smb"        }},
             { "match": { "service_info.is_dc" : True }},
-            { "match": { "session": session }}
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -353,8 +353,8 @@ def export_undiscovered_services(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "session": session }},
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "session.keyword": session }},
           ],
           "must_not": [
               { "exists": { "field": "nmap_service" }},
@@ -402,8 +402,8 @@ def export_http_urls(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "http"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "http"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -443,8 +443,8 @@ def export_domain_hashes(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_user"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "domain_user"        }},
+            { "match": { "session.keyword": session }}
           ],
           "must_not": [
             { "match": { "tags":   "Account disabled"  }},
@@ -467,9 +467,9 @@ def export_domain_hashes(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_hash"        }},
-            { "match": { "format": "ntlm" }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "ntlm" }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -512,8 +512,8 @@ def export_local_hashes(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "cred_hash"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "cred_hash"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -568,19 +568,21 @@ def export_bloodhound(session, output_dir):
 
     #output.append((format, hashfile_filename, count,  "hashes written"))
 
-    links_dict = get_gpos_links(session)
+    links_dict, links_effect = get_gpos_links(session)
 
-    domains, domain_fqdn_to_name, domain_name_to_sid, output = export_bloodhound_domains(session, links_dict, output_dir, output)
+    user_info, user_sid, group_sid = get_user_group_data(session)
+
+    domains, domain_fqdn_to_name, domain_name_to_sid, output = export_bloodhound_domains(session, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output)
 
     output = export_bloodhound_containers(session, domain_name_to_sid, output_dir, output)
 
-    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, output_dir, output)
+    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output)
 
-    user_info, user_sid, output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
+    output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
 
     output = export_bloodhound_gpos(session, domain_name_to_sid, output_dir, output)
 
-    group_sid = get_group_sid(session)
+    #group_sid = get_group_sid(session)
 
     domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, output)
 
@@ -595,8 +597,8 @@ def export_domain_hosts(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_host"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -640,7 +642,7 @@ def dump(session, output_file):
       "query": {
         "bool": {
           "must": [
-            { "match": { "session": session }}
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -708,3 +710,18 @@ def restore(session, input_file):
     f.close()
 
     Output.write("%d documents inserted in elasticsearch" % (c,))
+
+def delete_session(session):
+
+    query = {
+      "query": {
+        "match": {
+            "session.keyword":   session
+        }
+      },
+    }
+
+    res = Elasticsearch.delete_by_query(query)
+
+    print("Deleted %d documents" % res['deleted'])
+

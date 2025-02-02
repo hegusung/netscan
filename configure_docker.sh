@@ -28,7 +28,8 @@ else
     sudo sysctl -w vm.max_map_count=262144 > /dev/null
     
     echo -e "${GREEN}[+] Building & Starting containers...${ENDCOLOR}"
-    docker-compose up --build --remove-orphans -d > /dev/null
+    #docker-compose up --build --remove-orphans -d > /dev/null
+    docker-compose up --build --remove-orphans -d 
     docker build . -f docker/Dockerfile -t netscan:latest > /dev/null
     
     echo -e "${GREEN}[+] Configuring Elasticsearch...${ENDCOLOR}"
@@ -53,7 +54,7 @@ then
     exit 1
 else
     echo -e "${GREEN}[+] Kibana credentials: ${ENDCOLOR}${RED}${BLACK_BACKGROUND} elastic:$ELASTIC_PASSWORD ${ENDCOLOR}"
-    echo -e "${GREEN}[+] Remember to change the neo4j password at http://localhost:7474/ (default: ${ENDCOLOR}${RED}${BLACK_BACKGROUND} neo4j:neo4j ${ENDCOLOR}${GREEN})${ENDCOLOR}"
+    echo -e "${GREEN}[+] Neo4J credentials: ${ENDCOLOR}${RED}${BLACK_BACKGROUND} $NEO4J_AUTH ${ENDCOLOR}"
     
     echo -e "${GREEN}[+] Adding an alias in your personal settings...${ENDCOLOR}"
     

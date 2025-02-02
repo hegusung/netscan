@@ -16,6 +16,8 @@ class Host:
 
     @classmethod
     def list_hosts(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(objectCategory=computer)'
 
@@ -23,30 +25,34 @@ class Host:
             if not 'sAMAccountName' in attr:
                 continue
 
-            host = Host(ldap, attr)
+            host = Host(ldap, attr, schema_guid_dict)
 
             yield host
 
     @classmethod
     def list_constrained_delegations(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = "(msDS-AllowedToDelegateTo=*)"
         attributes = self.attributes
 
         for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
-            host = Host(ldap, attr)
+            host = Host(ldap, attr, schema_guid_dict)
 
             for spn in host.allowed_to_delegate_to:
                 yield host, str(spn)
 
     @classmethod
     def list_rbcd(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = "(msDS-AllowedToActOnBehalfOfOtherIdentity=*)"
         attributes = self.attributes
 
         for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
-            host = Host(ldap, attr)
+            host = Host(ldap, attr, schema_guid_dict)
 
             for name in host.allowed_to_act_on_behalf_of_other_identity:
                 yield host, name
@@ -55,12 +61,14 @@ class Host:
     @classmethod
     # Taken from https://github.com/n00py/LAPSDumper/blob/main/laps.py
     def dump_laps(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = "(&(objectCategory=computer)(ms-Mcs-AdmPwdExpirationTime=*))"
         attributes = self.attributes + ['ms-Mcs-AdmPwd']
 
         for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
-            host = Host(ldap, attr)
+            host = Host(ldap, attr, schema_guid_dict)
 
             if 'ms-Mcs-AdmPwd' in attr:
                 password = str(attr['ms-Mcs-AdmPwd'])
@@ -73,7 +81,7 @@ class Host:
     # === Host object ===
     # ===================
 
-    def __init__(self, ldap, attr):
+    def __init__(self, ldap, attr, schema_guid_dict):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.dns = str(attr["dNSHostName"]) if 'dNSHostName' in attr else ''
         self.hostname = str(attr['name'])
@@ -163,7 +171,7 @@ class Host:
 
         # Check the ACEs
         try:
-            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'computer', self.get_schema_guid_dict(ldap))
+            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'computer', schema_guid_dict)
         except KeyError:
             self.aces = {}
 
@@ -188,15 +196,16 @@ class Host:
         # Ressourse-Based Constrained delegation
         self.allowed_to_act_on_behalf_of_other_identity_sids = []
         if 'msDS-AllowedToActOnBehalfOfOtherIdentity' in attr:
-            aces = parse_sd(bytes(attr['msDS-AllowedToActOnBehalfOfOtherIdentity']), self.domain.upper(), 'computer', self.get_schema_guid_dict(ldap))
+            aces = parse_sd(bytes(attr['msDS-AllowedToActOnBehalfOfOtherIdentity']), self.domain.upper(), 'computer', schema_guid_dict)
             for ace in aces['aces']:
                 if ace['RightName'] == 'GenericAll':
                     self.allowed_to_act_on_behalf_of_other_identity_sids.append(ace['PrincipalSID'])
 
         self.allowed_to_act_on_behalf_of_other_identity = []
         for sid_obj in self.allowed_to_act_on_behalf_of_other_identity_sids:
-            name = ldap._resolve_sid_to_name(self.domain, sid_obj)
-            self.allowed_to_act_on_behalf_of_other_identity.append(name)
+            # Don't resolve here, reduce LDAP queries
+            #name = ldap._resolve_sid_to_name(self.domain, sid_obj) 
+            self.allowed_to_act_on_behalf_of_other_identity.append(sid_obj)
 
     def to_json(self):
         return {

@@ -1156,6 +1156,18 @@ class Elasticsearch(object):
             Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
 
     @classmethod
+    def delete_by_query(self, query):
+        try:
+            es = self.get_es_instance()
+
+            res = es[0].delete_by_query(index=es[1], body=query)
+
+            return res
+        except elasticsearch.exceptions.ConnectionError:
+            Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
+
+
+    @classmethod
     def insert_document(self, id, doc):
         try:
             es = self.get_es_instance()

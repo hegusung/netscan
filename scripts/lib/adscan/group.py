@@ -16,6 +16,8 @@ class Group:
 
     @classmethod
     def list_groups(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(|(samaccounttype=268435456)(samaccounttype=268435457)(samaccounttype=536870912)(samaccounttype=536870913))'
 
@@ -23,13 +25,15 @@ class Group:
             if not 'sAMAccountName' in attr:
                 continue
 
-            group = Group(ldap, attr)
+            group = Group(ldap, attr, schema_guid_dict)
 
             yield group
 
     @classmethod
     def get_members_recursive(self, ldap, name, users={}, processed_groups=[]):
         from lib.adscan.user import User
+
+        user_schema_guid_dict = User.get_schema_guid_dict(ldap)
 
         sbase = ldap.defaultdomainnamingcontext
         attributes = list(set(User.attributes + ['objectClass', 'member']))
@@ -59,7 +63,7 @@ class Group:
             name = str(attr['sAMAccountName'])
 
             if 'user' in object_class:
-                user = User(ldap, attr) 
+                user = User(ldap, attr, user_schema_guid_dict) 
 
                 domain_username = "%s\\%s" % (user.domain, user.username)
 
@@ -84,7 +88,7 @@ class Group:
     # === Group object ===
     # ====================
 
-    def __init__(self, ldap, attr):
+    def __init__(self, ldap, attr, schema_guid_dict):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.groupname = str(attr['sAMAccountName'])
         self.fullname = str(attr['displayName']) if 'displayName' in attr else ""
@@ -118,7 +122,7 @@ class Group:
 
         # Check the ACEs
         try:
-            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'group', self.get_schema_guid_dict(ldap))
+            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'group', schema_guid_dict)
         except KeyError:
             self.aces = {}
 

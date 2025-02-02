@@ -19,19 +19,56 @@ class User:
 
     @classmethod
     def list_users(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
-        search_filter = '(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,%s)(objectCategory=CN=ms-DS-Managed-Service-Account,%s))' % (ldap.schemanamingcontext, ldap.schemanamingcontext)
+        search_filter = '(&(sAMAccountName=*)(objectCategory=user))'
 
         for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
             if not 'sAMAccountName' in attr:
                 continue
 
-            user = User(ldap, attr)
+            user = User(ldap, attr, schema_guid_dict)
 
             yield user
 
     @classmethod
+    def list_gMSA(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = '(&(sAMAccountName=*)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,%s))' % ldap.schemanamingcontext
+
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            if not 'sAMAccountName' in attr:
+                continue
+
+            user = User(ldap, attr, schema_guid_dict)
+
+            yield user
+
+    @classmethod
+    def list_sMSA(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = '(&(sAMAccountName=*)(objectCategory=CN=ms-DS-Managed-Service-Account,%s))' % ldap.schemanamingcontext
+
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            if not 'sAMAccountName' in attr:
+                continue
+
+            user = User(ldap, attr, schema_guid_dict)
+
+            yield user
+
+
+
+
+    @classmethod
     def list_spns(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(&(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,%s)(objectCategory=CN=ms-DS-Managed-Service-Account,%s))(servicePrincipalName=*))' % (ldap.schemanamingcontext, ldap.schemanamingcontext)
 
@@ -39,13 +76,15 @@ class User:
             if not 'sAMAccountName' in attr:
                 continue
 
-            user = User(ldap, attr)
+            user = User(ldap, attr, schema_guid_dict)
 
             yield user
 
 
     @classmethod
     def get_from_spn(self, ldap, spn):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(servicePrincipalName=%s)' % (spn,)
 
@@ -53,13 +92,15 @@ class User:
             if not 'sAMAccountName' in attr:
                 continue
 
-            user = User(ldap, attr)
+            user = User(ldap, attr, schema_guid_dict)
 
             return user
         return None
 
     @classmethod
     def list_donotrequirepreauth(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(&(|(objectCategory=user)(objectCategory=CN=ms-DS-Group-Managed-Service-Account,%s)(objectCategory=CN=ms-DS-Managed-Service-Account,%s))(useraccountcontrol:1.2.840.113556.1.4.803:=4194304))' % (ldap.schemanamingcontext, ldap.schemanamingcontext)
 
@@ -67,19 +108,21 @@ class User:
             if not 'sAMAccountName' in attr:
                 continue
 
-            user = User(ldap, attr)
+            user = User(ldap, attr, schema_guid_dict)
 
             yield user
 
     @classmethod
     # Taken from https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py
     def dump_gMSA(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
         attributes = self.attributes + ['msDS-ManagedPassword']
 
         for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
-            user = User(ldap, attr)
+            user = User(ldap, attr, schema_guid_dict)
 
             try:
                 data = bytes(attr['msDS-ManagedPassword'])
@@ -97,12 +140,14 @@ class User:
 
     @classmethod
     def dump_sMSA(self, ldap):
+        schema_guid_dict = self.get_schema_guid_dict(ldap)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = "(objectClass=msDS-ManagedServiceAccount)"
         attributes = self.attributes + ['msDS-HostServiceAccountBL']
 
         for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
-            user = User(ldap, attr)
+            user = User(ldap, attr, schema_guid_dict)
 
             if 'msDS-HostServiceAccountBL' in attr:
                 target_host = str(attr['msDS-HostServiceAccountBL'])
@@ -115,6 +160,8 @@ class User:
     @classmethod
     def get_groups_recursive(self, ldap, name, groups={}, processed=[]):
         from lib.adscan.group import Group
+
+        group_schema_guid_dict = Group.get_schema_guid_dict(ldap)
 
         sbase = ldap.defaultdomainnamingcontext
         attributes = list(set(Group.attributes + ['objectClass', 'memberOf']))
@@ -146,7 +193,7 @@ class User:
             # Processed, add it to list
             if 'group' in object_class:
                 if not sid in groups:
-                    groups[sid] = Group(ldap, attr)
+                    groups[sid] = Group(ldap, attr, group_schema_guid_dict)
                 
             # Add the group specified by the "primaryGroupID" attribute to the list
             if 'primaryGroupID' in attr:
@@ -176,7 +223,7 @@ class User:
     # === User object ===
     # ===================
 
-    def __init__(self, ldap, attr):
+    def __init__(self, ldap, attr, schema_guid_dict):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.username = str(attr['sAMAccountName'])
         self.fullname = str(attr['displayName']) if 'displayName' in attr else ""
@@ -289,13 +336,13 @@ class User:
 
         # Check the ACEs
         try:
-            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'user', self.get_schema_guid_dict(ldap))
+            self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'user', schema_guid_dict)
         except KeyError:
             self.aces = {}
 
         # Check the ACEs to access the gMSA account password
         if 'msDS-GroupMSAMembership' in attr:
-            aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), self.domain.upper(), 'user', self.get_schema_guid_dict(ldap))
+            aces2 = parse_sd(bytes(attr['msDS-GroupMSAMembership']), self.domain.upper(), 'user', schema_guid_dict)
             for rule in aces2['aces']:
                 if rule['RightName'] in ['GenericAll', 'Owns']:
                     rule['RightName'] = 'ReadGMSAPassword'

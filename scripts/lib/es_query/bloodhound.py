@@ -5,12 +5,14 @@ from tqdm import tqdm
 from utils.db import Elasticsearch
 from utils.output import Output
 from lib.es_query.bloodhound_utils import *
+from lib.adscan.ou import OU
+from lib.adscan.ou import GPO
 
 from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
 
 BLOODHOUND_VERSION = 5
 
-def export_bloodhound_domains(session, links_dict, output_dir, output):
+def export_bloodhound_domains(session, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output):
 
     query = {
       "query": {
@@ -97,10 +99,121 @@ def export_bloodhound_domains(session, links_dict, output_dir, output):
 
             links = list(links.values())
 
-
-        # TODO recreate gpo_effect
+        # Recreate gpo_changes
         gpo_changes = {}
-        #gpo_changes = source['gpo_effect']
+        for sid in OU.privileged_sid_dict:
+            gpo_changes[sid] = {}
+            for t in ['Memberof', 'Members', 'Localgroup']:
+                gpo_changes[sid][t] = []
+
+        for link in links:
+            if link['GUID'] in links_effect:
+
+                for effect in links_effect[link['GUID']]['Memberof']:
+                    member = effect['member']
+
+                    if not member.startswith('S-'):
+                        if '\\' in member:
+                            username = member.split('\\')[-1]
+                        else:
+                            username = member
+
+                        # TODO: domain check
+                        member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                    if member != None:
+                        if effect['member'] in user_sid_list:
+                            object_type = "User"
+                        elif effect['member'] in group_sid_list:
+                            object_type = "Group"
+                        else:
+                            object_type = "Base"
+
+                        gpo_changes[effect['group']]['Memberof'].append({
+                            'ObjectIdentifier': effect['member'], 
+                            'ObjectType': object_type,
+                        }) 
+
+                for effect in links_effect[link['GUID']]['Members']:
+                    for member in effect['members']:
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            if member in user_sid_list:
+                                object_type = "User"
+                            elif member in group_sid_list:
+                                object_type = "Group"
+                            else:
+                                object_type = "Base"
+
+                            gpo_changes[effect['group']]['Members'].append({
+                                'ObjectIdentifier': member, 
+                                'ObjectType': object_type,
+                            }) 
+
+                for effect in links_effect[link['GUID']]['Localgroup']:
+                    if effect['action'] == 'deleteAllUsers':
+                        for item in gpo_changes[effect['group']]['Localgroup']:
+                            if item['ObjectType'] == 'User':
+                                del gpo_changes[effect['group']]['Localgroup'][item]
+
+                    elif effect['action'] == 'deleteAllGroups':
+                        for item in gpo_changes[effect['group']]['Localgroup']:
+                            if item['ObjectType'] == 'Group':
+                                del gpo_changes[effect['group']]['Localgroup'][item]
+
+                    elif effect['action'] == 'add':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            if member in user_sid_list:
+                                object_type = "User"
+                            elif member in group_sid_list:
+                                object_type = "Group"
+                            else:
+                                object_type = "Base"
+
+                            gpo_changes[effect['group']]['Localgroup'].append({
+                                'ObjectIdentifier': member, 
+                                'ObjectType': object_type,
+                            })
+
+                    elif effect['action'] == 'delete':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            for item in gpo_changes[effect['group']]['Localgroup']:
+                                if item['ObjectIdentifier'] == member:
+                                    del gpo_changes[effect['group']]['Localgroup'][item]
+
+        gpo_changes = GPO.merge_gpo_effect(gpo_changes)
+
         gpo_changes["AffectedComputers"] = get_affected_computers(session, source['dn'], source['sid'])
 
         #acl_info = parse_acl(source['sd'], properties['domain'], 'user')
@@ -244,7 +357,7 @@ def export_bloodhound_containers(session, domain_name_to_sid, output_dir, output
 
     return output
 
-def export_bloodhound_ous(session, domain_name_to_sid, links_dict, output_dir, output):
+def export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect, output_dir, user_info, user_sid_list, group_sid_list, output):
 
     query = {
       "query": {
@@ -327,9 +440,121 @@ def export_bloodhound_ous(session, domain_name_to_sid, links_dict, output_dir, o
 
             links = list(links.values())
 
-        # TODO : recreate gpo_changes
+        # Recreate gpo_changes
         gpo_changes = {}
-        #gpo_changes = source['gpo_effect']
+        for sid in OU.privileged_sid_dict:
+            gpo_changes[sid] = {}
+            for t in ['Memberof', 'Members', 'Localgroup']:
+                gpo_changes[sid][t] = []
+
+        for link in links:
+            if link['GUID'] in links_effect:
+
+                for effect in links_effect[link['GUID']]['Memberof']:
+                    member = effect['member']
+
+                    if not member.startswith('S-'):
+                        if '\\' in member:
+                            username = member.split('\\')[-1]
+                        else:
+                            username = member
+
+                        # TODO: domain check
+                        member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                    if member != None:
+                        if effect['member'] in user_sid_list:
+                            object_type = "User"
+                        elif effect['member'] in group_sid_list:
+                            object_type = "Group"
+                        else:
+                            object_type = "Base"
+
+                        gpo_changes[effect['group']]['Memberof'].append({
+                            'ObjectIdentifier': effect['member'], 
+                            'ObjectType': object_type,
+                        }) 
+
+                for effect in links_effect[link['GUID']]['Members']:
+                    for member in effect['members']:
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            if member in user_sid_list:
+                                object_type = "User"
+                            elif member in group_sid_list:
+                                object_type = "Group"
+                            else:
+                                object_type = "Base"
+
+                            gpo_changes[effect['group']]['Members'].append({
+                                'ObjectIdentifier': member, 
+                                'ObjectType': object_type,
+                            }) 
+
+                for effect in links_effect[link['GUID']]['Localgroup']:
+                    if effect['action'] == 'deleteAllUsers':
+                        for item in gpo_changes[effect['group']]['Localgroup']:
+                            if item['ObjectType'] == 'User':
+                                del gpo_changes[effect['group']]['Localgroup'][item]
+
+                    elif effect['action'] == 'deleteAllGroups':
+                        for item in gpo_changes[effect['group']]['Localgroup']:
+                            if item['ObjectType'] == 'Group':
+                                del gpo_changes[effect['group']]['Localgroup'][item]
+
+                    elif effect['action'] == 'add':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            if member in user_sid_list:
+                                object_type = "User"
+                            elif member in group_sid_list:
+                                object_type = "Group"
+                            else:
+                                object_type = "Base"
+
+                            gpo_changes[effect['group']]['Localgroup'].append({
+                                'ObjectIdentifier': member, 
+                                'ObjectType': object_type,
+                            })
+
+                    elif effect['action'] == 'delete':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            for item in gpo_changes[effect['group']]['Localgroup']:
+                                if item['ObjectIdentifier'] == member:
+                                    del gpo_changes[effect['group']]['Localgroup'][item]
+            
+        gpo_changes = GPO.merge_gpo_effect(gpo_changes)
+
         gpo_changes["AffectedComputers"] = get_affected_computers(session, source['dn'], properties['domainsid'])
 
         acl_info = source['aces']
@@ -392,8 +617,8 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
     # Create output files in dir if non existant
 
     data = []
-    user_info = []
-    user_sid = []
+    #user_info = []
+    #user_sid = []
 
     count = Elasticsearch.count(query)
     Output.write("Processing %d Users" % count)
@@ -475,13 +700,13 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
             'IsACLProtected': is_acl_protected,
         })
 
-        user_info.append({
-            'name': source['username'].upper(),
-            'domain_fqdn': source['domain'].upper(),
-            'domain_name': domain_fqdn_to_name[source['domain'].upper()],
-            'sid': source['sid'],
-        })
-        user_sid.append(source['sid'])
+        #user_info.append({
+        #    'name': source['username'].upper(),
+        #    'domain_fqdn': source['domain'].upper(),
+        #    'domain_name': domain_fqdn_to_name[source['domain'].upper()],
+        #    'sid': source['sid'],
+        #})
+        #user_sid.append(source['sid'])
 
         pg.update(1)
         c += 1
@@ -540,7 +765,7 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
 
     file.close()
 
-    return user_info, user_sid, output
+    return output
 
 def get_group_sid(session):
     query = {
@@ -1079,12 +1304,125 @@ def get_gpos_links(session):
     }
 
     links_dict = {}
+    links_effect = {}
 
     res = Elasticsearch.search(query)
     for item in res:
         source = item['_source']
 
         links_dict[source['dn'].lower()] = source['guid']
+        if 'gpo_effect' in source:
+            links_effect[source['guid']] = source['gpo_effect']
 
-    return links_dict
+    return links_dict, links_effect
+
+def get_user_group_data(session):
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    domain_fqdn_to_name = {}
+
+    # Create output files in dir if non existant
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d domains (preprocessing)" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        domain_fqdn_to_name[source['domain'].upper()] = source['name'].upper()
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_user"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    user_info = []
+    user_sid = []
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d Users (preprocessing)" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        user_info.append({
+            'name': source['username'].upper(),
+            'domain_fqdn': source['domain'].upper(),
+            'domain_name': domain_fqdn_to_name[source['domain'].upper()],
+            'sid': source['sid'],
+        })
+        user_sid.append(source['sid'])
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type":   "domain_group"        }},
+            { "match": { "session": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    group_sid = []
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d Users (preprocessing)" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        group_sid.append(source['sid'])
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    return user_info, user_sid, group_sid
+
 

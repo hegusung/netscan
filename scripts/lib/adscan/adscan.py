@@ -311,6 +311,12 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
             if 'domains' in actions:
                 if ldap_authenticated:
                     Output.highlight({'target': ldapscan.url(), 'message': 'Domains:'})
+
+                    trust_list = []
+                    for trust in Trust.list_trust(ldapscan):
+                        del trust['direction']
+                        trust_list.append(trust)
+
                     for domain in Domain.list_domains(ldapscan, smbscan):
                         entry = domain.to_json()
 
@@ -325,9 +331,10 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'dn': entry['dn'],
                             'functionallevel': entry['functionallevel'],
                             # For bloodhound
-                            'gpo_effect': entry['gpo_effect'],
-                            'trusts': entry['trusts'],
-                            'links': entry['links'],
+                            #'gpo_effect': entry['gpo_effect'],
+                            'trusts': trust_list,
+                            'gplink': entry['gplink'],
+                            #'links': entry['links'],
                             'aces': entry['aces'],
                             'owner': get_owner(entry['aces']),
                         })
@@ -387,8 +394,9 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 'dn': entry['dn'],
                                 'guid': entry['guid'],
                                 # For bloodhound
-                                'gpo_effect': entry['gpo_effect'],
-                                'links': entry['links'],
+                                'gplink': entry['gplink'],
+                                #'gpo_effect': entry['gpo_effect'],
+                                #'links': entry['links'],
                                 'aces': entry['aces'],
                                 'owner': get_owner(entry['aces']),
                             })
@@ -398,8 +406,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     raise NotImplementedError('Dumping domains through SMB')
 
             if 'users' in actions:
-                Output.highlight({'target': ldapscan.url(), 'message': 'Users:'})
                 if ldap_authenticated:
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Users:'})
                     for user in User.list_users(ldapscan):
                         entry = user.to_json()
                         user = '%s\\%s' % (entry['domain'], entry['username'])
@@ -425,6 +433,62 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'sid_history': entry['sid_history'],
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'gMSA accounts:'})
+                    for user in User.list_gMSA(ldapscan):
+                        entry = user.to_json()
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        DB.insert_domain_user({
+                            'domain': entry['domain'],
+                            'username': entry['username'],
+                            'user': user,
+                            'fullname': entry['fullname'],
+                            'comment': entry['comment'],
+                            'created_date': entry['created_date'],
+                            'last_logon': entry['last_logon'],
+                            'last_password_change': entry['last_password_change'],
+                            'primary_gid': entry['primary_gid'],
+                            'sid': entry['sid'],
+                            'rid': entry['rid'],
+                            'dn': entry['dn'],
+                            'tags': entry['tags'],
+                            'group': entry['group'],
+                            'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'spns': entry['spns'],
+                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                            'sid_history': entry['sid_history'],
+                        })
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'sMSA accounts:'})
+                    for user in User.list_sMSA(ldapscan):
+                        entry = user.to_json()
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        DB.insert_domain_user({
+                            'domain': entry['domain'],
+                            'username': entry['username'],
+                            'user': user,
+                            'fullname': entry['fullname'],
+                            'comment': entry['comment'],
+                            'created_date': entry['created_date'],
+                            'last_logon': entry['last_logon'],
+                            'last_password_change': entry['last_password_change'],
+                            'primary_gid': entry['primary_gid'],
+                            'sid': entry['sid'],
+                            'rid': entry['rid'],
+                            'dn': entry['dn'],
+                            'tags': entry['tags'],
+                            'group': entry['group'],
+                            'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'spns': entry['spns'],
+                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                            'sid_history': entry['sid_history'],
+                        })
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+
+
 
                 else:
                     raise NotImplementedError('Dumping users through SMB')
@@ -887,27 +951,34 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 if ldap_authenticated:
                     for trust in Trust.list_trust(ldapscan):
                         entry = trust.to_json()
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s   [%s]' % (entry['domain'].ljust(30), entry['direction'].ljust(20), entry['type'].ljust(20), ','.join(entry['tags']))})
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s   Sid filtering:%s, Transitive:%s' % (entry['TargetDomainName'].ljust(30), entry['direction'].ljust(20), entry['TrustType'].ljust(20), entry['SidFilteringEnabled'], entry['IsTransitive'])})
                 else:
                     raise NotImplementedError('Dumping trusts through SMB')
 
             if 'gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'GPOs:'})
                 if ldap_authenticated:
-                    for gpo in GPO.list_gpos(ldapscan):
+                    for gpo in GPO.list_gpos(ldapscan, smbscan ):
                         entry = gpo.to_json()
 
                         DB.insert_domain_gpo({
                             'domain': entry['domain'],
-                            'domain_sid': entry['domain_sid'],
+                            #'domain_sid': entry['domain_sid'],
                             'name': entry['name'],
                             'guid': entry['guid'],
                             'dn': entry['dn'],
                             'gpcpath': entry['gpcpath'],
                             'aces': entry['aces'],
                             'owner': get_owner(entry['aces']),
+                            'gpo_effect': entry['gpo_effect'],
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   [%s]' % (entry['name'].ljust(30), entry['gpcpath'])})
+                        for effect in entry['gpo_effect']['Members']:
+                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
+                        for effect in entry['gpo_effect']['Memberof']:
+                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
+                        for effect in entry['gpo_effect']['Localgroup']:
+                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
                 else:
                     raise NotImplementedError('Dumping GPOs through SMB')
 

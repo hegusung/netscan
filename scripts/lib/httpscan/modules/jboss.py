@@ -37,6 +37,7 @@ jboss_urls = [
     "web-console/ServerInfo.jsp",
     "invoker/readonly",
     "invoker/JMXInvokerServlet",
+    "invoker/EJBInvokerServlet/",
 ]
 
 auth_5_6_urls = [

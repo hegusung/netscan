@@ -17,6 +17,7 @@ class OU:
     @classmethod
     def list_ous(self, ldap, smb):
         schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
+
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter='(objectCategory=organizationalUnit)'
 
@@ -41,7 +42,10 @@ class OU:
 
         self.guid = ldap.parse_guid(bytes(attr['objectGUID']))
 
+        self.gplink = str(attr['gPLink'])
+
         # Process GPO
+        """
         self.links = {}
         self.gpo_paths = []
         if 'gPLink' in attr:
@@ -75,9 +79,17 @@ class OU:
             for t in ['Memberof', 'Members', 'Localgroup']:
                 self.gpo_effect[sid][t] = []
 
+        print(self.gpo_paths)
+        print(self.gpo_effect)
+
         for gpo_path, gpo_dn in self.gpo_paths:
             GPO.resolve_effect(smb, ldap, gpo_dn, gpo_path, self.gpo_effect)
+        print(self.gpo_effect)
         self.gpo_effect = GPO.merge_gpo_effect(self.gpo_effect)
+        print(self.gpo_effect)
+        """
+
+
 
         self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'organizational-unit', schema_guid_dict)
 
@@ -87,8 +99,9 @@ class OU:
             'name': self.name,
             'dn': self.dn,
             'guid': self.guid,
-            'links': list(self.links.values()),
-            'gpo_effect': self.gpo_effect,
+            #'links': list(self.links.values()),
+            #'gpo_effect': self.gpo_effect,
+            'gplink': self.gplink, 
             'aces': self.aces,
         }
 

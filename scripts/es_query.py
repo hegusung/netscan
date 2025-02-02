@@ -5,7 +5,7 @@ from utils.utils import normalize_path
 from utils.output import Output
 from utils.db import DB
 from utils.config import Config
-from lib.es_query.es_query import dump, export_ports, export_hashes, export_bloodhound, restore
+from lib.es_query.es_query import dump, export_ports, export_hashes, export_bloodhound, restore, delete_session
 
 def main():
     parser = argparse.ArgumentParser(description='Elasticsearch Query: make target list out of elasticsearch')
@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--export-bloodhound', metavar='output directory', type=str, nargs='?', help='Directory to export bloodhound files to', dest='export_bloodhound')
     parser.add_argument('--dump', metavar='output file', type=str, nargs='?', help='Dump elastisearch to file', dest='dump')
     parser.add_argument('--restore', metavar='input file', type=str, nargs='?', help='Restore dump from file', dest='restore')
+
+    parser.add_argument('--delete-session', metavar='session', type=str, nargs='?', help='Delete all documents related to a specific session', dest='delete_session')
 
     args = parser.parse_args()
 
@@ -39,6 +41,8 @@ def main():
         dump(session, normalize_path(args.dump))
     elif args.restore:
         restore(session, normalize_path(args.restore))
+    elif args.delete_session:
+        delete_session(args.delete_session)
 
     DB.stop_worker()
     Output.stop()

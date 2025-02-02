@@ -80,6 +80,8 @@ class LDAPScan:
             
             if not connected:
                 return False, None
+        except ldap3.core.exceptions.LDAPSocketSendError:
+            return False, None
         except ldap3.core.exceptions.LDAPSocketOpenError:
             return False, None
         except ldap3.core.exceptions.LDAPInvalidPortError:
@@ -222,11 +224,44 @@ class LDAPScan:
         if scope != None:
             scope = Scope(scope)
 
+        import threading
+        import queue
+        q = queue.Queue()
+
+        def callback(item):
+            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
+                return
+
+            q.put(self.to_dict_impacket(item))
+
+
+        def search_ldap():
+            self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, attributes=attributes, scope=scope, perRecordCallback=callback)
+
+        # Run the library function in a separate thread
+        thread = threading.Thread(target=search_ldap)
+        thread.start()
+
+        # Yield items from the queue until the thread finishes
+        while thread.is_alive() or not q.empty():
+            try:
+                item = q.get(timeout=1)  # Wait for an item with a timeout
+
+                if item == None:
+                    continue
+
+                yield item
+            except queue.Empty:
+                break  # Break if queue is empty and thread is done
+
+
+        """
         for item in self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, attributes=attributes, scope=scope):
             if isinstance(item, ldapasn1.SearchResultEntry) is not True:
                 continue
 
             yield self.to_dict_impacket(item)
+        """
 
     def query_ldap3_generator(self, search_base, search_filter, attributes, query_sd=False, page_size=1000, scope=None):
         if self.protocol == "ldap":
@@ -281,6 +316,7 @@ class LDAPScan:
             yield self.to_dict_ldap3(item)
 
     def query_generator(self, search_base, search_filter, attributes, query_sd=False, page_size=1000, scope=None):
+
         if not self.python_ldap:
             # use impacket ldap
             for item in self.query_impacket_generator(search_base, search_filter, attributes, query_sd=query_sd, page_size=page_size, scope=scope):
@@ -322,6 +358,8 @@ class LDAPScan:
         return schema_guid_dict
 
     def _resolve_name_to_sid(self, domain, name):
+        raise Exception("No !")
+
         if "\\" in name:
             account_domain = name.split("\\")[0]
             if "." in account_domain:
@@ -354,6 +392,8 @@ class LDAPScan:
         return return_sid
 
     def _resolve_sid_to_name(self, domain, sid):
+        raise Exception("No !")
+
         # Child object
         search_filter = "(objectSid=%s)" % sid
         search_base = ",".join(["DC=%s" % dc for dc in domain.split('.')])
@@ -378,6 +418,8 @@ class LDAPScan:
 
 
     def _resolve_trusts(self, domain_name):
+        raise Exception("No !")
+
         trusts = []
         
         # Child object
@@ -431,6 +473,8 @@ class LDAPScan:
         return trusts
 
     def _resolve_links(self, links_dn_list):
+        raise Exception("No !")
+
         links_dict = {}
         
         if len(links_dn_list) != 0:
@@ -468,6 +512,8 @@ class LDAPScan:
         return links_dict
 
     def _resolve_sid_types(self, data, data_type):
+        raise Exception("No !")
+
         to_process = []
         if data_type == 'aces':
             for obj in data['aces']:
@@ -696,6 +742,8 @@ class LDAPScan:
     # Impacket LDAP does not support binary search
     guid_dict = {}
     def resolve_guid(self, guid):
+        raise Exception("No !")
+
         if guid in self.guid_dict:
             return self.guid_dict[guid]
 
@@ -718,6 +766,8 @@ class LDAPScan:
         return None
 
     def resolve_dn_to_sid(self, dn_list):
+        raise Exception("No !")
+
         to_resolve = []
         sid_list = []
 
