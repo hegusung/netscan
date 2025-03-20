@@ -502,14 +502,14 @@ def export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect,
 
                 for effect in links_effect[link['GUID']]['Localgroup']:
                     if effect['action'] == 'deleteAllUsers':
-                        for item in gpo_changes[effect['group']]['Localgroup']:
+                        for item in gpo_changes[effect['group']]['Localgroup'][:]:
                             if item['ObjectType'] == 'User':
-                                del gpo_changes[effect['group']]['Localgroup'][item]
+                                gpo_changes[effect['group']]['Localgroup'].remove(item)
 
                     elif effect['action'] == 'deleteAllGroups':
-                        for item in gpo_changes[effect['group']]['Localgroup']:
+                        for item in gpo_changes[effect['group']]['Localgroup'][:]:
                             if item['ObjectType'] == 'Group':
-                                del gpo_changes[effect['group']]['Localgroup'][item]
+                                gpo_changes[effect['group']]['Localgroup'].remove(item)
 
                     elif effect['action'] == 'add':
                         member = effect['member']

@@ -365,14 +365,14 @@ class GPO:
                                     for member in members:
                                         action = member.attrib['action']
 
-                                        member = member.attrib['sid'] if 'sid' in member.attrib else None
+                                        memberSid = member.attrib['sid'] if 'sid' in member.attrib else None
                                         memberName = member.attrib['name'] if 'name' in member.attrib else None
 
-                                        if not member:
-                                            member = memberName
+                                        if not memberSid:
+                                            memberSid = memberName
                                             #memberSid = ldap_obj._resolve_name_to_sid(gpo_domain, memberName)
 
-                                        if member:
+                                        if memberSid:
                                             if action.lower() == "add":
                                                 gpo_effect["Localgroup"].append({
                                                     'action': 'add',

@@ -20,7 +20,7 @@ if [ $? -eq 0 ]
 then
     echo -e "${GREEN}[+] Containers are already built.. Skipping${ENDCOLOR}"
     echo -e "${GREEN}[+] Starting containers...${ENDCOLOR}"
-    docker-compose start
+    docker compose start
     echo -e "${GREEN}[+] Waiting 15 seconds for containers initialization...${ENDCOLOR}"
     sleep 15
 else
@@ -29,7 +29,7 @@ else
     
     echo -e "${GREEN}[+] Building & Starting containers...${ENDCOLOR}"
     #docker-compose up --build --remove-orphans -d > /dev/null
-    docker-compose up --build --remove-orphans -d 
+    docker compose up --build --remove-orphans -d 
     docker build . -f docker/Dockerfile -t netscan:latest > /dev/null
     
     echo -e "${GREEN}[+] Configuring Elasticsearch...${ENDCOLOR}"

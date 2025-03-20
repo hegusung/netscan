@@ -252,7 +252,7 @@ class LDAPScan:
 
                 yield item
             except queue.Empty:
-                break  # Break if queue is empty and thread is done
+                continue
 
 
         """
@@ -323,8 +323,14 @@ class LDAPScan:
                 yield item
         else:
             # use ldap3
-            for item in self.query_ldap3_generator(search_base, search_filter, attributes, query_sd=query_sd, page_size=page_size, scope=scope):
-                yield item
+            try:
+                for item in self.query_ldap3_generator(search_base, search_filter, attributes, query_sd=query_sd, page_size=page_size, scope=scope):
+                    yield item
+            except ldap3.core.exceptions.LDAPAttributeError as e:
+                attr = str(e).split()[-1]
+                attributes.remove(attr)
+                for item in self.query_ldap3_generator(search_base, search_filter, attributes, query_sd=query_sd, page_size=page_size, scope=scope):
+                    yield item
 
     def getUnixTime(self, t):
         t -= 116444736000000000

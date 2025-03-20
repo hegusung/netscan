@@ -1075,8 +1075,12 @@ class SMBScan:
 
     def get_file_data(self, share, path):
         buf = BytesIO()
-        self.conn.getFile(share, path, buf.write)
-        data = buf.getvalue()
+        try:
+            self.conn.getFile(share, path, buf.write)
+            data = buf.getvalue()
+        except UnicodeDecodeError:
+            Output.error({'target': self.url(), 'message': "Error while reading file %s%s: UnicodeDecodeError" % (share, path)})
+
 
         return data
 

@@ -314,8 +314,9 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                     trust_list = []
                     for trust in Trust.list_trust(ldapscan):
-                        del trust['direction']
-                        trust_list.append(trust)
+                        trust_json = trust.to_json()
+                        del trust_json['direction']
+                        trust_list.append(trust_json)
 
                     for domain in Domain.list_domains(ldapscan, smbscan):
                         entry = domain.to_json()
@@ -540,7 +541,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'comment': entry['details']['comment'],
                             'created_date': entry['details']['created_date'],
                             'last_logon': entry['details']['last_logon'],
-                            'last_logon_timestamp': entry['last_logon_timestamp'],
+                            'last_logon_timestamp': entry['details']['last_logon_timestamp'],
                             'last_password_change': entry['details']['last_password_change'],
                             'primary_gid': entry['details']['primary_gid'],
                             'sid': entry['details']['sid'],
@@ -805,9 +806,9 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                                 for spn_item in spn:
                                     try:
-                                        TGS = kerberos.getTGS(spn, TGT)
+                                        TGS = kerberos.getTGS(spn_item, TGT)
 
-                                        output = kerberos.TGStoHashcat(TGS, username, spn)
+                                        output = kerberos.TGStoHashcat(TGS, username, spn_item)
 
                                         cred_info = {
                                             'domain': entry['domain'],

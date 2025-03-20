@@ -42,7 +42,10 @@ class OU:
 
         self.guid = ldap.parse_guid(bytes(attr['objectGUID']))
 
-        self.gplink = str(attr['gPLink'])
+        if 'gPLink' in attr:
+            self.gplink = str(attr['gPLink'])
+        else:
+            self.gplink = ""
 
         # Process GPO
         """
