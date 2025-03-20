@@ -155,6 +155,22 @@ class LDAPScan:
             print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
             return False, None
 
+    def get_impacket_connection(self):
+        conn = ldap.LDAPConnection(self.url(), self.defaultdomainnamingcontext, self.dc_ip)  
+
+        if self.do_kerberos is not True:
+            if self.username == None:
+                # Anonymous connection
+                #self.conn = ldap3.Connection(self.server)
+                conn.login('', '', self.domain, '', '')
+            elif self.domain != None:
+                #self.conn = ldap3.Connection(self.server, user="%s\\%s" % (domain, username), password=password, authentication="NTLM")
+                conn.login(self.username, self.password, self.domain, self.lm_hash, self.nt_hash)
+        else:
+            conn.kerberosLogin(self.username, self.password, self.domain, self.lm_hash, self.nt_hash, None, self.dc_ip)
+
+        return conn
+
     def disconnect(self):
         #if self.conn.bind():
         self.conn.close()
@@ -236,7 +252,11 @@ class LDAPScan:
 
 
         def search_ldap():
-            self.conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, attributes=attributes, scope=scope, perRecordCallback=callback)
+            conn = self.get_impacket_connection()
+
+            conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, attributes=attributes, scope=scope, perRecordCallback=callback)
+
+            conn.close()
 
         # Run the library function in a separate thread
         thread = threading.Thread(target=search_ldap)
