@@ -6,7 +6,7 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
 class User:
-    attributes = ['objectClass', 'distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'primaryGroupID', 'whenCreated', 'lastLogon', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName', 'msDS-AllowedToDelegateTo', 'msDS-SupportedEncryptionTypes', 'sIDHistory']
+    attributes = ['objectClass', 'distinguishedName', 'sAMAccountname', 'displayName', 'description', 'objectSid', 'objectGUID', 'primaryGroupID', 'whenCreated', 'lastLogon', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'adminCount', 'memberOf', 'nTSecurityDescriptor', 'msDS-GroupMSAMembership', 'servicePrincipalName', 'msDS-AllowedToDelegateTo', 'msDS-SupportedEncryptionTypes', 'sIDHistory']
     schema_guid_attributes = ['user', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
     schema_guid_dict = None
 
@@ -244,6 +244,9 @@ class User:
 
         self.primaryGID = int(str(attr["primaryGroupID"]))
 
+        if 'objectGUID' in attr:
+            self.guid = ldap.parse_guid(bytes(attr['objectGUID']))
+
         try:
             self.created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
         except KeyError:
@@ -390,6 +393,7 @@ class User:
             'last_logon_timestamp': self.last_logon_timestamp_date,
             'last_password_change': self.last_password_change_date,
             'sid': self.sid,
+            'guid': self.guid,
             'rid': self.rid,
             'primary_gid': self.primaryGID,
             'dn': self.dn,

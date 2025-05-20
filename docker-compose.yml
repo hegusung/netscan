@@ -77,7 +77,7 @@ services:
       - es_certs:/usr/share/elasticsearch/config/certs
       - es_data:/usr/share/elasticsearch/data
     ports:
-      - 9200:9200
+      - 127.0.0.1:9200:9200
     networks:
       - netscan-network
     depends_on:
@@ -103,7 +103,7 @@ services:
       - kb_data:/usr/share/kibana/data
     container_name: netscan-kibana
     ports:
-      - 5601:5601
+      - 127.0.0.1:5601:5601
     networks:
       - netscan-network
     environment:
@@ -125,6 +125,8 @@ services:
   bloodhound-postgres:
     container_name: netscan-bloodhound-postgres
     image: docker.io/library/postgres:13.2
+    env_file:
+      - docker/docker.env
     #network_mode: "host"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
@@ -151,12 +153,14 @@ services:
   bloodhound-neo4j:
     container_name: netscan-bloodhound-neo4j
     image: docker.io/library/neo4j:4.4
+    env_file:
+      - docker/docker.env
     #network_mode: "host"
     volumes:
       - bloodhound_data:/data
     ports:
-      - "${NEO4J_WEB_PORT}:7474"
-      - "${NEO4J_DB_PORT}:7687"
+      - "127.0.0.1:${NEO4J_WEB_PORT}:7474"
+      - "127.0.0.1:${NEO4J_DB_PORT}:7687"
     environment:
       - NEO4J_AUTH=${NEO4J_AUTH}
       - NEO4J_dbms_memory_heap_initial__size=${NEO4J_dbms_memory_heap_initial__size}
@@ -185,11 +189,13 @@ services:
   bloodhound-app:
     container_name: netscan-bloodhound-app
     image: docker.io/specterops/bloodhound:${BLOODHOUND_TAG:-latest}
+    env_file:
+      - docker/docker.env
     #network_mode: "host"
     environment:
       - bhe_disable_cypher_qc=${bhe_disable_cypher_qc:-false}
     ports:
-      - ${BLOODHOUND_PORT}:8080
+      - 127.0.0.1:${BLOODHOUND_PORT}:8080
     volumes:
       - ./docker/bloodhound.config.json:/bloodhound.config.json:ro
     depends_on:

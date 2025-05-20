@@ -139,14 +139,14 @@ def smbscan_worker(target, actions, creds, timeout):
                     if is_admin:
                         Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
 
-                        if 'domain' in creds and not creds['domain'] in [None, 'WORKGROUP']:
-                                # domain account 
-                                cred_info = {
-                                    'domain': domain,
-                                    'username': user,
-                                    'admin_of': target['hostname'],
-                                }
-                                DB.insert_domain_user(cred_info)
+                        # domain account 
+                        cred_info = {
+                            'domain': smb_info['domain'],
+                            'hostname': smb_info['hostname'],
+                            'os': smb_info['server_os'],
+                            'admin': "%s\\%s" % (creds['domain'], creds['username']),
+                        }
+                        DB.insert_domain_host(cred_info)
 
                 except AuthFailure as e:
                     Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
@@ -231,14 +231,15 @@ def smbscan_worker(target, actions, creds, timeout):
                 if is_admin:
                     Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
 
-                    if 'domain' in creds and not creds['domain'] in [None, 'WORKGROUP']:
-                            # domain account 
-                            cred_info = {
-                                'domain': creds['domain'],
-                                'username': creds['username'],
-                                'admin_of': target['hostname'],
-                            }
-                            DB.insert_domain_user(cred_info)
+                    # domain account 
+                    cred_info = {
+                        'domain': smb_info['domain'],
+                        'hostname': smb_info['hostname'],
+                        'os': smb_info['server_os'],
+                        'admin': "%s\\%s" % (creds['domain'], creds['username']),
+                    }
+                    DB.insert_domain_host(cred_info)
+
 
 
             if success:

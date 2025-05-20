@@ -39,6 +39,7 @@ class ADEdit:
         self.schema = ldap.schemanamingcontext
         self.configuration = ldap.configurationnamingcontext
 
+
     def connect(self):
 
         if self.protocol == "ldap":
@@ -68,6 +69,7 @@ class ADEdit:
         if not self.session.bind():
             reason = self.session.result['message'] 
             return reason
+
 
         return True
 

@@ -847,17 +847,14 @@ class DB:
                     host_doc['ip'] = [ip_list]
                 """
 
-        if 'admin_of' in host_doc:
-            if check_ip(host_doc['admin_of']):
-                # 'host' is an IP
-                append = {'admin_of': [host_doc['admin_of']]}
-                host_doc['append'] = append
-                del host_doc['admin_of']
-            else:
+        if 'admin' in host_doc:
                 # 'host' is a hostname
-                ip_list = resolve_hostname(host_doc['admin_of'])
-                append = {'admin_of': ip_list}
-                del host_doc['admin_of']
+                admin_list = host_doc['admin']
+                if type(admin_list) != list:
+                    admin_list = [admin_list]
+
+                append = {'admin': admin_list}
+                del host_doc['admin']
                 host_doc['append'] = append
 
         if 'tags' in host_doc:
