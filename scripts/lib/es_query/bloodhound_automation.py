@@ -52,7 +52,7 @@ def set_owned(session):
     print(owned_hosts)
     if len(owned_hosts) != 0:
         print("Setting %d computers as Owned..." % len(owned_hosts))
-        cypher_query = "WITH ['%s'] AS ownedUsers MATCH (u:Computer) WHERE u.name IN ownedUsers AND (u.system_tags IS NULL OR NOT 'owned' IN u.system_tags) SET u.system_tags = coalesce(u.system_tags, []) + 'owned'" % "', '".join(owned_hosts)
+        cypher_query = "WITH ['%s'] AS ownedUsers MATCH (u:Computer) WHERE u.name IN ownedUsers AND (u.system_tags IS NULL OR NOT 'owned' IN u.system_tags) SET u.system_tags = coalesce(u.system_tags, '') + ' owned'" % "', '".join(owned_hosts)
 
         driver = GraphDatabase.driver("bolt://%s:7687" % neo4j_host, auth=(neo4j_username, neo4j_password))
         with driver.session() as neo4j_session:
@@ -110,7 +110,7 @@ def set_owned(session):
 
     if len(owned_users) != 0:
         print("Setting %d users as Owned..." % len(owned_users))
-        cypher_query = "WITH ['%s'] AS ownedUsers MATCH (u:User) WHERE u.name IN ownedUsers AND (u.system_tags IS NULL OR NOT 'owned' IN u.system_tags) SET u.system_tags = coalesce(u.system_tags, []) + 'owned'" % "', '".join(owned_users)
+        cypher_query = "WITH ['%s'] AS ownedUsers MATCH (u:User) WHERE u.name IN ownedUsers AND (u.system_tags IS NULL OR NOT 'owned' IN u.system_tags) SET u.system_tags = coalesce(u.system_tags, '') + ' owned'" % "', '".join(owned_users)
 
         driver = GraphDatabase.driver("bolt://%s:7687" % neo4j_host, auth=(neo4j_username, neo4j_password))
         with driver.session() as neo4j_session:
