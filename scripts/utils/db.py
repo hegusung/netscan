@@ -91,6 +91,12 @@ es_mapping = {
             "created_date": {
                 "type": "date"
             },
+            "last_access": {
+                "type": "date"
+            },
+            "last_modification": {
+                "type": "date"
+            },
             "last_logon": {
                 "type": "date"
             },

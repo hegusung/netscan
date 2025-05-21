@@ -56,7 +56,7 @@ class SearchSecret:
 
         return True
 
-    def search_secret(self, filename, filepath, data):
+    def search_secret(self, filename, filepath, data, file_info):
         if any([filename.endswith(".%s" % ext) for ext in textract_extensions]):
             # Not supported yet
             return
@@ -114,6 +114,13 @@ class SearchSecret:
                         'reliability': reliability,
                         'service': service,
                     }
+
+                    if 'creation_time' in file_info:
+                        secret['created_date'] = file_info['creation_time']
+                    if 'last_access' in file_info:
+                        secret['last_access'] = file_info['last_access']
+                    if 'last_modification' in file_info:
+                        secret['last_modification'] = file_info['last_modification']
 
                     Output.vuln({'target': secret['filepath'], 'message': '%s SECRET: %s' % (("[%s]" % secret['secret_name']).ljust(20), secret['line'])})
                     DB.insert_secret(secret)

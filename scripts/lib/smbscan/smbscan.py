@@ -79,7 +79,7 @@ def smbscan_worker(target, actions, creds, timeout):
 
             ip = target['hostname']
             if smb_info['signing'] == False:
-                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMB protocol is not signed, vulnerable to relay attacks'})
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMB protocol is not signed, vulnerable to relay attacks' % smb_info['hostname']})
 
                 vuln_info = {
                     'hostname': ip,
@@ -92,7 +92,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 DB.insert_vulnerability(vuln_info)
 
             if smb_info['smbv1'] == True:
-                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMBv1 protocol is deprecated'})
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMBv1 protocol is deprecated' % smb_info['hostname']})
 
                 vuln_info = {
                     'hostname': ip,
@@ -134,10 +134,10 @@ def smbscan_worker(target, actions, creds, timeout):
 
                     success, is_admin = smbscan.kerberos_auth(dc_ip=dc_ip)
 
-                    Output.success({'target': smbscan.url(), 'message': 'Successful authentication from kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+                    Output.success({'target': smbscan.url(), 'message': '[%s] Successful authentication from kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
                     if is_admin:
-                        Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+                        Output.major({'target': smbscan.url(), 'message': '[%s] Administrative privileges with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
                         # domain account 
                         cred_info = {
@@ -149,7 +149,7 @@ def smbscan_worker(target, actions, creds, timeout):
                         DB.insert_domain_host(cred_info)
 
                 except AuthFailure as e:
-                    Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+                    Output.minor({'target': smbscan.url(), 'message': '[%s] Authentication failure with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
             elif 'username' in creds:
                 if not 'domain' in creds:
@@ -159,11 +159,13 @@ def smbscan_worker(target, actions, creds, timeout):
                     creds['domain'] = creds['username'].split('\\')[0]
                     creds['username'] = creds['username'].split('\\')[1]
 
+                creds['hostname'] = smb_info['hostname']
+
                 if 'password' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
 
-                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -189,11 +191,11 @@ def smbscan_worker(target, actions, creds, timeout):
 
                             pass
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
                 elif 'hash' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
-                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -220,16 +222,16 @@ def smbscan_worker(target, actions, creds, timeout):
                             DB.insert_domain_credential(cred_info)
 
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
                 else:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password='')
-                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
 
                 if is_admin:
-                    Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
+                    Output.major({'target': smbscan.url(), 'message': '[{hostname}] Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
 
                     # domain account 
                     cred_info = {
@@ -246,11 +248,13 @@ def smbscan_worker(target, actions, creds, timeout):
                 # Authenticated, now perform actions
                 share_list = []
                 if 'list_shares' in actions:
-                    shares = "Shares:\n"
+                    #shares = "Shares:\n"
                     try:
                         for share_info in smbscan.list_shares():
-                            shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
-                            share_list.append(share_info['name'])
+                            #shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
+                            share_str = "[%s] Share: %s %s %s" % (smb_info['hostname'], share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
+                            Output.highlight({'target': smbscan.url(), 'message': share_str})
+                            #share_list.append(share_info['name'])
 
                             db_info = {
                                 'hostname': target['hostname'],
@@ -265,7 +269,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             }
                             DB.insert_content(db_info)
 
-                        Output.highlight({'target': smbscan.url(), 'message': shares})
+                        #Output.highlight({'target': smbscan.url(), 'message': shares})
 
 
                     except impacket.nmb.NetBIOSError:
@@ -305,6 +309,12 @@ def smbscan_worker(target, actions, creds, timeout):
                                     'path': content['name'].replace('\\', '/'),
                                     'account': "%s\\%s" % (creds['domain'], creds['username']),
                                 }
+                                if 'creation_time' in content:
+                                    db_info['created_date'] = content['creation_time']
+                                if 'last_access' in content:
+                                    db_info['last_access'] = content['last_access']
+                                if 'last_modification' in content:
+                                    db_info['last_modification'] = content['last_modification']
                                 if 'size' in content:
                                     db_info['size'] = content['size']
                                 DB.insert_content(db_info)
@@ -320,7 +330,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                             try:
                                                 data = smbscan.get_file_data(share, content['name'])
                                                 
-                                                ss.search_secret(filename, smbscan.url("/%s" % share) + content['name'].replace('\\', '/'), data)
+                                                ss.search_secret(filename, smbscan.url("/%s" % share) + content['name'].replace('\\', '/'), data, content)
                                             except impacket.smbconnection.SessionError as e:
                                                 pass
 

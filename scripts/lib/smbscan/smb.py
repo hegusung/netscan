@@ -729,7 +729,7 @@ class SMBScan:
 
                 if not is_directory:
                     size = content.get_filesize()
-                    yield {'type': 'file', 'name': filepath, 'size': size}
+                    yield {'type': 'file', 'name': filepath, 'size': size, 'creation_time': int(content.get_ctime_epoch()*1000), 'last_access': int(content.get_atime_epoch()*1000), 'last_modification': int(content.get_mtime_epoch()*1000)}
                 else:
                     if not filepath.endswith('\\'):
                         filepath = "%s\\" % filepath
