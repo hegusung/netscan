@@ -633,6 +633,9 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, o
         #if 'Interdomain trust account' in source['tags']:
         #    continue
 
+        if not 'sid' in source: # Not from the AD, ignore
+            continue
+
         if not 'tags' in source:
             source['tags'] = []
 
@@ -1377,6 +1380,9 @@ def get_user_group_data(session):
     c = 0
     for item in res:
         source = item['_source']
+
+        if not source['domain'].upper() in domain_fqdn_to_name: # If we don't have the FQDN, just ignore...
+            continue
 
         user_info.append({
             'name': source['username'].upper(),
