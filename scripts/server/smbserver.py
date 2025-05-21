@@ -2552,7 +2552,7 @@ class SMBCommands:
                     resp['Flags2'] = smb.SMB.FLAGS2_EXTENDED_SECURITY | smb.SMB.FLAGS2_NT_STATUS | smb.SMB.FLAGS2_UNICODE
                     #resp['Flags2'] = smb.SMB.FLAGS2_EXTENDED_SECURITY | smb.SMB.FLAGS2_NT_STATUS 
                     _dialects_data = smb.SMBExtended_Security_Data()
-                    _dialects_data['ServerGUID'] = b'A'*16
+                    _dialects_data['ServerGUID'] = os.urandom(16)
                     blob = SPNEGO_NegTokenInit()
                     blob['MechTypes'] = [TypesMech['NTLMSSP - Microsoft NTLM Security Support Provider']]
                     _dialects_data['SecurityBlob'] = blob.getData()
@@ -2663,7 +2663,7 @@ class SMB2Commands:
                 raise Exception('SMB2 not supported, fallbacking')
         else:
             respSMBCommand['DialectRevision'] = smb2.SMB2_DIALECT_002
-        respSMBCommand['ServerGuid'] = b'A'*16
+        respSMBCommand['ServerGuid'] = os.urandom(16)
         respSMBCommand['Capabilities'] = 0
         respSMBCommand['MaxTransactSize'] = 65536
         respSMBCommand['MaxReadSize'] = 65536
@@ -3703,7 +3703,7 @@ class Ioctls:
         validateNegotiateInfo = smb2.VALIDATE_NEGOTIATE_INFO(ioctlRequest['Buffer'])
         validateNegotiateInfoResponse = smb2.VALIDATE_NEGOTIATE_INFO_RESPONSE()
         validateNegotiateInfoResponse['Capabilities'] = 0
-        validateNegotiateInfoResponse['Guid'] = b'A'*16
+        validateNegotiateInfoResponse['Guid'] = os.urandom(16)
         validateNegotiateInfoResponse['SecurityMode'] = 1
         validateNegotiateInfoResponse['Dialect'] = smb2.SMB2_DIALECT_002
 
@@ -4424,7 +4424,7 @@ smb.SMB.TRANS_TRANSACT_NMPIPE          :self.__smbTransHandler.transactNamedPipe
         if self.__serverConfig.has_option('global', 'challenge'):
             self.__challenge    = unhexlify(self.__serverConfig.get('global', 'challenge'))
         else:
-            self.__challenge    = b'A'*16
+            self.__challenge    = os.urandom(16)
 
         if self.__serverConfig.has_option("global", "jtr_dump_path"):
             self.__jtr_dump_path = self.__serverConfig.get("global", "jtr_dump_path")
