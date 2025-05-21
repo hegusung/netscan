@@ -706,10 +706,11 @@ class DB:
         secret_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         secret_doc = check_entry(secret_doc, ['filepath', 'secret_name', 'line', 'reliability'], [])
 
-        secret_doc['name'] = os.path.basename(secret_doc['filepath'])
+        if not secret_doc['filepath'].startswith("LSA:"):
+            secret_doc['name'] = os.path.basename(secret_doc['filepath'])
 
-        if '.' in secret_doc['name']:
-            secret_doc['ext'] = secret_doc['name'].split('.')[-1].lower()
+            if '.' in secret_doc['name']:
+                secret_doc['ext'] = secret_doc['name'].split('.')[-1].lower()
 
         secret_doc['service'] = secret_doc['service']
         self.send(secret_doc)

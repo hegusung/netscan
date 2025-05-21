@@ -3,19 +3,6 @@ from utils.config import Config
 from utils.db import DB
 from utils.db import Elasticsearch
 
-# Neo4j connection details
-NEO4J_URI = "bolt://localhost:7687"  # Change if your DB is remote or uses a different port
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "your_password"
-
-# Cypher query (example: mark users as owned)
-cypher_query = """
-WITH ['DOMAIN\\user1', 'DOMAIN\\user2'] AS ownedUsers
-MATCH (u:User)
-WHERE u.name IN ownedUsers
-SET u.system_tags = coalesce(u.system_tags, []) + 'owned'
-"""
-
 def set_owned(session):
 
     neo4j_host = Config.config.get('Neo4J', 'host')
