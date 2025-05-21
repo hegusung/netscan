@@ -624,6 +624,10 @@ class DB:
 
         credential_doc['service'] = credential_doc['service'].lower()
 
+        if 'hash' in credential_doc:
+            if credential_doc['hash'].startswith('aad3b435b51404eeaad3b435b51404ee:'):  # Remove empty LN
+                credential_doc['hash'] = credential_doc['hash'][len('aad3b435b51404eeaad3b435b51404ee:'):]
+
         to_insert = []
         if check_ip(credential_doc['hostname']):
             # 'host' is an IP
@@ -946,8 +950,13 @@ class DB:
             credential_doc['doc_type'] = 'domain_hash'
         else:
             return
+
         credential_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         credential_doc = check_entry(credential_doc, ['domain', 'username'], ['password', 'format', 'hash'])
+
+        if 'hash' in credential_doc:
+            if credential_doc['hash'].startswith('aad3b435b51404eeaad3b435b51404ee:'):  # Remove empty LN
+                credential_doc['hash'] = credential_doc['hash'][len('aad3b435b51404eeaad3b435b51404ee:'):]
 
         credential_doc['domain'] = credential_doc['domain'].lower()
         credential_doc['username'] = credential_doc['username'].lower()
