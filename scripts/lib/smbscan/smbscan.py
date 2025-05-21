@@ -176,6 +176,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                 'type': 'password',
                                 'username': creds['username'],
                                 'password': creds['password'],
+                                'comment': "Host: %s.%s" % (smb_info['hostname'], smb_info['domain'])
                             }
                             DB.insert_credential(cred_info)
 
@@ -207,6 +208,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                 'username': creds['username'],
                                 'format': 'ntlm',
                                 'hash': creds['hash'],
+                                'comment': "Host: %s.%s" % (smb_info['hostname'], smb_info['domain'])
                             }
                             DB.insert_credential(cred_info)
 
