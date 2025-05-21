@@ -1,4 +1,5 @@
 import os.path
+import base64
 import impacket
 from time import sleep
 import socket
@@ -355,6 +356,16 @@ def smbscan_worker(target, actions, creds, timeout):
                     except impacket.smbconnection.SessionError as e:
                         Output.error({'target': smbscan.url(), 'message': 'Failed to get file: %s' % (str(e),)})
 
+
+                if 'powershell' in actions:
+                    b64_ps = base64.b64encode(actions['powershell']['powershell'].encode("UTF-16LE")).decode()
+                    ps_command = "powershell.exe -noni -nop -w 1 -enc %s" % b64_ps
+
+                    output, method = smbscan.exec(ps_command, exec_method=actions['powershell']['method'], get_output=True, code_page=actions['powershell']['code_page'])
+                    if output:
+                        Output.highlight({'target': smbscan.url(), 'message': 'Executed powershell command \'%s\' via \'%s\':\n%s' % (actions['powershell']['powershell'], method, output)})
+                    else:
+                        Output.error({'target': smbscan.url(), 'message': 'Failed to execute powershell command %s' % (actions['powershell']['powershell'],)})
 
                 if 'command' in actions:
                     output, method = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True, code_page=actions['command']['code_page'])

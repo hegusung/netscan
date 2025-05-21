@@ -43,6 +43,7 @@ def main():
     cmd_group = parser.add_argument_group("Command execution (admin rights required)")
     cmd_group.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
     cmd_group.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
+    cmd_group.add_argument("--powershell", metavar="COMMAND", help="execute the specified command with powershell", dest='powershell')
     cmd_group.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
     cmd_group.add_argument("--list-payloads", action='store_true', help='List payloads', dest='list_payloads')
     cmd_group.add_argument("--code-page", metavar="CODEPAGE", help='System code page', default="cp850", dest='code_page')
@@ -161,6 +162,8 @@ def main():
         actions['search'] = {}
     if args.command:
         actions['command'] = {'command': args.command, 'method': args.exec_method, 'code_page': args.code_page}
+    if args.powershell:
+        actions['powershell'] = {'powershell': args.powershell, 'method': args.exec_method, 'code_page': args.code_page}
     if args.payload:
         cmd = PayloadManager.generate_payload(args.payload[0], args.payload[1:])
         actions['command'] = {'command': cmd, 'method': args.exec_method, 'code_page': args.code_page}
