@@ -1,4 +1,5 @@
 import elasticsearch
+import hashlib
 from elasticsearch import helpers
 import sys
 import os.path
@@ -222,7 +223,9 @@ class DB:
                         del insert['append']
                     else:
                         append = None
-                    inserts.append((es_ids[insert['doc_type']].format(**insert), insert, append))
+                    document_id = es_ids[insert['doc_type']].format(**insert)
+                    document_id_hash = hashlib.sha256(document_id.encode()).hexdigest()
+                    inserts.append((document_id_hash, insert, append))
 
                     if len(inserts) >= MAX_BULK:
                         error = Elasticsearch.insert_bulk(inserts)
