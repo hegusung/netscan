@@ -58,7 +58,7 @@ def main():
         static_inputs['port'] += normalize_path(args.port_file)
 
     creds = {}
-    if args.password:
+    if args.password != None:
         creds['password'] = args.password
 
     actions = {}

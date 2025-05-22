@@ -63,9 +63,9 @@ def main():
     static_inputs['database'] = args.database
 
     creds = {}
-    if args.username:
+    if args.username != None:
         creds['username'] = args.username
-    if args.password:
+    if args.password != None:
         creds['password'] = args.password
 
     actions = {}
