@@ -122,7 +122,8 @@ def ftpscan_worker(target, actions, creds, timeout):
                     args = (timeout,)
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
-
+    except TimeoutError:
+        pass
     except ConnectionRefusedError:
         pass
     except Exception as e:
