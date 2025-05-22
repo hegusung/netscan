@@ -33,3 +33,4 @@ pysnmp
 pysnmp-mibs
 sslyze
 gssapi
+jinja2

@@ -11,10 +11,12 @@ from server.payload_manager import PayloadManager
 from lib.smbscan.smbscan import smbscan_worker, smb_modules
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 
 def main():
-    parser = argparse.ArgumentParser(description='SMBScan')
+    parser = argparse.ArgumentParser(description='SMBScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     target_group = parser.add_argument_group("Targets")
     target_group.add_argument('targets', type=str, nargs='?')
     target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')

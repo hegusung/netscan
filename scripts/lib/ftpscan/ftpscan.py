@@ -52,11 +52,6 @@ def ftpscan_worker(target, actions, creds, timeout):
                         'description': 'Anonymous account can connect to ftp service: %s' % ftpscan.url(),
                     }
                     DB.insert_vulnerability(vuln_info)
-            else:
-                if 'username' in creds and 'password' in creds:
-                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with credentials %s:%s' % (creds['username'], creds['password'])})
-                else:
-                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with anonymous credentials'})
 
                 if 'list' in actions:
                     try:
@@ -93,6 +88,12 @@ def ftpscan_worker(target, actions, creds, timeout):
                         Output.highlight({'target': ftpscan.url(), 'message': 'Contents of %s\n%s' % (ftp_dir, contents)})
                     except socket.timeout as e:
                         Output.error({'target': ftpscan.url(), 'message': 'Timeout while listing folder, do you have a firewall enabled ?'})
+
+            else:
+                if 'username' in creds and 'password' in creds:
+                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with credentials %s:%s' % (creds['username'], creds['password'])})
+                else:
+                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with anonymous credentials'})
 
 
         if 'bruteforce' in actions:

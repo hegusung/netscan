@@ -10,9 +10,11 @@ from server.http_server import run_http_server
 from server.ldap_server import run_ldap_server
 from server.smb_server import run_smb_server
 from server.vulnerability_callback import VulnCallback
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='HTTP Server')
+    parser = argparse.ArgumentParser(description='HTTP Server', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()

@@ -10,10 +10,11 @@ from lib.rdpscan.rdpscan import rdpscan_worker
 from lib.rdpscan.rdpscan import rdp_modules
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 
 
 def main():
-    parser = argparse.ArgumentParser(description='RDPScan')
+    parser = argparse.ArgumentParser(description='RDPScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-d', metavar='domain', type=str, nargs='?', help='Domain', default='WORKGROUP', dest='domain')

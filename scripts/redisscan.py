@@ -8,10 +8,12 @@ from utils.output import Output
 from lib.redisscan.redisscan import redisscan_worker
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 
 def main():
-    parser = argparse.ArgumentParser(description='RedisScan')
+    parser = argparse.ArgumentParser(description='RedisScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='6379', dest='port')

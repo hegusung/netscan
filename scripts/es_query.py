@@ -7,9 +7,11 @@ from utils.db import DB
 from utils.config import Config
 from lib.es_query.es_query import dump, export_ports, export_hashes, export_bloodhound, restore, delete_session
 from lib.es_query.bloodhound_automation import set_owned
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 def main():
-    parser = argparse.ArgumentParser(description='Elasticsearch Query: make target list out of elasticsearch')
+    parser = argparse.ArgumentParser(description='Elasticsearch Query: make target list out of elasticsearch', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument('-s', metavar='session', type=str, nargs='?', help='session', dest='session')
     parser.add_argument('--service', metavar='service', type=str, nargs='?', help='service', dest='service')
     parser.add_argument('--export', metavar='output directory', type=str, nargs='?', help='Directory to export ip:port files to', dest='export_ports')

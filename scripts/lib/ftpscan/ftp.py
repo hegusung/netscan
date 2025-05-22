@@ -59,6 +59,8 @@ class FTPScan:
             return True
         except ftplib.error_perm:
             return False
+        except EOFError:
+            return False
 
     def disconnect(self):
         if self.ftp != None:

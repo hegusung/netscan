@@ -9,6 +9,7 @@ from utils.config import Config
 import tqdm
 from tqdm import tqdm
 import configparser
+from jinja2 import Template
 
 # Sometimes tqdm hangs during write
 from utils.dispatch import pg_lock
@@ -130,6 +131,10 @@ class Output:
         if len(color_pattern) == 0:
             color_pattern = color_dict['white']
 
+        # Add all colors
+        for color_name, value in color_dict.items():
+            message[color_name] = value
+
         message['color'] = color_pattern
         message['reset'] = RESET
 
@@ -173,7 +178,9 @@ class Output:
                 self.color(message, message_type)
 
                 # Remove control characters which breaks terminal
-                message = output_format.format(**message)
+                template = Template(output_format)
+                message = template.render(**message)
+                #message = output_format.format(**message)
                 message = ''.join([c if ord(c) not in [0x9d, 0x9e, 0x9f] else '\\x%x' % ord(c) for c in message])
 
                 tqdm.write(message)

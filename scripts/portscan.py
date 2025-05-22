@@ -11,10 +11,12 @@ from utils.output import Output
 from lib.portscan.portscan import portscan_worker, top_ports
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 
 def main():
-    parser = argparse.ArgumentParser(description='PortScan', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='PortScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default=None, dest='port')
