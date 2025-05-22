@@ -102,6 +102,9 @@ def postgrescan_worker(target, actions, creds, timeout):
                     'protocol': 'tcp',
                     'service': 'postgresql',
                 })
+                for err in str(e).split("\n"):
+                    if len(err.strip()) != 0:
+                        Output.minor({'target': postgresql.url(), 'message': str(err)})
             elif "fe_sendauth:" in str(e):
                 postgresql_server = True
                 postgresql_info = {'version': 'Unknown'}
@@ -114,6 +117,9 @@ def postgrescan_worker(target, actions, creds, timeout):
                     'protocol': 'tcp',
                     'service': 'postgresql',
                 })
+                for err in str(e).split("\n"):
+                    if len(err.strip()) != 0:
+                        Output.minor({'target': postgresql.url(), 'message': str(err)})
 
             else:
                 raise e
