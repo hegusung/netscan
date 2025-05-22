@@ -14,7 +14,7 @@ from utils.config import Config
 
 
 def main():
-    parser = argparse.ArgumentParser(description='PortScan')
+    parser = argparse.ArgumentParser(description='PortScan', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default=None, dest='port')

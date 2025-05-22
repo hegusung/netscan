@@ -44,6 +44,9 @@ class SearchSecret:
         self.config  = configparser.ConfigParser()
         self.config.read(self.config_file)
 
+        self.previous_lines = int(self.config['General']['previous_lines'])
+        self.after_lines = int(self.config['General']['after_lines'])
+
     def to_check(self, filename, file_size):
         
         ignored_extensions  = self.config['General']['ignored_extensions'].split(',')
@@ -87,13 +90,13 @@ class SearchSecret:
         else:
             data_str = decode_bytes(data, file_type)
 
-        for line in data_str.split('\n'):
-            line = line.strip()
+        lines = data_str.split('\n')
+        for line_index in range(len(lines)):
+            line = lines[line_index].strip()
 
             for secret_pattern_name in self.config['General']['secret_patterns'].split(','):
                 pattern = self.config[secret_pattern_name]['regex']
 
-                # TODO
                 if re.compile(pattern, re.IGNORECASE).search(line):
                     false_positive_string = self.config[secret_pattern_name]['false_positive_string']
                     if len(false_positive_string) > 0:
@@ -107,10 +110,12 @@ class SearchSecret:
 
                     reliability = self.config[secret_pattern_name]['reliability']
 
+                    block = self.get_previous_after(lines, line_index)
+
                     secret = {
                         'filepath': filepath,
                         'secret_name': secret_pattern_name,
-                        'line': line,
+                        'line': block,
                         'reliability': reliability,
                         'service': service,
                     }
@@ -122,9 +127,16 @@ class SearchSecret:
                     if 'last_modification' in file_info:
                         secret['last_modification'] = file_info['last_modification']
 
-                    Output.vuln({'target': secret['filepath'], 'message': '%s SECRET: %s' % (("[%s]" % secret['secret_name']).ljust(20), secret['line'])})
+                    Output.vuln({'target': secret['filepath'], 'message': '%s SECRET: %s' % (("[%s]" % secret['secret_name']).ljust(20), line)})
                     DB.insert_secret(secret)
 
 
+    def get_previous_after(self, lines, line_index):
+        start = line_index - self.previous_lines
+        if start < 0:
+            start = 0
+        end = line_index + self.after_lines
+        if end >= len(lines):
+            end = len(lines) - 1
 
-
+        return "\n".join(lines[start:end + 1])
