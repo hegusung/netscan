@@ -55,6 +55,9 @@ def smbscan_worker(target, actions, creds, timeout):
 
             smb_info['target'] = smbscan.url()
             smb_info['message_type'] = 'smb'
+            smb_info['protocol'] = 'SMB'
+            smb_info['host'] = target['hostname']
+            smb_info['port'] = target['port']
             Output.write(smb_info)
             DB.insert_port({
                 'hostname': target['hostname'],
@@ -80,7 +83,16 @@ def smbscan_worker(target, actions, creds, timeout):
 
             ip = target['hostname']
             if smb_info['signing'] == False:
-                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMB protocol is not signed, vulnerable to relay attacks' % smb_info['hostname']})
+
+                message_info = {
+                    'protocol': 'SMB',
+                    'host': target['hostname'],
+                    'port': target['port'],
+                    'hostname': smb_info['hostname'],
+                    'target': smbscan.url(),
+                    'message': 'SMB protocol is not signed, vulnerable to relay attacks'
+                }
+                Output.highlight(message_info)
 
                 vuln_info = {
                     'hostname': ip,
@@ -93,7 +105,16 @@ def smbscan_worker(target, actions, creds, timeout):
                 DB.insert_vulnerability(vuln_info)
 
             if smb_info['smbv1'] == True:
-                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMBv1 protocol is deprecated' % smb_info['hostname']})
+
+                message_info = {
+                    'protocol': 'SMB',
+                    'host': target['hostname'],
+                    'port': target['port'],
+                    'hostname': smb_info['hostname'],
+                    'target': smbscan.url(),
+                    'message': 'SMBv1 protocol is deprecated',
+                }
+                Output.highlight(message_info)
 
                 vuln_info = {
                     'hostname': ip,
@@ -135,10 +156,25 @@ def smbscan_worker(target, actions, creds, timeout):
 
                     success, is_admin = smbscan.kerberos_auth(dc_ip=dc_ip)
 
-                    Output.success({'target': smbscan.url(), 'message': '[%s] Successful authentication from kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
+                    auth_message = {
+                        'message_type': 'auth_success_kerberos',
+                        'protocol': 'SMB',
+                        'host': target['hostname'],
+                        'port': target['port'],
+                        'hostname': smb_info['hostname'],
+                        'target': smbscan.url(),
+                        'domain': domain,
+                        'username': user,
+                        'ticket': ticket,
+                        'is_admin': is_admin,
+                    }
+                    Output.success(auth_message)
+
+    
+                    #Output.success({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[%s] Successful authentication from kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
                     if is_admin:
-                        Output.major({'target': smbscan.url(), 'message': '[%s] Administrative privileges with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
+                        #Output.major({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[%s] Administrative privileges with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
                         # domain account 
                         cred_info = {
@@ -150,7 +186,21 @@ def smbscan_worker(target, actions, creds, timeout):
                         DB.insert_domain_host(cred_info)
 
                 except AuthFailure as e:
-                    Output.minor({'target': smbscan.url(), 'message': '[%s] Authentication failure with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
+                    auth_message = {
+                        'message_type': 'auth_failure_kerberos',
+                        'protocol': 'SMB',
+                        'host': target['hostname'],
+                        'port': target['port'],
+                        'hostname': smb_info['hostname'],
+                        'target': smbscan.url(),
+                        'domain': domain,
+                        'username': user,
+                        'ticket': ticket,
+                        'failure_reason': str(e),
+                    }
+                    Output.minor(auth_message)
+
+                    #Output.minor({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[%s] Authentication failure with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
             elif 'username' in creds:
                 if not 'domain' in creds:
@@ -166,7 +216,21 @@ def smbscan_worker(target, actions, creds, timeout):
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
 
-                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
+                        auth_message = {
+                            'message_type': 'auth_success_password',
+                            'protocol': 'SMB',
+                            'host': target['hostname'],
+                            'port': target['port'],
+                            'hostname': smb_info['hostname'],
+                            'target': smbscan.url(),
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'password': creds['password'],
+                            'is_admin': is_admin,
+                        }
+                        Output.success(auth_message)
+
+                        #Output.success({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -193,11 +257,41 @@ def smbscan_worker(target, actions, creds, timeout):
 
                             pass
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
+
+                        auth_message = {
+                            'message_type': 'auth_failure_password',
+                            'protocol': 'SMB',
+                            'host': target['hostname'],
+                            'port': target['port'],
+                            'hostname': smb_info['hostname'],
+                            'target': smbscan.url(),
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'password': creds['password'],
+                            'failure_reason': str(e),
+                        }
+                        Output.success(auth_message)
+
+                        #Output.minor({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
                 elif 'hash' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
-                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
+
+                        auth_message = {
+                            'message_type': 'auth_success_hash',
+                            'protocol': 'SMB',
+                            'host': target['hostname'],
+                            'port': target['port'],
+                            'hostname': smb_info['hostname'],
+                            'target': smbscan.url(),
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'hash': creds['hash'],
+                            'is_admin': is_admin,
+                        }
+                        Output.success(auth_message)
+
+                        #Output.success({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -225,16 +319,30 @@ def smbscan_worker(target, actions, creds, timeout):
                             DB.insert_domain_credential(cred_info)
 
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
+                        auth_message = {
+                            'message_type': 'auth_failure_hash',
+                            'protocol': 'SMB',
+                            'host': target['hostname'],
+                            'port': target['port'],
+                            'hostname': smb_info['hostname'],
+                            'target': smbscan.url(),
+                            'domain': creds['domain'],
+                            'username': creds['username'],
+                            'hash': creds['hash'],
+                            'failure_reason': str(e),
+                        }
+                        Output.success(auth_message)
+
+                        #Output.minor({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
                 else:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password='')
-                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
+                        Output.success({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
+                        Output.minor({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
 
                 if is_admin:
-                    Output.major({'target': smbscan.url(), 'message': '[{hostname}] Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
+                    #Output.major({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '[{hostname}] Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
 
                     # domain account 
                     cred_info = {
@@ -256,7 +364,7 @@ def smbscan_worker(target, actions, creds, timeout):
                         for share_info in smbscan.list_shares():
                             #shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
                             share_str = "[%s] Share: %s %s %s" % (smb_info['hostname'], share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
-                            Output.highlight({'target': smbscan.url(), 'message': share_str})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': share_str})
                             #share_list.append(share_info['name'])
 
                             db_info = {
@@ -272,15 +380,15 @@ def smbscan_worker(target, actions, creds, timeout):
                             }
                             DB.insert_content(db_info)
 
-                        #Output.highlight({'target': smbscan.url(), 'message': shares})
+                        #Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': shares})
 
 
                     except impacket.nmb.NetBIOSError:
                         # Connection reset
-                        Output.error({'target': smbscan.url(), 'message': 'List shares: Access denied'})
+                        Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'List shares: Access denied'})
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'List shares: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'List shares: Access denied'})
                         else:
                             raise e
                 if 'list' in actions:
@@ -337,10 +445,10 @@ def smbscan_worker(target, actions, creds, timeout):
                                             except impacket.smbconnection.SessionError as e:
                                                 pass
 
-                            Output.highlight({'target': smbscan.url(), 'message': contents})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': contents})
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_ACCESS_DENIED' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'List share contents: Access denied'})
                         else:
                             raise e
                 if 'get_file' in actions:
@@ -352,9 +460,9 @@ def smbscan_worker(target, actions, creds, timeout):
                         f = open(file_path, 'wb')
                         f.write(data)
                         f.close()
-                        Output.highlight({'target': smbscan.url(), 'message': 'File uploaded at: netscan%s' % (file_path.split('../../..')[-1],)})
+                        Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'File uploaded at: netscan%s' % (file_path.split('../../..')[-1],)})
                     except impacket.smbconnection.SessionError as e:
-                        Output.error({'target': smbscan.url(), 'message': 'Failed to get file: %s' % (str(e),)})
+                        Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Failed to get file: %s' % (str(e),)})
 
 
                 if 'powershell' in actions:
@@ -363,16 +471,16 @@ def smbscan_worker(target, actions, creds, timeout):
 
                     output, method = smbscan.exec(ps_command, exec_method=actions['powershell']['method'], get_output=True, code_page=actions['powershell']['code_page'])
                     if output:
-                        Output.highlight({'target': smbscan.url(), 'message': 'Executed powershell command \'%s\' via \'%s\':\n%s' % (actions['powershell']['powershell'], method, output)})
+                        Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Executed powershell command \'%s\' via \'%s\':\n%s' % (actions['powershell']['powershell'], method, output)})
                     else:
-                        Output.error({'target': smbscan.url(), 'message': 'Failed to execute powershell command %s' % (actions['powershell']['powershell'],)})
+                        Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Failed to execute powershell command %s' % (actions['powershell']['powershell'],)})
 
                 if 'command' in actions:
                     output, method = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True, code_page=actions['command']['code_page'])
                     if output:
-                        Output.highlight({'target': smbscan.url(), 'message': 'Executed command \'%s\' via \'%s\':\n%s' % (actions['command']['command'], method, output)})
+                        Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Executed command \'%s\' via \'%s\':\n%s' % (actions['command']['command'], method, output)})
                     else:
-                        Output.error({'target': smbscan.url(), 'message': 'Failed to execute command %s' % (actions['command']['command'],)})
+                        Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Failed to execute command %s' % (actions['command']['command'],)})
                 if 'sam' in actions:
                     output = "SAM hashes:\n"
                     try:
@@ -392,10 +500,10 @@ def smbscan_worker(target, actions, creds, timeout):
                             }
                             DB.insert_credential(cred_info)
 
-                        Output.highlight({'target': smbscan.url(), 'message': output})
+                        Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'SAM dump: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'SAM dump: Access denied'})
                         else:
                             raise e
                 if 'lsa' in actions:
@@ -432,34 +540,34 @@ def smbscan_worker(target, actions, creds, timeout):
 
                                     break
 
-                        Output.highlight({'target': smbscan.url(), 'message': output})
+                        Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'LSA dump: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'LSA dump: Access denied'})
                         else:
                             raise e
                 if 'users' in actions:
-                    Output.write({'target': smbscan.url(), 'message': 'Users:'})
+                    Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Users:'})
                     try:
                         entries = smbscan.enum_users()
                         for entry in entries:
                             user = '%s\\%s' % (entry['domain'], entry['username'])
-                            Output.highlight({'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '(%d) %s   %s  [%s]' % (entry['uid'], user.ljust(30), entry['fullname'].ljust(30), ','.join(entry['tags']))})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum users: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum users: Access denied'})
                         else:
                             raise e
                 if 'groups' in actions:
-                    Output.write({'target': smbscan.url(), 'message': 'Groups:'})
+                    Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Groups:'})
                     try:
                         entries = smbscan.enum_groups()
                         for entry in entries:
                             group = '%s\\%s' % (entry['domain'], entry['groupname'])
-                            Output.highlight({'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '(%d) %s   %s' % (entry['uid'], group.ljust(30), entry['admin_comment'])})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum groups: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum groups: Access denied'})
                         else:
                             raise e
                 if 'admins' in actions:
@@ -471,19 +579,19 @@ def smbscan_worker(target, actions, creds, timeout):
                     }
                     new_info = False
 
-                    Output.write({'target': smbscan.url(), 'message': 'Administrators:'})
+                    Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Administrators:'})
                     try:
                         entries = smbscan.dump_admins()
                         for admin_group in entries:
-                            Output.highlight({'target': smbscan.url(), 'message': '- %s' % (admin_group,)})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '- %s' % (admin_group,)})
                             for sid in entries[admin_group]:
-                                Output.highlight({'target': smbscan.url(), 'message': '   - %s' % (sid,)})
+                                Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '   - %s' % (sid,)})
 
                             host_info[admin_group] = entries[admin_group]
                             new_info = True
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum admins: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum admins: Access denied'})
                         else:
                             raise e
 
@@ -526,18 +634,18 @@ def smbscan_worker(target, actions, creds, timeout):
                             }
                             DB.insert_application(db_info)
 
-                        Output.highlight({'target': smbscan.url(), 'message': msg})
+                        Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': msg})
                     else:
-                        Output.error({'target': smbscan.url(), 'message': 'Failed to dump applications'})
+                        Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Failed to dump applications'})
                 if 'processes' in actions:
-                    Output.highlight({'target': smbscan.url(), 'message': 'Processes:'})
+                    Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Processes:'})
                     try:
                         entries = smbscan.enum_processes()
                         for entry in entries:
                             if entry['pid'] != None:
                                 proc = '[%d] %s' % (entry['pid'], entry['name'])
                                 user = '%s\\%s' % (entry['domain'], entry['user'])
-                                Output.highlight({'target': smbscan.url(), 'message': '%s   %s' % (proc.ljust(30), user)})
+                                Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '%s   %s' % (proc.ljust(30), user)})
                     except Exception as e:
                         raise e
                 if 'passpol' in actions:
@@ -554,10 +662,10 @@ def smbscan_worker(target, actions, creds, timeout):
                             if password_policy['lock_threshold'] != 0:
                                 output += " "*60+"- Lock duration:    %s\n" % password_policy['lock_duration']
 
-                            Output.highlight({'target': smbscan.url(), 'message': output})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum password policy: Access denied'})
                         else:
                             raise e
                 if 'sessions' in actions:
@@ -569,12 +677,12 @@ def smbscan_worker(target, actions, creds, timeout):
                     }
                     new_info = False
 
-                    Output.write({'target': smbscan.url(), 'message': 'Logged in users:'})
+                    Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Logged in users:'})
                     try:
                         privileged_sessions = []
                         entries = smbscan.enum_loggedin()
                         for entry in entries:
-                            Output.highlight({'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Logged in: %s\\%s' % (entry['domain'], entry['username'])})
                             privileged_sessions.append({
                                 'domain': entry['domain'],
                                 'username': entry['username'],
@@ -584,16 +692,16 @@ def smbscan_worker(target, actions, creds, timeout):
                         new_info = True
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum logged in: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum logged in: Access denied'})
                         else:
                             raise e
 
-                    Output.write({'target': smbscan.url(), 'message': 'Sessions:'})
+                    Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Sessions:'})
                     try:
                         sessions = []
                         entries = smbscan.enum_sessions()
                         for entry in entries:
-                            Output.highlight({'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Session: %s' % (entry,)})
 
                             sessions.append({
                                 'username': entry['username'],
@@ -603,16 +711,16 @@ def smbscan_worker(target, actions, creds, timeout):
                         new_info = True
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum sessions: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum sessions: Access denied'})
                         else:
                             raise e
 
-                    Output.write({'target': smbscan.url(), 'message': 'Registry Sessions:'})
+                    Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Registry Sessions:'})
                     try:
                         registry_sessions = []
                         entries = smbscan.dump_registry_sessions()
                         for entry in entries:
-                            Output.highlight({'target': smbscan.url(), 'message': 'Registry Session: %s' % (entry,)})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Registry Session: %s' % (entry,)})
 
                             registry_sessions.append({
                                 'sid': entry,
@@ -622,14 +730,14 @@ def smbscan_worker(target, actions, creds, timeout):
                         new_info = True
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum registry sessions: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum registry sessions: Access denied'})
                         elif 'STATUS_OBJECT_NAME_NOT_FOUND' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum registry sessions: Non existing pipe'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum registry sessions: Non existing pipe'})
                         else:
                             raise e
                     except impacket.smbconnection.SessionError as e:
                         if 'STATUS_OBJECT_NAME_NOT_FOUND' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'Enum registry sessions: Non existing pipe'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Enum registry sessions: Non existing pipe'})
                         else:
                             raise e
 
@@ -637,15 +745,15 @@ def smbscan_worker(target, actions, creds, timeout):
                         DB.insert_domain_host(host_info)
 
                 if 'rid_brute' in actions:
-                    Output.write({'target': smbscan.url(), 'message': 'Users discovered via RID bruteforce:'})
+                    Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Users discovered via RID bruteforce:'})
                     try:
                         entries = smbscan.rid_bruteforce(actions['rid_brute']['start'], actions['rid_brute']['end'])
                         for entry in entries:
                             user = '%s\\%s' % (entry['domain'], entry['name'])
-                            Output.highlight({'target': smbscan.url(), 'message': '- %s (%s)' % (user.ljust(30), entry['type'])})
+                            Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '- %s (%s)' % (user.ljust(30), entry['type'])})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'RID brutefroce: Access denied'})
+                            Output.error({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'RID brutefroce: Access denied'})
                         else:
                             raise e
 
@@ -653,7 +761,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
             if 'bruteforce' in actions:
                 if 'username_file' in actions['bruteforce'] != None:
-                    Output.highlight({'target': smbscan.url(), 'message': 'Starting bruteforce:'})
+                    Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:
                         domain = creds['domain']
@@ -688,7 +796,7 @@ def smbscan_worker(target, actions, creds, timeout):
 
             if 'simple_bruteforce' in actions:
                 if 'username_file' in actions['simple_bruteforce'] != None:
-                    Output.highlight({'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})
+                    Output.highlight({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})
 
                     if 'domain' in creds:
                         domain = creds['domain']
@@ -706,14 +814,14 @@ def smbscan_worker(target, actions, creds, timeout):
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except ConnectionResetError:
-        Output.write({'target': smbscan.url(), 'message': 'Connection reset by target'})
+        Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Connection reset by target'})
     except TypeError as e:
         if 'ConnectionResetError' in str(e):
-            Output.write({'target': smbscan.url(), 'message': 'Connection reset by target'})
+            Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': 'Connection reset by target'})
         else:
-            Output.write({'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+            Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     except Exception as e:
-        Output.write({'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
+        Output.write({'protocol': 'SMB', 'host': target['hostname'], 'port': target['port'], 'hostname': smb_info['hostname'], 'target': smbscan.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:
         smbscan.disconnect()
 

@@ -27,6 +27,7 @@ color_dict = {
     'cyan': "\033[96m",
     'white': "\033[97m",
     'bold': "\033[1m",
+    'orange': "\033[38;5;208m",
 }
 RESET = "\033[0m"
 

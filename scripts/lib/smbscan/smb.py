@@ -84,7 +84,7 @@ class SMBScan:
 
     def auth(self, domain='WORKGROUP', username=None, password=None, hash=None):
         if not self.conn:
-            Output.write({'target': self.url(), 'message': 'auth(): please connect first'})
+            Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': 'auth(): please connect first'})
 
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
@@ -139,7 +139,7 @@ class SMBScan:
             raise AuthFailure("%s" % type(e))
         except Exception as e:
             success = False
-            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+            Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             raise AuthFailure("%s: %s" % (type(e), e))
 
         self.authenticated = success
@@ -148,7 +148,7 @@ class SMBScan:
 
     def kerberos_auth(self, dc_ip=None):
         if not self.conn:
-            Output.write({'target': self.url(), 'message': 'enum_host_info(): please connect first'})
+            Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': 'enum_host_info(): please connect first'})
 
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
@@ -168,20 +168,20 @@ class SMBScan:
         except impacket.krb5.kerberosv5.KerberosError as e:
             success = False
             if "KDC_ERR_PREAUTH_FAILED" in str(e):
-                Output.error({'target': self.url(), 'message': "KDC_ERR_PREAUTH_FAILED received, you should specify the server FQDN instead of the IP"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "KDC_ERR_PREAUTH_FAILED received, you should specify the server FQDN instead of the IP"})
                 raise AuthFailure("KDC_ERR_PREAUTH_FAILED")
             elif "KDC_ERR_S_PRINCIPAL_UNKNOWN" in str(e):
-                Output.error({'target': self.url(), 'message': "KDC_ERR_S_PRINCIPAL_UNKNOWN received, you should specify the server FQDN instead of the IP"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "KDC_ERR_S_PRINCIPAL_UNKNOWN received, you should specify the server FQDN instead of the IP"})
                 raise AuthFailure("KDC_ERR_S_PRINCIPAL_UNKNOWN")
             elif "KDC_ERR_WRONG_REALM" in str(e):
-                Output.error({'target': self.url(), 'message': "KDC_ERR_WRONG_REALM received, you should define the DC ip with --dc-ip"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "KDC_ERR_WRONG_REALM received, you should define the DC ip with --dc-ip"})
                 raise AuthFailure("KDC_ERR_WRONG_REALM")
             else:
-                Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+                Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
                 raise AuthFailure("%s: %s" % (type(e), e))
         except Exception as e:
             success = False
-            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+            Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             raise AuthFailure("%s: %s" % (type(e), e))
 
         self.authenticated = success
@@ -208,14 +208,14 @@ class SMBScan:
         if not self.domain:
             self.domain = hostname
 
-        smb_info = {}
-        smb_info['domain'] = self.domain.strip()
-        smb_info['hostname'] = hostname.strip()
-        smb_info['server_os'] = server_os.strip()
-        smb_info['signing'] = signing
-        smb_info['smbv1'] = self.smbv1
+        self.smb_info = {}
+        self.smb_info['domain'] = self.domain.strip()
+        self.smb_info['hostname'] = hostname.strip()
+        self.smb_info['server_os'] = server_os.strip()
+        self.smb_info['signing'] = signing
+        self.smb_info['smbv1'] = self.smbv1
 
-        return smb_info
+        return self.smb_info
 
 
     def connect(self):
@@ -238,7 +238,7 @@ class SMBScan:
                 return False
 
         except Exception as e:
-            Output.write({'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
+            Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "%s:%s\n%s" % (type(e), str(e), traceback.format_exc())})
             return False
 
     def disconnect(self):
@@ -323,7 +323,7 @@ class SMBScan:
                 username_principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
 
-                Output.highlight({'target': self.url(), 'message': "Requesting TGT"})
+                Output.highlight({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Requesting TGT"})
                 tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(username_principal, password, domain,
                                                                     unhexlify(lmhash), unhexlify(nthash), '',
                                                                     self.hostname)
@@ -334,7 +334,7 @@ class SMBScan:
                 print(tgt)
                 print(oldSessionKey)
                 ticket_file = "%s_%s.ccache" % (domain, username)
-                Output.highlight({'target': self.url(), 'message': "Saving TGT to %s" % ticket_file})
+                Output.highlight({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Saving TGT to %s" % ticket_file})
                 ccache.saveFile(ticket_file)
             except impacket.krb5.kerberosv5.KerberosError as e:
                 if 'KRB_AP_ERR_SKEW' in str(e):
@@ -344,7 +344,7 @@ class SMBScan:
             except Exception as e:
                 print("%s: %s" % (type(e), str(e)))
         else:
-            Output.write({'target': self.url(), 'message': "getTGT error: Not authenticated"})
+            Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "getTGT error: Not authenticated"})
 
     def gettgs(self, spn, impersonate):
         if self.authenticated:
@@ -406,7 +406,7 @@ class SMBScan:
 
                 ccache.fromTGS(tgs, oldSessionKey, oldSessionKey)
                 ticket_file = "%s_%s.ccache" % (spn.replace('/', '_'), ticket_username)
-                Output.highlight({'target': self.url(), 'message': "Saving TGS to %s" % ticket_file})
+                Output.highlight({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Saving TGS to %s" % ticket_file})
                 ccache.saveFile(ticket_file)
             except impacket.krb5.kerberosv5.KerberosError as e:
                 print("%s: %s\n%s" % (type(e), str(e), traceback.format_exc()))
@@ -419,7 +419,7 @@ class SMBScan:
             except Exception as e:
                 print("%s: %s\n%s" % (type(e), str(e), traceback.format_exc()))
         else:
-            Output.write({'target': self.url(), 'message': "getTGS error: Not authenticated"})
+            Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "getTGS error: Not authenticated"})
 
     def _doS4U(self, tgt, cipher, oldSessionKey, sessionKey, kdcHost, impersonate, domain, user, spn):
         decodedTGT = decoder.decode(tgt, asn1Spec = AS_REP())[0]
@@ -523,7 +523,7 @@ class SMBScan:
                       (int(cipher.enctype),int(constants.EncryptionTypes.rc4_hmac.value)))
 
         logging.info('\tRequesting S4U2self')
-        Output.highlight({'target': self.url(), 'message': "Requesting S4U2self"})
+        Output.highlight({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Requesting S4U2self"})
         message = encoder.encode(tgsReq)
 
         r = sendReceive(message, domain, kdcHost)
@@ -624,7 +624,7 @@ class SMBScan:
         message = encoder.encode(tgsReq)
 
         logging.info('\tRequesting S4U2Proxy')
-        Output.highlight({'target': self.url(), 'message': "Requesting S4U2Proxy"})
+        Output.highlight({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Requesting S4U2Proxy"})
         r = sendReceive(message, domain, kdcHost)
 
         tgs = decoder.decode(r, asn1Spec=TGS_REP())[0]
@@ -702,15 +702,15 @@ class SMBScan:
                 contents = self.conn.listPath(share, request_path)
             except SessionError as e:
                 if 'STATUS_ACCESS_DENIED' not in str(e):
-                    Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                    Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
                 else:
-                    Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: Access denied".format(share, path)})
+                    Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Failed listing files on share {} in directory {}: Access denied".format(share, path)})
                 return
             except impacket.nmb.NetBIOSError as e:
-                Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
                 return
             except BrokenPipeError as e:
-                Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
+                Output.write({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
                 return
 
             for content in contents:
@@ -778,11 +778,11 @@ class SMBScan:
                     break
                 except Exception as e:
                     if 'access_denied' in str(e):
-                        Output.error({'target': self.url(), 'message': "Error: command execution via wmiexec: Access denied"})
+                        Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error: command execution via wmiexec: Access denied"})
                     elif 'stringBinding' in str(e):
-                        Output.error({'target': self.url(), 'message': "Error: command execution via wmiexec: %s" % str(e)})
+                        Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error: command execution via wmiexec: %s" % str(e)})
                     else:
-                        Output.error({'target': self.url(), 'message': "Error: command execution via wmiexec:\n%s" % traceback.format_exc()})
+                        Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error: command execution via wmiexec:\n%s" % traceback.format_exc()})
                     continue
             elif method == 'smbexec':
                 try:
@@ -790,9 +790,9 @@ class SMBScan:
                     break
                 except Exception as e:
                     if 'STATUS_ACCESS_DENIED' in str(e):
-                        Output.error({'target': self.url(), 'message': "Error: command execution via smbexec: Access denied"})
+                        Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error: command execution via smbexec: Access denied"})
                     else:
-                        Output.error({'target': self.url(), 'message': "Error: command execution via smbexec:\n%s" % traceback.format_exc()})
+                        Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error: command execution via smbexec:\n%s" % traceback.format_exc()})
                     continue
             elif method == 'mmcexec':
                 try:
@@ -800,12 +800,12 @@ class SMBScan:
                     break
                 except Exception as e:
                     if 'access_denied' in str(e):
-                        Output.error({'target': self.url(), 'message': "Error: command execution via mmcexec: Access denied"})
+                        Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error: command execution via mmcexec: Access denied"})
                     else:
-                        Output.error({'target': self.url(), 'message': "Error: command execution via mmcexec:\n%s" % traceback.format_exc()})
+                        Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error: command execution via mmcexec:\n%s" % traceback.format_exc()})
                     continue
             else:
-                Output.error({'target': self.url(), 'message': "Unknown execution method: %s" % method})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Unknown execution method: %s" % method})
 
         if exec == None:
             return None
@@ -904,7 +904,7 @@ class SMBScan:
                 yield user
         except impacket.dcerpc.v5.samr.DCERPCSessionError as e:
             if 'STATUS_ACCESS_DENIED' in str(e):
-                Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while enumerating: Access denied"})
             else:
                 raise e
 
@@ -927,7 +927,7 @@ class SMBScan:
                 yield group
         except impacket.dcerpc.v5.samr.DCERPCSessionError as e:
             if 'STATUS_ACCESS_DENIED' in str(e):
-                Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while enumerating: Access denied"})
             else:
                 raise e
 
@@ -950,7 +950,7 @@ class SMBScan:
                 yield user
         except impacket.dcerpc.v5.samr.DCERPCSessionError as e:
             if 'STATUS_ACCESS_DENIED' in str(e):
-                Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while enumerating: Access denied"})
             else:
                 raise e
 
@@ -973,7 +973,7 @@ class SMBScan:
                 yield process
         except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
             if "rpc_s_access_denied" in str(e):
-                Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while enumerating: Access denied"})
             else:
                 raise e
 
@@ -996,7 +996,7 @@ class SMBScan:
             return enum.enumPasswordPolicy()
         except impacket.dcerpc.v5.samr.DCERPCSessionError as e:
             if 'STATUS_ACCESS_DENIED' in str(e):
-                Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while enumerating: Access denied"})
             else:
                 raise e
             return None
@@ -1025,7 +1025,7 @@ class SMBScan:
                         yield logged
         except impacket.smbconnection.SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
-                Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while enumerating: Access denied"})
             else:
                 raise e
 
@@ -1052,7 +1052,7 @@ class SMBScan:
                     yield session
         except impacket.smbconnection.SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
-                Output.error({'target': self.url(), 'message': "Error while enumerating: Access denied"})
+                Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while enumerating: Access denied"})
             else:
                 raise e
 
@@ -1079,7 +1079,7 @@ class SMBScan:
             self.conn.getFile(share, path, buf.write)
             data = buf.getvalue()
         except UnicodeDecodeError:
-            Output.error({'target': self.url(), 'message': "Error while reading file %s%s: UnicodeDecodeError" % (share, path)})
+            Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': "Error while reading file %s%s: UnicodeDecodeError" % (share, path)})
 
 
         return data
@@ -1094,7 +1094,7 @@ class SMBScan:
                 break
 
         if not sysvol_found:
-            Output.error({'target': self.url(), 'message': 'No access to %s share' % gpp_share})
+            Output.error({'protocol': 'SMB', 'host': self.hostname, 'port': self.port, 'hostname': self.smb_info['hostname'], 'target': self.url(), 'message': 'No access to %s share' % gpp_share})
             return
 
         gpp_files = []
