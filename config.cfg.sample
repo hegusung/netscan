@@ -17,6 +17,10 @@ host = 127.0.0.1
 username = neo4j
 password = netscan
 
+[Gowitness]
+host = 127.0.0.1
+port = 7171
+
 [Server]
 bind_ip = 0.0.0.0
 enable_http = true

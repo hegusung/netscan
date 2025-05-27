@@ -11,24 +11,33 @@ from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 
 def main():
     parser = argparse.ArgumentParser(description='DNSScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
-    parser.add_argument('targets', type=str, nargs='?')
-    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
-    parser.add_argument('--dns', metavar='dns_ip', nargs='?', type=str, help='DNS server to send query to', default=None, dest='dns')
-    parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Bruteforce subdomains', default=None, dest='bruteforce')
-    parser.add_argument('--axfr', action='store_true', help='AXFR check', dest='axfr')
-    parser.add_argument('--dc', action='store_true', help='Look for a Domain Controller from a domain', dest='dc')
-    parser.add_argument('--tcp', action='store_true', help='Make TCP queries', dest='do_tcp')
-    parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
-    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     
-    # Dispatcher arguments
-    parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
+    # Target specification group
+    target_group = parser.add_argument_group('Target Specification')
+    target_group.add_argument('targets', type=str, nargs='?')
+    target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     
-    # Resume
-    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
+    # DNS options group
+    dns_group = parser.add_argument_group('DNS Options')
+    dns_group.add_argument('--dns', metavar='dns_ip', nargs='?', type=str, help='DNS server to send query to', default=None, dest='dns')
+    dns_group.add_argument('--tcp', action='store_true', help='Make TCP queries', dest='do_tcp')
     
-    # DB arguments
-    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+    # Actions group
+    actions_group = parser.add_argument_group('Actions')
+    actions_group.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Bruteforce subdomains', default=None, dest='bruteforce')
+    actions_group.add_argument('--axfr', action='store_true', help='AXFR check', dest='axfr')
+    actions_group.add_argument('--dc', action='store_true', help='Look for a Domain Controller from a domain', dest='dc')
+    
+    # Connection options group
+    conn_group = parser.add_argument_group('Connection Options')
+    conn_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    conn_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
+    conn_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
+    
+    # Scan control group
+    control_group = parser.add_argument_group('Scan Control')
+    control_group.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
+    control_group.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
 

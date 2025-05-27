@@ -206,6 +206,17 @@ services:
     networks:
       - netscan-network
 
+  gowitness:
+    container_name: netscan-gowitness
+    image: ghcr.io/sensepost/gowitness
+    command: gowitness report server --host 0.0.0.0 --port 7171
+    ports:
+      - 127.0.0.1:7171:7171
+    volumes:
+      - gowitness-data:/data
+    networks:
+      - netscan-network
+
 volumes:
   es_certs:
     driver: local
@@ -216,6 +227,8 @@ volumes:
   bloodhound_data:
     driver: local
   postgres_data:
+    driver: local
+  gowitness-data:
     driver: local
 
 networks:

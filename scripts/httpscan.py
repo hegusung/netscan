@@ -12,44 +12,55 @@ from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 
 
-
 def main():
     parser = argparse.ArgumentParser(description='HTTPScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
-    parser.add_argument('targets', type=str, nargs='?')
-    parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
-    parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='80,443', dest='port')
-    parser.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
-    parser.add_argument('--verb', metavar='VERB', type=str, nargs='?', help='verb to use', default='GET', dest='verb')
-    parser.add_argument('--method', metavar='methods', type=str_comma, nargs='?', help='methods to connect', default='http,https', dest='method')
-    parser.add_argument('--path', metavar='path', nargs='?', type=str_comma, help='HTTP path', default='/', dest='path')
-    parser.add_argument('--useragent', metavar='useragent', nargs='?', type=str, help='User agent', default='Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0', dest='useragent')
-    parser.add_argument('--dir-bruteforce', metavar='file', nargs='?', type=str, help='Bruteforce path', default=None, dest='dir_bruteforce')
-    parser.add_argument('--http-auth', metavar='username:password', nargs='?', type=str, help='401 authentication, format username:password', default=None, dest='http_auth')
-    parser.add_argument('--cookies', metavar='key=value', nargs='?', type=str, help='Comma-separated list of cookies KEY=VALUE', default=None, dest='cookies')
-    parser.add_argument('--headers', metavar='header', nargs='?', type=str, help='Comma-separated list of headers KEY=VALUE', default=None, dest='headers')
-    parser.add_argument('--data', metavar='DATA', nargs='?', type=str, help='Data to use with post', default=None, dest='data')
-    parser.add_argument('-x', metavar='extensions', nargs='?', type=str, help='Bruteforce file extensions', default='', dest='extensions')
-    parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers for the directory bruteforce', default=5, dest='dir_bruteforce_workers')
-    parser.add_argument('--proxy', metavar='http://ip:port', nargs='?', type=str, help='Proxy', default=None, dest='proxy')
-    parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
-    parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     
-    # Modules
-    parser.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
-    parser.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules', default=None, dest='modules')
-    
-    # Module arguments
-    parser.add_argument('--exec', metavar='command', nargs='?', type=str, help='Execute command if RCE from a module', default=None, dest='exec')
-    parser.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Enable bruteforce, file name is optional', default=None, const='default', dest='bruteforce')
-    
-    # Dispatcher arguments
-    parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
-    
-    # Resume
-    parser.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
-    
-    # DB arguments
-    parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
+    # Target Specification
+    target_group = parser.add_argument_group('Target Specification')
+    target_group.add_argument('targets', type=str, nargs='?')
+    target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
+    target_group.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='80,443', dest='port')
+    target_group.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
+    target_group.add_argument("--resume", metavar='resume_number', type=int, nargs='?', default=0, help='resume scan from a specific value', dest='resume')
+
+    # Performance & Timing
+    perf_group = parser.add_argument_group('Performance & Timing')
+    perf_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
+    perf_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    perf_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
+
+    # HTTP Request Configuration
+    http_group = parser.add_argument_group('HTTP Request Configuration')
+    http_group.add_argument('--verb', metavar='VERB', type=str, nargs='?', help='verb to use', default='GET', dest='verb')
+    http_group.add_argument('--method', metavar='methods', type=str_comma, nargs='?', help='methods to connect', default='http,https', dest='method')
+    http_group.add_argument('--path', metavar='path', nargs='?', type=str_comma, help='HTTP path', default='/', dest='path')
+    http_group.add_argument('--data', metavar='DATA', nargs='?', type=str, help='Data to use with post', default=None, dest='data')
+    http_group.add_argument('--useragent', metavar='useragent', nargs='?', type=str, help='User agent', default='Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0', dest='useragent')
+
+    # Authentication & Headers
+    auth_group = parser.add_argument_group('Authentication & Headers')
+    auth_group.add_argument('--http-auth', metavar='username:password', nargs='?', type=str, help='401 authentication, format username:password', default=None, dest='http_auth')
+    auth_group.add_argument('--cookies', metavar='key=value', nargs='?', type=str, help='Comma-separated list of cookies KEY=VALUE', default=None, dest='cookies')
+    auth_group.add_argument('--headers', metavar='header', nargs='?', type=str, help='Comma-separated list of headers KEY=VALUE', default=None, dest='headers')
+
+    # Directory & Path Enumeration
+    dir_group = parser.add_argument_group('Directory & Path Enumeration')
+    dir_group.add_argument('--dir-bruteforce', metavar='file', nargs='?', type=str, help='Bruteforce path', default=None, dest='dir_bruteforce')
+    dir_group.add_argument('-x', metavar='extensions', nargs='?', type=str, help='Bruteforce file extensions', default='', dest='extensions')
+    dir_group.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers for the directory bruteforce', default=5, dest='dir_bruteforce_workers')
+
+    # Post-Exploitation & Advanced Features
+    post_group = parser.add_argument_group('Post-Exploitation & Advanced Features')
+    post_group.add_argument("--gowitness", action="store_true", help="Get a screenshot using gowitness", dest='gowitness')
+    post_group.add_argument("--list-modules", action="store_true", help="List available modules", dest='list_modules')
+    post_group.add_argument('-m', metavar='modules', nargs='*', type=str, help='Launch modules', default=None, dest='modules')
+    post_group.add_argument('--exec', metavar='command', nargs='?', type=str, help='Execute command if RCE from a module', default=None, dest='exec')
+    post_group.add_argument('--bruteforce', metavar='file', nargs='?', type=str, help='Enable bruteforce, file name is optional', default=None, const='default', dest='bruteforce')
+
+    # Proxy & Infrastructure
+    infra_group = parser.add_argument_group('Proxy & Infrastructure')
+    infra_group.add_argument('--proxy', metavar='http://ip:port', nargs='?', type=str, help='Proxy', default=None, dest='proxy')
+    infra_group.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
 
@@ -90,6 +101,9 @@ def main():
             'args': args.modules[1:],
         }
         actions['modules'] = {'modules': args.modules[0], 'args': module_args}
+
+    if args.gowitness:
+        actions['gowitness'] = {'host': Config.config.get('Gowitness', 'host'), 'port': int(Config.config.get('Gowitness', 'port')), 'timeout': int(Config.config.get('Gowitness', 'timeout')), 'delay': int(Config.config.get('Gowitness', 'screenshot_delay'))}
 
     # Parse cookies
     cookie_dict = {}
