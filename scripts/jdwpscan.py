@@ -24,6 +24,7 @@ def main():
     action_group.add_argument('--break-on', metavar='JAVA_METHOD', nargs='?', type=str, help='Specify full path to method to break on', default="java.net.ServerSocket.accept", dest='break_on')
     action_group.add_argument("--classes", action="store_true", help="Get classes info")
     action_group.add_argument("--system-info", action="store_true", help="Get system info (requires breakpoint, so might hang)")
+    action_group.add_argument('--exec', metavar='COMMAND', nargs='?', type=str, help='Command to execute', default=None, dest='exec')
 
     misc_group = parser.add_argument_group("Misc")
     # Dispatcher arguments
@@ -59,6 +60,8 @@ def main():
         actions['classes'] = {}
     if args.system_info:
         actions['system_info'] = {'break_on': args.break_on}
+    if args.exec:
+        actions['exec'] = {'break_on': args.break_on, 'command': args.exec}
 
     jdwpscan(targets, static_inputs, args.workers, actions, args.timeout, args.delay, args.resume)
 
