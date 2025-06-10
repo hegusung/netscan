@@ -15,7 +15,7 @@ from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 def main():
     parser = argparse.ArgumentParser(description='ADScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     target_group = parser.add_argument_group("Targets")
-    target_group.add_argument('targets', type=str, nargs='?')
+    target_group.add_argument('targets', type=str, nargs='?', help="Active Directory to target (IP or Hostname)")
     target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     
     # Authentication
@@ -27,7 +27,7 @@ def main():
     auth_group.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     auth_group.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NT or NTLM hash', default=None, dest='hash')
     auth_group.add_argument('-k', metavar='ticket', type=str, nargs='?', help='Kerberos authentication (uses KRB5CCNAME environment variable if not parameter is defined)', default=None, const='', dest='kerberos')
-    auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
+    auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos only', default=None, dest='dc_ip')
     auth_group.add_argument('--aes-key', metavar='AESKey', type=str, nargs='?', help='AES key used for kerberos authentication, to use with --gettgt', default=None, dest='aes_key')
     
     # Enum

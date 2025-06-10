@@ -8,6 +8,7 @@ from utils.db import DB
 from utils.db import Elasticsearch
 from utils.output import Output
 from lib.es_query.bloodhound import *
+from lib.es_query.bloodhound_utils import *
 
 #from utils.utils import open
 
@@ -589,6 +590,280 @@ def export_bloodhound(session, output_dir):
     output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, output)
 
     pprint(output)
+
+def get_gpos_admins(session):
+    links_dict, links_effect = get_gpos_links(session)
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_user"   }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    user_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        user_dict[source['sid']] = "%s@%s" % (source['username'], source['domain'])
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_group"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    group_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        group_dict[source['sid']] = "%s@%s" % (source['groupname'], source['domain'])
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    computer_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        computer_dict[source['sid']] = source['dns']
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "bool": {
+                "should": [
+                  { "match": { "doc_type.keyword": "domain_ou" } },
+                  { "match": { "doc_type.keyword": "domain" } }
+                ]
+              }
+            },
+            { "match": { "session.keyword": session } }
+          ],
+          "filter": []
+        }
+      }
+    }
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d OUs & domains" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        print("====== %s ======" % source['name'])
+
+        if 'sid' in source:
+            sid = source['sid']
+        else:
+            sid = source['domain_sid']
+
+        affected_computers = list(set([item['ObjectIdentifier'] for item in get_affected_computers(session, source['dn'], sid)]))
+        print("Affected computers:")
+        for computer in affected_computers:
+            if computer in computer_dict:
+                print("  > %s" % computer_dict[computer])
+            else:
+                print("  > %s" % computer)
+
+
+        print("Links:")
+        links = []
+        if 'links' in source:
+            links = source['links']
+        elif 'gplink' in source:
+            links = {}
+            for l in str(source['gplink']).split(']'):
+                if len(l) == 0:
+                    continue
+                # Remove initial [
+                l = l[1:]
+                # Take after ://
+                l = l.split('://')[-1]
+                # Take before ;
+                status = l.split(';')[1]
+                link = l.split(';')[0]
+
+                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
+                if status in ['1', '3']:
+                    continue
+
+                links[link.lower()] = {'IsEnforced': False if status == '0' else True}
+
+            # Get GUID for links
+            for link_dn in links:
+                if link_dn in links_dict:
+                    links[link_dn]['GUID'] = links_dict[link_dn]
+                else:
+                    links[link_dn]['GUID'] = "Unknown"
+
+            links = list(links.values())
+
+        for link in links:
+            print("  > %s" % link)
+
+        print("GPO changes:")
+
+        # Recreate gpo_changes
+        gpo_changes = {}
+        for sid in OU.privileged_sid_dict:
+            gpo_changes[sid] = {}
+            for t in ['Memberof', 'Members', 'Localgroup']:
+                gpo_changes[sid][t] = []
+
+        for link in links:
+            if link['GUID'] in links_effect:
+
+                for effect in links_effect[link['GUID']]['Memberof']:
+                    member = effect['member']
+
+                    if not member.startswith('S-'):
+                        if '\\' in member:
+                            username = member.split('\\')[-1]
+                        else:
+                            username = member
+
+                        # TODO: domain check
+                        member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                    if member != None:
+                        gpo_changes[effect['group']]['Memberof'].append({
+                            'ObjectIdentifier': effect['member'], 
+                        }) 
+
+                for effect in links_effect[link['GUID']]['Members']:
+                    for member in effect['members']:
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            gpo_changes[effect['group']]['Members'].append({
+                                'ObjectIdentifier': member, 
+                            }) 
+
+                for effect in links_effect[link['GUID']]['Localgroup']:
+                    if effect['action'] == 'deleteAllUsers':
+                        for item in gpo_changes[effect['group']]['Localgroup'][:]:
+                            if item['ObjectType'] == 'User':
+                                gpo_changes[effect['group']]['Localgroup'].remove(item)
+
+                    elif effect['action'] == 'deleteAllGroups':
+                        for item in gpo_changes[effect['group']]['Localgroup'][:]:
+                            if item['ObjectType'] == 'Group':
+                                gpo_changes[effect['group']]['Localgroup'].remove(item)
+
+                    elif effect['action'] == 'add':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            gpo_changes[effect['group']]['Localgroup'].append({
+                                'ObjectIdentifier': member, 
+                            })
+
+                    elif effect['action'] == 'delete':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            for item in gpo_changes[effect['group']]['Localgroup']:
+                                if item['ObjectIdentifier'] == member:
+                                    del gpo_changes[effect['group']]['Localgroup'][item]
+            
+        gpo_changes = GPO.merge_gpo_effect(gpo_changes)
+
+        for name, items in gpo_changes.items():
+            print("  [%s]" % name)
+            for item in items:
+                item = item['ObjectIdentifier']
+
+                if item in user_dict:
+                    item = "User: %s" % user_dict[item]
+
+                if item in group_dict:
+                    item = "Group: %s" % group_dict[item]
+
+                print("    > %s" % item)
+
+
+
+
+
+
+
+        print("==================")
+
+
+
 
 
 def export_domain_hosts(session, output_dir):
