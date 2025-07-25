@@ -700,6 +700,8 @@ class SMBScan:
                 else:
                     request_path = path + "\\*"
                 contents = self.conn.listPath(share, request_path)
+            except UnicodeDecodeError as e:
+                Output.error({'target': self.url(), 'message': "Impacket decode error: Share:%s Path:%s" % (share, request_path)})
             except SessionError as e:
                 if 'STATUS_ACCESS_DENIED' not in str(e):
                     Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})

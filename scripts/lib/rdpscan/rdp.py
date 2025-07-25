@@ -74,11 +74,13 @@ class RDP:
         return True
 
     def get_certificate_info(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(self.timeout)
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
 
-        ssl_sock = ssl.wrap_socket(sock)
-        ssl_sock.connect((self.hostname, self.port))
+        sock = socket.create_connection((self.hostname, self.port), timeout=self.timeout)
+        ssl_sock = context.wrap_socket(sock, server_hostname=None)
+
         bcert = ssl_sock.getpeercert(True)
         ssl_sock.close()
 

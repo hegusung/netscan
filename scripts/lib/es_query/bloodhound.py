@@ -48,6 +48,9 @@ def export_bloodhound_domains(session, links_dict, links_effect, output_dir, use
     for item in res:
         source = item['_source']
 
+        if not 'sid' in source:
+            continue
+
         domains.append({
             'name': source['domain'].upper(),
             'sid': source['sid'],
@@ -829,6 +832,9 @@ def export_bloodhound_groups(session, output_dir, domains, domain_controlers, ou
     for item in res:
         source = item['_source']
 
+        if not 'sid' in source:
+            continue
+
         if not 'tags' in source:
             source['tags'] = []
 
@@ -1384,6 +1390,9 @@ def get_user_group_data(session):
         if not source['domain'].upper() in domain_fqdn_to_name: # If we don't have the FQDN, just ignore...
             continue
 
+        if not 'sid' in source:
+            continue
+
         user_info.append({
             'name': source['username'].upper(),
             'domain_fqdn': source['domain'].upper(),
@@ -1421,6 +1430,9 @@ def get_user_group_data(session):
     c = 0
     for item in res:
         source = item['_source']
+
+        if not 'sid' in source:
+            continue
 
         group_sid.append(source['sid'])
 

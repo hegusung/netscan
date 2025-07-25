@@ -102,13 +102,16 @@ class Output:
             script_name = os.path.basename(sys.argv[0]).split('.')[0]
             now = datetime.now()
 
-            log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), Config.config.get('Logging', 'folder'), "log_%s_%s.log" % (script_name, now.strftime(log_time_format)))
+            log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "..", Config.config.get('Logging', 'folder'), "log_%s_%s.log" % (script_name, now.strftime(log_time_format)))
 
             # remove all colors
             message['color'] = ''
             message['reset'] = ''
 
-            message = output_format.format(**message)
+            template = Template(output_format)
+            message = template.render(**message)
+
+            #message = output_format.format(**message)
 
             logfile = open(log_path, 'a')
             logfile.write(message + '\n')

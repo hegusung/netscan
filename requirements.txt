@@ -13,7 +13,7 @@ pycryptodome
 netaddr
 paramiko
 tqdm
-elasticsearch
+elasticsearch==8.13.0
 git+https://github.com/fortra/impacket
 pillow
 psycopg2-binary
@@ -34,3 +34,4 @@ pysnmp-mibs
 sslyze
 gssapi
 jinja2
+neo4j
