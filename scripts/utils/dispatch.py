@@ -65,7 +65,7 @@ def dispatch(gen, gen_size, worker_func, func_args, workers=10, process=True, pg
             n_all = n_threads
 
         # Start feeding worker
-        feed_queue = multiprocessing.Queue()
+        feed_queue = multiprocessing.Queue(maxsize=workers*10)
         feed_thread = Process(target=feedqueue_worker, args=(gen, feed_queue, n_all, 10))
         feed_thread.daemon = True
         feed_thread.start()
@@ -185,7 +185,7 @@ def progressbar_worker(target_size, pg_queue, pg_name):
 
 def feedqueue_worker(target_gen, feed_queue, nb_workers, bulk_nb):
     try:
-        for target in target_gen:
+        for i, target in enumerate(target_gen):
             feed_queue.put(json.dumps(target))
 
     except BrokenPipeError:

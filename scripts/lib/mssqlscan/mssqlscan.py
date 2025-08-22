@@ -169,7 +169,10 @@ def mssqlscan_worker(target, actions, creds, timeout):
                             hashes = mssqlscan.list_hashes()
                         output = "Hashes:\n"
                         for account in hashes:
-                            output += " "*60+"- %s   %s\n" % (account['name'].ljust(30), account['password_hash'].decode())
+                            password_hash = account['password_hash']
+                            if type(password_hash) == bytes:
+                                password_hash = password_hash.encode()
+                            output += " "*60+"- %s   %s\n" % (account['name'].ljust(30), password_hash)
 
                             cred_info = {
                                 'hostname': target['hostname'],
