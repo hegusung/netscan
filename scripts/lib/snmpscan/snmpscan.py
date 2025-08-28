@@ -8,8 +8,27 @@ from utils.dispatch import dispatch
 from utils.db import DB
 
 #from pysnmp.entity.rfc3413.oneliner import cmdgen
-import pysnmp
-from pysnmp.hlapi import *
+#import pysnmp
+#from pysnmp.hlapi import *
+
+# PySNMP upgrade...
+import asyncio
+
+from pysnmp.hlapi.v3arch.asyncio import (
+    SnmpEngine,
+    CommunityData,      # use mpModel=0 (v1) or 1 (v2c)
+    UsmUserData,        # for v3
+    UdpTransportTarget,
+    ContextData,
+    ObjectType,
+    ObjectIdentity,
+    get_cmd,
+    next_cmd,
+    walk_cmd,
+)
+from pysnmp.hlapi.v3arch.asyncio import UsmUserData
+import pysnmp.error
+import pysnmp.proto.rfc1905
 
 class SNMPTimeout(Exception):
     pass
@@ -17,6 +36,21 @@ class SNMPError(Exception):
     pass
 class SNMPAuthFailure(Exception):
     pass
+
+def _run_in_thread(coro):
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    if loop.is_running():
+        new_loop = asyncio.new_event_loop()
+        try:
+            return new_loop.run_until_complete(coro)
+        finally:
+            new_loop.close()
+    else:
+        return loop.run_until_complete(coro)
 
 def snmpscan_worker(target, actions, creds, timeout):
     snmp = SNMP(target['hostname'], target['port'], timeout)
@@ -189,6 +223,92 @@ class SNMP:
 
         self.sock = None
 
+
+    def url(self):
+        return f"snmp://{self.hostname}:{self.port}"
+
+    # ---------- public sync methods ----------
+    def request_v2(self, community='public', oid='1.3.6.1.2.1.1.1'):
+        return _run_in_thread(self._request_v2_async(community, oid))
+
+    def request_v3_noauth(self):
+        return _run_in_thread(self._request_v3_noauth_async())
+
+    # ---------- async implementations ----------
+    async def _mk_transport(self):
+        # timeout is seconds; you previously divided by 6 to match older behavior
+        return await UdpTransportTarget.create(
+            (self.hostname, self.port),
+            timeout=self.timeout / 6.0,
+            retries=0,
+        )
+
+    async def _request_v2_async(self, community, oid):
+        engine = SnmpEngine()
+        transport = await UdpTransportTarget.create(
+            (self.hostname, self.port),
+            timeout=self.timeout / 6.0,
+            retries=0,
+        )
+        ctx = ContextData()
+
+        results = []
+        # walk_cmd yields multiple responses (async generator)
+        async for (err_ind, err_stat, err_idx, var_binds) in walk_cmd(
+            engine,
+            CommunityData(community, mpModel=1),
+            transport,
+            ctx,
+            ObjectType(ObjectIdentity(oid)),
+            lexicographicMode=False,
+        ):
+            if err_ind:
+                s = str(err_ind)
+                if "No SNMP response received before timeout" in s:
+                    raise SNMPTimeout(err_ind)
+                raise SNMPError(f"{err_stat}: {err_ind}")
+            if err_stat:
+                raise SNMPError(f"{int(err_stat)}: {err_stat.prettyPrint()}")
+
+            for vb in var_binds:
+                if isinstance(vb[1], pysnmp.proto.rfc1905.EndOfMibView):
+                    continue
+                results.append([
+                    vb[0].prettyPrint(),
+                    vb[1].__class__.__name__,
+                    vb[1].prettyPrint()
+                ])
+
+        engine.closeDispatcher()
+        return results
+
+    async def _request_v3_noauth_async(self):
+        engine = SnmpEngine()
+        transport = await UdpTransportTarget.create(
+            (self.hostname, self.port),
+            timeout=self.timeout / 6.0,
+            retries=0,
+        )
+        err_ind, err_stat, err_idx, var_binds = await get_cmd(
+            engine,
+            UsmUserData('user-none-none'),
+            transport,
+            ContextData(),
+            ObjectType(ObjectIdentity('IF-MIB', 'ifInOctets', 1)),
+        )
+        engine.closeDispatcher()
+        if err_ind:
+            s = str(err_ind)
+            if "No SNMP response received before timeout" in s:
+                raise SNMPTimeout(err_ind)
+            if "Unknown USM user" in s:
+                raise SNMPAuthFailure(err_ind)
+            raise SNMPError(f"{err_stat}: {err_ind}")
+        if err_stat:
+            raise SNMPError(f"{int(err_stat)}: {err_stat.prettyPrint()}")
+        return True
+    
+"""
     def url(self):
         return 'snmp://%s:%d' % (self.hostname, self.port)
 
@@ -240,6 +360,6 @@ class SNMP:
                 raise SNMPAuthFailure(error_indication)
             else:
                 raise SNMPError("%d: %s" % (error_status, error_indication))
-
+"""
 
 
