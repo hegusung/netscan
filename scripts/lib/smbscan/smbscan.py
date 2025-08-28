@@ -193,7 +193,7 @@ def smbscan_worker(target, actions, creds, timeout):
 
                             pass
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and password {password}: {error}'.format(**creds, error=e)})
                 elif 'hash' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
@@ -225,13 +225,13 @@ def smbscan_worker(target, actions, creds, timeout):
                             DB.insert_domain_credential(cred_info)
 
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and hash {hash}: {error}'.format(**creds, error=e)})
                 else:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password='')
                         Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and no password: {error}'.format(**creds, error=e)})
 
                 if is_admin:
                     Output.major({'target': smbscan.url(), 'message': '[{hostname}] Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
@@ -402,14 +402,14 @@ def smbscan_worker(target, actions, creds, timeout):
                     output = "LSA secrets:\n"
                     try:
                         lsa_parsers = [
-                            ("LSA:DCC2", re.compile("^(?P<domain>[\\w.-]+)\/(?P<username>[\\w.-]+):\$DCC2\$(?P<rounds>\d+)#(?P<username2>[\\w.-]+)#(?P<hash>[a-fA-F0-9]{32}):\s+\((?P<date>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)$")),
+                            ("LSA:DCC2", re.compile("^(?P<domain>[\\w.-]+)\\/(?P<username>[\\w.-]+):\\$DCC2\\$(?P<rounds>\\d+)#(?P<username2>[\\w.-]+)#(?P<hash>[a-fA-F0-9]{32}):\\s+\\((?P<date>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\)$")),
                             ("LSA:des-cbc-md5" , re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<etype>des-cbc-md5):(?P<key>[a-fA-F0-9]{16})$")),
                             ("LSA:aes128-cts-hmac-sha1-96", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<etype>aes128-cts-hmac-sha1-96):(?P<key>[a-fA-F0-9]{32})$")),
                             ("LSA:aes256-cts-hmac-sha1-96", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<etype>aes256-cts-hmac-sha1-96):(?P<key>[a-fA-F0-9]{64})$")),
-                            ("LSA:plain_password_hex", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<type>plain_password_hex):(?P<hex>[a-fA-F0-9]\S+)$")),
+                            ("LSA:plain_password_hex", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<type>plain_password_hex):(?P<hex>[a-fA-F0-9]\\S+)$")),
                             ("LSA:NTLM", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<lm>[a-fA-F0-9]{32}):(?P<nt>[a-fA-F0-9]{32}):::$")),
-                            ("LSA:password", re.compile("^(?P<domain>[\\w.$-]+)\\\\(?P<username>[\\w.$-]+):(?P<password>\S+)$")),
-                            ("LSA:password", re.compile("^(?P<username>[\\w.$-]+)@(?P<domain>[\\w.$-]+):(?P<password>\S+)$")),
+                            ("LSA:password", re.compile("^(?P<domain>[\\w.$-]+)\\\\(?P<username>[\\w.$-]+):(?P<password>\\S+)$")),
+                            ("LSA:password", re.compile("^(?P<username>[\\w.$-]+)@(?P<domain>[\\w.$-]+):(?P<password>\\S+)$")),
                         ]
 
                         entries = smbscan.dump_lsa()
