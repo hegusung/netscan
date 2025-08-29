@@ -1,27 +1,88 @@
 #!/bin/bash
 
+set -o errexit
+set -o pipefail
+set -o nounset
+
 #########################
 ###       CONFIG      ###
 #########################
 RED="\e[31m"
 ENDCOLOR="\e[0m"
 
-SCRIPTS_DIR="./scripts"
+# Make paths robust relative to this script’s location
+SCRIPT_DIR_REAL="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+SCRIPTS_DIR="${SCRIPT_DIR_REAL}/scripts"
+
+# Virtualenv settings
+VENV_DIR="${SCRIPT_DIR_REAL}/.venv"
+REQUIREMENTS_FILE="${SCRIPT_DIR_REAL}/requirements.txt"
 
 #########################
 ###     FUNCTIONS     ###
 #########################
-usage(){ 
-    echo -e "Usage: $0 <module> [options]\n" 
-    #echo -e "Modules available : \n\t$(find $SCRIPTS_DIR -maxdepth 1 -type f | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed ':a;N;$!ba;s/\n/,/g' | sed 's/,$//g' | sed -e "s/.\{109\}/&\n\t/g"),shell"
+usage(){
+    echo -e "Usage: $0 <module> [options]\n"
     echo -e "Modules available :"
-    find $SCRIPTS_DIR -maxdepth 1 -type f | sed "s#$SCRIPTS_DIR/##g" | sed  's/.py//g' | sort | sed 's/^/        - /g'
+    find "$SCRIPTS_DIR" -maxdepth 1 -type f \
+      | sed "s#${SCRIPTS_DIR}/##g" | sed 's/.py$//g' \
+      | sort | sed 's/^/        - /g'
     echo -e "        - shell"
     echo -e "\nOptions :"
-    echo -e "\t-h : Display help" 
+    echo -e "\t-h : Display help"
     echo ""
-    exit $1
-} 
+    exit "${1:-0}"
+}
+
+activate_venv() {
+  echo "Activating venv"
+  # Activate only if not already this venv
+  if [[ -z "${VIRTUAL_ENV:-}" || "$VIRTUAL_ENV" != "$VENV_DIR" ]]; then
+    # shellcheck disable=SC1090
+    source "${VENV_DIR}/bin/activate"
+  fi
+}
+
+ensure_venv() {
+  if [[ ! -d "$VENV_DIR" || ! -x "${VENV_DIR}/bin/python" ]]; then
+    PYTHON_BIN=""
+
+    # 1. Prefer pyenv if available
+    if command -v pyenv >/dev/null 2>&1; then
+      if pyenv versions --bare | grep -q '^3\.12'; then
+        echo "[+] Using pyenv Python 3.12"
+        PYTHON_BIN="$(pyenv prefix 3.12)/bin/python3.12"
+      else
+        echo -e "${RED}[!] pyenv found, but no Python 3.12 installed.${ENDCOLOR}"
+      fi
+    fi
+
+    # 2. Otherwise try system python3.12
+    if [[ -z "$PYTHON_BIN" ]]; then
+      if command -v python3.12 >/dev/null 2>&1; then
+        echo "[+] Using system python3.12"
+        PYTHON_BIN="python3.12"
+      fi
+    fi
+
+    # 3. Fail if none available
+    if [[ -z "$PYTHON_BIN" ]]; then
+      echo -e "${RED}[!] Python 3.12 not available via pyenv or system.${ENDCOLOR}"
+      exit 2
+    fi
+
+    echo "[+] Creating virtual environment in ${VENV_DIR} with $PYTHON_BIN"
+    "$PYTHON_BIN" -m venv "$VENV_DIR"
+    activate_venv
+    python -m pip install --upgrade pip wheel >/dev/null
+    if [[ -f "$REQUIREMENTS_FILE" ]]; then
+      echo "[+] Installing requirements from ${REQUIREMENTS_FILE}"
+      pip install -r "$REQUIREMENTS_FILE"
+    fi
+  else
+    activate_venv
+  fi
+}
 
 #########################
 ###     ARGS MGMT     ###
@@ -29,51 +90,53 @@ usage(){
 MODULE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
-  case $1 in
+  case "$1" in
     -h|--help)
       HELP=YES
       shift
       ;;
     *)
-      MODULE_ARGS+=("$1") # save positional arg
+      MODULE_ARGS+=("$1")
       shift
       ;;
   esac
 done
 
-set -- "${MODULE_ARGS[@]}" # restore positional parameters
+set -- "${MODULE_ARGS[@]:-}"
 
 #########################
 ###       CHECKS      ###
 #########################
-if [ $# -gt 0 ]; then
-    MODULE=$1
-    shift
+if [[ $# -gt 0 ]]; then
+  MODULE="$1"
+  shift
 
-    if [ $MODULE == "shell" ]; then
-        /bin/bash
-        exit 0
-    fi
+  # Always ensure/activate venv before doing anything Python-related or shell
+  ensure_venv
 
-    if [ ! -f "$SCRIPTS_DIR/$MODULE.py" ]; then
-        echo -e "${RED}[!] Module \"$MODULE\" not found.${ENDCOLOR}\n"
-        usage 1
-    fi
+  if [[ "$MODULE" == "shell" ]]; then
+    echo "[+] Opening shell in venv: ${VENV_DIR}"
+    exec /bin/bash -i
+  fi
+
+  if [[ ! -f "${SCRIPTS_DIR}/${MODULE}.py" ]]; then
+    echo -e "${RED}[!] Module \"${MODULE}\" not found.${ENDCOLOR}\n"
+    usage 1
+  fi
 else
-    usage 0
+  usage 0
 fi
 
-if [ ! -z "$HELP" ]; then
-    if [ ! -z "$MODULE" ]; then
-        python $SCRIPTS_DIR/${MODULE}.py -h
-        exit 0
-    else
-        usage 0
-    fi
+if [[ -n "${HELP:-}" ]]; then
+  if [[ -n "${MODULE:-}" ]]; then
+    python "${SCRIPTS_DIR}/${MODULE}.py" -h
+    exit 0
+  else
+    usage 0
+  fi
 fi
 
 #########################
 ###       MAIN        ###
 #########################
-#echo "Let's run  : python ./${MODULE}.py $@"
-python3 $SCRIPTS_DIR/${MODULE}.py "$@"
+python "${SCRIPTS_DIR}/${MODULE}.py" "$@"
