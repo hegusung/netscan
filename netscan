@@ -19,6 +19,24 @@ VENV_DIR="${SCRIPT_DIR_REAL}/.venv"
 REQUIREMENTS_FILE="${SCRIPT_DIR_REAL}/requirements.txt"
 
 #########################
+###   ENV / DETECT    ###
+#########################
+in_container() {
+  # Detect Docker/Podman/K8s style cgroups or marker files
+  [[ -f "/.dockerenv" ]] && return 0
+  [[ -f "/run/.containerenv" ]] && return 0
+  grep -qaE '(docker|containerd|kubepods|libpod)' /proc/1/cgroup 2>/dev/null && return 0
+  return 1
+}
+
+# Decide whether to use a venv (default yes on host; no in containers or if DISABLE_VENV=1)
+if in_container || [[ "${DISABLE_VENV:-0}" == "1" ]]; then
+  USE_VENV=0
+else
+  USE_VENV=1
+fi
+
+#########################
 ###     FUNCTIONS     ###
 #########################
 usage(){
@@ -111,11 +129,18 @@ if [[ $# -gt 0 ]]; then
   MODULE="$1"
   shift
 
-  # Always ensure/activate venv before doing anything Python-related or shell
-  ensure_venv
+  if (( USE_VENV )); then
+    ensure_venv
+  else
+    echo "[+] Container detected (or DISABLE_VENV=1): skipping virtualenv; using system Python."
+  fi
 
   if [[ "$MODULE" == "shell" ]]; then
-    echo "[+] Opening shell in venv: ${VENV_DIR}"
+    if (( USE_VENV )); then
+      echo "[+] Opening shell in venv: ${VENV_DIR}"
+    else
+      echo "[+] Opening shell (no venv)."
+    fi
     exec /bin/bash -i
   fi
 
@@ -140,3 +165,4 @@ fi
 ###       MAIN        ###
 #########################
 python "${SCRIPTS_DIR}/${MODULE}.py" "$@"
+
