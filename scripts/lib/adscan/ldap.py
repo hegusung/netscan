@@ -81,13 +81,10 @@ class LDAPScan:
             if not connected:
                 return False, None
         except ldap3.core.exceptions.LDAPSocketSendError:
-            traceback.print_exc()
             return False, None
         except ldap3.core.exceptions.LDAPSocketOpenError:
-            traceback.print_exc()
             return False, None
         except ldap3.core.exceptions.LDAPInvalidPortError:
-            traceback.print_exc()
             return False, None
 
         self.defaultdomainnamingcontext = c.server.info.other['defaultNamingContext'][0]
@@ -150,7 +147,6 @@ class LDAPScan:
             return True, {'default_domain_naming_context': self.defaultdomainnamingcontext, 'domain_sid': self.domain_sid}
         except impacket.ldap.ldap.LDAPSessionError as e:
             print(str(e))
-            traceback.print_exc()
             return False, None
         except impacket.ldap.ldap.LDAPSearchError as e:
             return False, None
