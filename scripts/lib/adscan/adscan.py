@@ -826,8 +826,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                             continue
                                 else:
                                     Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
-                        else:
-                            Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
+                    else:
+                        Output.error({'target': smbscan.url(), 'message': 'Failed to get your TGT'})
 
                 else:
                     raise NotImplementedError('Dumping users through SMB')

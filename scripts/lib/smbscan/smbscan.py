@@ -113,6 +113,7 @@ def smbscan_worker(target, actions, creds, timeout):
             success = False
             is_admin = False
             # Authenticate
+            creds = creds.copy()
             if 'kerberos' in creds:
                 try:
                     ticket = os.environ['KRB5CCNAME']

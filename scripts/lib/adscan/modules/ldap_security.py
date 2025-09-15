@@ -130,6 +130,11 @@ def run_ldap(inputUser, inputPassword, dcTarget):
 #no error at all. Any other "successful" edge cases
 #not yet accounted for.
 def DoesLdapsCompleteHandshake(dcIp):
+  context = ssl.create_default_context()
+  context.check_hostname = False
+  context.verify_mode = ssl.CERT_NONE
+
+  """
   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   s.settimeout(5)
   ssl_sock = ssl.wrap_socket(s,
@@ -137,7 +142,11 @@ def DoesLdapsCompleteHandshake(dcIp):
                             suppress_ragged_eofs=False,
                             do_handshake_on_connect=False)
   ssl_sock.connect((dcIp, 636))
+  """
   try:
+    sock = socket.create_connection((dcIp, 636))
+    ssl_sock = context.wrap_socket(sock, server_hostname=None)
+
     ssl_sock.do_handshake()
     ssl_sock.close()
     return True
@@ -150,7 +159,10 @@ def DoesLdapsCompleteHandshake(dcIp):
         return False
     else:
         Output.error({'target': 'ldaps://%s:%d' % (dcIp, 636), 'message': "[LDAP_Security] Unexpected error during LDAPS handshake: " + str(e)})
-    ssl_sock.close()
+    try:
+        ssl_sock.close()
+    except:
+        pass
 
 #Conduct a bind to LDAPS and determine if channel
 #binding is enforced based on the contents of potential

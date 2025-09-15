@@ -74,17 +74,20 @@ class LDAPScan:
         # Use LDAP3 to get default naming context and config and schema
         connected = False
         try:
-            s = Server('%s://%s' % (self.protocol, self.hostname), get_info=ALL)
+            s = Server('%s://%s' % (self.protocol, self.hostname),  get_info=ALL)
             c = Connection(s)
             connected = c.bind()
             
             if not connected:
                 return False, None
         except ldap3.core.exceptions.LDAPSocketSendError:
+            traceback.print_exc()
             return False, None
         except ldap3.core.exceptions.LDAPSocketOpenError:
+            traceback.print_exc()
             return False, None
         except ldap3.core.exceptions.LDAPInvalidPortError:
+            traceback.print_exc()
             return False, None
 
         self.defaultdomainnamingcontext = c.server.info.other['defaultNamingContext'][0]
@@ -103,7 +106,7 @@ class LDAPScan:
                 lm_hash = ntlm.split(':')[0]
         
         try:
-            self.conn = ldap.LDAPConnection(self.url(), self.defaultdomainnamingcontext, dc_ip)  
+            self.conn = ldap.LDAPConnection(url=self.url(), baseDN=self.defaultdomainnamingcontext, dstIp=dc_ip)  
 
             if doKerberos is not True:
                 if username == None:
@@ -146,6 +149,8 @@ class LDAPScan:
 
             return True, {'default_domain_naming_context': self.defaultdomainnamingcontext, 'domain_sid': self.domain_sid}
         except impacket.ldap.ldap.LDAPSessionError as e:
+            print(str(e))
+            traceback.print_exc()
             return False, None
         except impacket.ldap.ldap.LDAPSearchError as e:
             return False, None

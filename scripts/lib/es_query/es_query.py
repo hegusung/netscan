@@ -110,6 +110,9 @@ def export_ports(session, service, output_dir):
 
 
 def export_hashes(session, service, output_dir):
+    global output
+    output = []
+
     if not session:
         print('A session must be defined')
         return
@@ -125,6 +128,7 @@ def export_hashes(session, service, output_dir):
     export_local_hashes(session, output_dir)
     export_domain_hashes(session, output_dir)
 
+    pprint(output)
 
 def export_ip_ports(session, service, output_dir):
     global output
@@ -437,6 +441,7 @@ def export_http_urls(session, output_dir):
 
 
 def export_domain_hashes(session, output_dir):
+    global output
 
     enabled_users = []
 
@@ -508,6 +513,7 @@ def export_domain_hashes(session, output_dir):
 
 
 def export_local_hashes(session, output_dir):
+    global output
        
     query = {
       "query": {
