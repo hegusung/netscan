@@ -165,6 +165,8 @@ def bruteforce_generator(target, domain, username_file, password_file, simple_br
             if ':' in u:
                 u = u.split(':', 1)[0]
             p = [u]
+            if '\\' in p[0]:
+                p = [p[0].split('\\', 1)[-1]]
 
         if '\\' in u:
             d = u.split('\\', 1)[0]

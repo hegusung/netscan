@@ -101,9 +101,12 @@ def export_ports(session, service, output_dir):
 
     export_ip_ports(session, service, output_dir)
     export_undiscovered_services(session, output_dir)
+
     export_domains(session, output_dir)
     export_domain_controllers(session, output_dir)
     export_domain_hosts(session, output_dir)
+    export_domain_enabled_users(session, output_dir)
+
     export_http_urls(session, output_dir)
 
     pprint(output)
@@ -909,6 +912,49 @@ def export_domain_hosts(session, output_dir):
         count += 1
       
     output.append(("domain_hosts", domain_host_filename, count,  "Domain hosts written"))
+
+def export_domain_enabled_users(session, output_dir):
+       
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_user"        }},
+            { "match": { "session.keyword": session }}
+          ],
+          "must_not": [
+            { "match": { "tags":   "Account disabled"  }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    # Create output files in dir if non existant
+
+    domain_user_filename = os.path.join(output_dir, '%s_domain_users.txt' % session)
+    domain_user_file = open(domain_user_filename, 'a')
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if 'domain' in source and 'username' in source:
+            domain_user_file.write('%s\\%s\n' % (source['domain'], source['username']))
+        c += 1
+
+    domain_user_file.close()
+    # Make files unique
+    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(domain_user_filename))
+    count = 0
+    for _ in open(domain_user_filename):
+        count += 1
+      
+    output.append(("domain_users", domain_user_filename, count,  "Domain users written"))
+
+
 
 def dump(session, output_file):
     if not session:
