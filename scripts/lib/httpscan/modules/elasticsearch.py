@@ -18,7 +18,7 @@ class Module:
 
         response = http.get('/')
 
-        if response['code'] == 200 and response['content-type'] == 'application/json':
+        if response != None and response['code'] == 200 and response['content-type'] == 'application/json':
             data = json.loads(response['html'])
 
             if 'X-elastic-product' in response['headers'] and response['headers']['X-elastic-product'] == 'Elasticsearch':

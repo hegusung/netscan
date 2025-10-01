@@ -49,9 +49,9 @@ class Module:
             Output.minor("[%s] Module requires a valid user and password/hash authentication" % self.name)
             return
 
-        ldapIsProtected = run_ldap(username, password, target['hostname'])
-
         Output.minor({'target': 'ldap://%s' % (target['hostname'],), 'message': "[%s] Running module..." % self.name})
+
+        ldapIsProtected = run_ldap(username, password, target['hostname'])
 
         if ldapIsProtected == False:
             Output.vuln({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': '[%s] LDAP signing requirements not enforced' % self.name})
@@ -65,6 +65,8 @@ class Module:
                 'description': 'LDAP Service ldap://%s:%d does not have the signing requirements enforced' % (target['hostname'], 389),
             }
             DB.insert_vulnerability(vuln_info)
+        else:
+            Output.success({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': '[%s] LDAP signing requirements is enforced' % self.name})
 
         if DoesLdapsCompleteHandshake(target['hostname']) == True:
 
@@ -99,7 +101,7 @@ class Module:
 
             elif ldapsChannelBindingAlwaysCheck == True:
                 # Not vulnerable
-                pass
+                Output.success({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "always"' % self.name})
             else:
                 Output.error({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': "[" + self.name + "] ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
 

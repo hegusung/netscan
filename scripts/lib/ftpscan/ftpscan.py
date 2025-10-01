@@ -1,5 +1,6 @@
 import traceback
 import socket
+import time
 from .ftp import FTPScan
 from .ftp_bruteforce import *
 
@@ -8,11 +9,12 @@ from utils.dispatch import dispatch
 from utils.utils import sizeof_fmt, gen_random_string
 from utils.db import DB
 
-def ftpscan_worker(target, actions, creds, timeout):
+def ftpscan_worker(target, actions, creds, timeout, passive):
     try:
-        ftpscan = FTPScan(target['hostname'], target['port'], timeout)
+        ftpscan = FTPScan(target['hostname'], target['port'], timeout, passive)
 
-        ftp_code, version = ftpscan.grab_banner()
+        #ftp_code, version = ftpscan.grab_banner()
+        ftp_code, version = ftpscan.connect()
         if ftp_code:
             Output.write({'target': ftpscan.url(), 'message': '%d   %s' % (ftp_code, version)})
             DB.insert_port({
@@ -102,6 +104,8 @@ def ftpscan_worker(target, actions, creds, timeout):
                 ftpscan = FTPScan(target['hostname'], target['port'], timeout)
                 rnd_user = gen_random_string()
                 rnd_pass = gen_random_string()
+                # small delay to prevent errors
+                time.sleep(1)
                 success = ftpscan.auth(rnd_user, rnd_pass)
 
                 if success == True:

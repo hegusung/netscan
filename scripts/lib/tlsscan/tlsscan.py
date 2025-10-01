@@ -51,7 +51,10 @@ def tlsscan_worker(target, tls_config, timeout):
 
             res = new_res
 
-        certificate_domain = res.scan_result.certificate_info.result.hostname_used_for_server_name_indication
+        if res.scan_result.certificate_info.result != None:
+            certificate_domain = res.scan_result.certificate_info.result.hostname_used_for_server_name_indication
+        else:
+            certificate_domain = "<No domain>
 
         mozilla_checker = MozillaTlsConfigurationChecker.get_default()
         try:

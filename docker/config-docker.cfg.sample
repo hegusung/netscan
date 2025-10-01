@@ -20,6 +20,8 @@ password = netscan
 [Gowitness]
 host = 127.0.0.1
 port = 7171
+timeout = 60
+screenshot_delay = 5
 
 [Server]
 bind_ip = 0.0.0.0

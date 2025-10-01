@@ -191,6 +191,13 @@ class DNSScan:
                     continue
             except dns.exception.Timeout:
                 continue
+            except OSError as e:
+                if "113" in str(e):
+                    Output.minor({"target": str(ns_dns), "message": "No route to host"})
+                    continue
+                else:
+                    raise
+
             except dns.xfr.TransferError:
                 Output.minor({"target": str(ns_dns), "message": "AXFR transfer failure"})
                 continue

@@ -6,10 +6,11 @@ from utils.output import Output
 
 class FTPScan:
 
-    def __init__(self, hostname, port, timeout):
+    def __init__(self, hostname, port, timeout, passive=False):
         self.hostname = hostname
         self.port = port
         self.timeout = timeout
+        self.passive = passive
 
         self.ftp = None
 
@@ -42,13 +43,38 @@ class FTPScan:
 
         return ftp_code, version
 
-    def auth(self, username=None, password=None):
-        if self.ftp != None:
-            self.disconnect()
+    def connect(self):
+        try:
+            self.ftp = ftplib.FTP()
+            self.ftp.set_pasv(self.passive)
+            self.ftp.connect(host=self.hostname, port=self.port, timeout=self.timeout)
 
-        self.ftp = ftplib.FTP()
-        self.ftp.set_pasv(False)
-        self.ftp.connect(self.hostname, self.port, timeout=self.timeout)
+            welcome = self.ftp.getwelcome()
+            banner_parts = welcome.split(' ', 1)
+
+            if len(banner_parts) < 2:
+                return None, None
+
+            ftp_code = int(banner_parts[0].split('-')[0])
+            version = banner_parts[1]
+
+        except TimeoutError:
+            return None, None
+        except OSError:
+            return None, None
+        except Exception as e:
+            Output.write({'target': self.url(), 'message': "%s: %s" % (type(e), e)})
+            return None, None
+
+        return ftp_code, version
+
+    def auth(self, username=None, password=None):
+        #if self.ftp != None:
+        #    self.disconnect()
+
+        #self.ftp = ftplib.FTP()
+        #self.ftp.set_pasv(False)
+        #self.ftp.connect(self.hostname, self.port, timeout=self.timeout)
 
         try:
             if username == None:

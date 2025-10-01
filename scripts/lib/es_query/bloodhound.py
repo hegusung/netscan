@@ -66,6 +66,7 @@ def export_bloodhound_domains(session, links_dict, links_effect, output_dir, use
             'domainsid': source['sid'],
             'highvalue': True,
             'functionallevel': source['functionallevel'],
+            'enabled': True,
         }
 
         # Query child objects
