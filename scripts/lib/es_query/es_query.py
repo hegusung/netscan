@@ -1052,3 +1052,92 @@ def delete_session(session):
 
     print("Deleted %d documents" % res['deleted'])
 
+def parse_spns(session, output_dir):
+    global output
+    output = []
+
+    spn_rules = {
+        "HTTP": {
+            "name": "HTTP",
+            "default_port": None,
+        },
+        "nfs": {
+            "name": "NFS",
+            "default_port": None,
+        },
+        "cifs": {
+            "name": "CIFS",
+            "default_port": None,
+        },
+        "ftp": {
+            "name": "FTP",
+            "default_port": None,
+        },
+        "MSSQLSvc": {
+            "name": "MSSQL",
+            "default_port": 1433,
+        },
+    }
+
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    spn_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        for spn in source['spns']:
+            spn_type = spn.split('/')[0]
+            spn_target = spn.split('/', 1)[1]
+
+            if not spn_type in spn_dict:
+                spn_dict[spn_type] = []
+
+            spn_dict[spn_type].append(spn_target)
+
+    print("SPNs types:")
+    print(" - %s" % ", ".join(list(spn_dict.keys())))
+
+    for spn_type, spn_data in spn_rules.items():
+        spn_list = []
+        for spn in spn_dict[spn_type]:
+            if "." in spn:
+                if spn_data["default_port"] != None:
+                    if not ":" in spn:
+                        spn = "%s:%d" % (spn, spn_data["default_port"])
+                    else:
+                        try:
+                            port = int(spn.split(":")[1])
+                        except ValueError:
+                            continue
+
+                spn_list.append(spn)
+
+        spn_list = list(set(spn_list))
+
+        spn_filename = os.path.join(output_dir, '%s_spn_%s.txt' % (session, spn_data['name']))
+        spn_file = open(spn_filename, 'w')
+
+        for spn in spn_list: 
+            spn_file.write("%s\n" % spn)
+
+        spn_file.close()
+        
+        output.append((spn_data["name"], spn_filename, len(spn_list),  "services written"))
+
+    pprint(output)
+

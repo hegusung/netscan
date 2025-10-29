@@ -250,11 +250,14 @@ def smbscan_worker(target, actions, creds, timeout):
 
             if success:
                 # Authenticated, now perform actions
-                share_list = []
+                share_list = None
                 if 'list_shares' in actions:
                     #shares = "Shares:\n"
                     try:
+
+                        share_list = []
                         for share_info in smbscan.list_shares():
+                            share_list.append(share_info)
                             #shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
                             share_str = "[%s] Share: %s %s %s" % (smb_info['hostname'], share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
                             Output.highlight({'target': smbscan.url(), 'message': share_str})
@@ -284,19 +287,35 @@ def smbscan_worker(target, actions, creds, timeout):
                             Output.error({'target': smbscan.url(), 'message': 'List shares: Access denied'})
                         else:
                             raise e
+
                 if 'list' in actions:
                     try:
                         if 'path' in target:
                             share_name = target['path'].split('/')[1]
-                            share_list = [share_name]
+                            share_list = [{
+                                "name": share_name,
+                                "access": ["READ"],
+                            }]
                         elif 'share' in actions['list']:
-                            share_list = [actions['list']['share']]
+                            share_list = [{
+                                "name": actions['list']['share'],
+                                "access": ["READ"],
+                            }]
                         else:
-                            if len(share_list) == 0:
-                                for share_info in smbscan.list_shares():
-                                    share_list.append(share_info['name'])
+                            if share_list == None:
+                                share_list = smbscan.list_shares()
+                                #for share_info in smbscan.list_shares():
+                                #    share_list.append(share_info['name'])
 
-                        for share in share_list:
+                        for share_info in share_list:
+                            share = share_info['name']
+
+                            if share in ["IPC$"]:
+                                continue
+
+                            if not 'READ' in share_info['access']:
+                                continue
+
                             contents = "Content of share %s:\n" % share
                             for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
                                 if 'size' in content:
