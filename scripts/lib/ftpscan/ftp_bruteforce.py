@@ -17,6 +17,7 @@ def bruteforce_worker(target, timeout):
         retry = 0
 
         try:
+            ftpscan.connect()
             success = ftpscan.auth(username, password)
             if success:
                 Output.success({'target': ftpscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})

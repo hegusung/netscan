@@ -246,7 +246,7 @@ def export_ip_ports(session, service, output_dir):
 
     ip_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(ip_filename))
     count = 0
     for _ in open(ip_filename):
         count += 1
@@ -255,7 +255,7 @@ def export_ip_ports(session, service, output_dir):
 
     ip_port_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_port_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(ip_port_filename))
     count = 0
     for _ in open(ip_port_filename):
         count += 1
@@ -267,7 +267,7 @@ def export_ip_ports(session, service, output_dir):
         output.append((service, f['filename'], f['count'],  "ports written"))
 
         # Make files unique
-        os.system('sort %s | uniq > %s_tmp; mv %s_tmp %s' % (f['filename'], f['filename'], f['filename'], f['filename']))
+        os.system('sort \'%s\' | uniq > \'%s_tmp\'; mv \'%s_tmp\' \'%s\'' % (f['filename'], f['filename'], f['filename'], f['filename']))
 
 
 def export_domains(session, output_dir):
@@ -304,7 +304,7 @@ def export_domains(session, output_dir):
 
     file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(filename))
     count = 0
     for _ in open(filename):
         count += 1
@@ -346,7 +346,7 @@ def export_domain_controllers(session, output_dir):
 
     file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(filename))
     count = 0
     for _ in open(filename):
         count += 1
@@ -394,7 +394,7 @@ def export_undiscovered_services(session, output_dir):
 
     file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(filename))
     count = 0
     for _ in open(filename):
         count += 1
@@ -435,7 +435,7 @@ def export_http_urls(session, output_dir):
 
     url_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(url_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(url_filename))
     count = 0
     for _ in open(url_filename):
         count += 1
@@ -507,7 +507,7 @@ def export_domain_hashes(session, output_dir):
 
     hashfile_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(hashfile_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
     count = 0
     for _ in open(hashfile_filename):
         count += 1
@@ -565,7 +565,7 @@ def export_local_hashes(session, output_dir):
         hashfile_file.close()
 
         # Make files unique
-        os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(hashfile_filename))
+        os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
         count = 0
         for _ in open(hashfile_filename):
             count += 1
@@ -906,7 +906,7 @@ def export_domain_hosts(session, output_dir):
 
     domain_host_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(domain_host_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(domain_host_filename))
     count = 0
     for _ in open(domain_host_filename):
         count += 1
@@ -947,7 +947,7 @@ def export_domain_enabled_users(session, output_dir):
 
     domain_user_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(domain_user_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(domain_user_filename))
     count = 0
     for _ in open(domain_user_filename):
         count += 1

@@ -106,6 +106,7 @@ def ftpscan_worker(target, actions, creds, timeout, passive):
                 rnd_pass = gen_random_string()
                 # small delay to prevent errors
                 time.sleep(1)
+                ftpscan.connect()
                 success = ftpscan.auth(rnd_user, rnd_pass)
 
                 if success == True:
