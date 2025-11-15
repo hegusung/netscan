@@ -1403,12 +1403,16 @@ class Elasticsearch(object):
         except elasticsearch.exceptions.ConnectionError:
             Output.error("Elasticsearch: Unable to connect to elasticsearch instance")
 
-def resolve_hostname(hostname, timeout=5):
+resolved = {}
+def resolve_hostname(hostname, timeout=30):
 
     ip_results = []
 
+    if hostname in resolved:
+        return resolved[hostname]
+
     try:
-        ip_results = resolver.query(hostname, "A")
+        ip_results = resolver.resolve(hostname, "A", tcp=True)
     except resolver.NXDOMAIN:
         pass
     except resolver.NoAnswer:
@@ -1421,5 +1425,6 @@ def resolve_hostname(hostname, timeout=5):
     for ip in ip_results:
         ip = str(ip)
 
-    return [str(ip) for ip in ip_results]
+    resolved[hostname] = [str(ip) for ip in ip_results]
+    return resolved[hostname]
 

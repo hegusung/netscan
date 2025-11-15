@@ -5,7 +5,7 @@ from utils.utils import normalize_path
 from utils.output import Output
 from utils.db import DB
 from utils.config import Config
-from lib.es_query.es_query import dump, export_ports, export_hashes, export_bloodhound, restore, delete_session, get_gpos_admins
+from lib.es_query.es_query import dump, export_ports, export_hashes, export_bloodhound, restore, delete_session, get_gpos_admins, parse_spns
 from lib.es_query.bloodhound_automation import set_owned
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 
@@ -22,6 +22,7 @@ def main():
     
     parser.add_argument('--owned', action='store_true', help='Queries Neo4j to set owned users and computers as "owned"', dest='owned')
     parser.add_argument('--gpos-admins', action='store_true', help='Lists administrators based on GPOs', dest='gpo_admins')
+    parser.add_argument('--parse-spns', metavar='output directory', type=str, nargs='?', help='Parse SPNs and save them as files', dest='parse_spns')
 
     parser.add_argument('--delete-session', metavar='session', type=str, nargs='?', help='Delete all documents related to a specific session', dest='delete_session')
 
@@ -49,6 +50,8 @@ def main():
         restore(session, normalize_path(args.restore))
     elif args.delete_session:
         delete_session(args.delete_session)
+    elif args.parse_spns:
+        parse_spns(session, normalize_path(args.parse_spns))
     # Bloodhound 
     if args.owned:
         set_owned(session)
