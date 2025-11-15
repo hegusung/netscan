@@ -47,6 +47,7 @@ es_ids = {
     #'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
     'domain_password': 'domain_password_{session}_{domain}_{username}_{password}',
     'domain_hash': 'domain_hash_{session}_{domain}_{username}_{format}_{hash}',
+    'domain_dns': 'domain_dns_{session}_{dns}',
     # ADCS
     'domain_ntauthcertificate': 'domain_ntauthcertificate_{session}_{domain}_{name}',
     'domain_rootca': 'domain_rootca_{session}_{domain}_{name}',
@@ -825,6 +826,19 @@ class DB:
 
         self.send(gpo_doc)
 
+
+    @classmethod
+    def insert_domain_dns(self, dns_doc):
+        dns_doc['doc_type'] = 'domain_dns'
+        dns_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        dns_doc = check_entry(dns_doc, ['domain', 'dns'], [])
+
+        dns_doc['domain'] = dns_doc['domain'].lower()
+
+        if len(dns_doc['domain']) == 0 or dns_doc['domain'] == 'workgroup':
+            return
+
+        self.send(dns_doc)
 
 
     @classmethod

@@ -692,9 +692,14 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 if ldap_authenticated:
                     dns_timeout = False
                     for dns_entry in DNS.list_dns(ldapscan):
-                        entry = dns_entry.to_json()['dns']
+                        entry = dns_entry.to_json()
+
+                        dns = entry['dns']
+                        dns_domain = entry['domain']
+
                         # resolve dns entry
 
+                        """
                         if not dns_timeout:
                             try:
                                 resolver = dns.resolver.Resolver()
@@ -715,9 +720,23 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 dns_timeout = True
                         else:
                             ips = []
+                        """
 
-                        Output.write({'target': ldapscan.url(), 'message': '- %s (%s)' % (entry.ljust(50), ','.join(ips))})
+                        #Output.write({'target': ldapscan.url(), 'message': '- %s (%s)' % (entry.ljust(50), ','.join(ips))})
+                        if ".RootDNSServers" in dns:
+                            continue
 
+                        if "DnsZones." in dns:
+                            continue
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s' % (dns, )})
+
+                        DB.insert_domain_dns({
+                            'domain': dns_domain,
+                            'dns': dns,
+                        })
+
+                        """
                         if len(ips) != 0:
                             for ip in ips:
                                 DB.insert_dns({
@@ -725,6 +744,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                     'query_type': 'A',
                                     'target': ip,
                                 })
+                        """
 
                 else:
                     raise NotImplementedError('Dumping DNS through SMB')
