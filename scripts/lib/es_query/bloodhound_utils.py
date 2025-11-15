@@ -114,6 +114,8 @@ sid_type_dict = {
     'S-1-5-9': 'Group',
     'S-1-5-11': 'Group',
     'S-1-5-18': 'User',
+    'S-1-5-4': 'Group', # interactive user
+    'S-1-5-17': 'User', # default IIS user
 }
 
 def process_aces(session, aces):
@@ -151,6 +153,7 @@ def process_aces(session, aces):
 
     return aces
 
+
 dn_dict = {}
 
 def resolve_sid_from_dn(session, domain, members):
@@ -158,6 +161,7 @@ def resolve_sid_from_dn(session, domain, members):
     output = []
 
     to_process = []
+    to_process_sid = {}
     for dn in members:
         if not dn.startswith('CN=S-1-'):
             if not dn in dn_dict:
@@ -171,6 +175,12 @@ def resolve_sid_from_dn(session, domain, members):
                     'ObjectIdentifier': '%s-%s' % (domain, sid),
                     'ObjectType': sid_type_dict[sid],
                 })
+            else:
+                # Foreign security principals
+                if not dn in dn_dict:
+                    to_process_sid[sid] = dn
+                else:
+                    output.append(dn_dict[dn])
 
     if len(to_process) != 0:
         query = {
@@ -208,6 +218,41 @@ def resolve_sid_from_dn(session, domain, members):
 
             output.append(dn_dict[dn])
 
+    if len(to_process_sid) != 0:
+        sid_list = list(to_process_sid.keys())
+
+        query = {
+          "query": {
+            "bool": {
+              "must": [
+                { "match": {"session.keyword": session}, },
+              ],
+              "filter": {
+                  "terms": {
+                      "sid.keyword": sid_list,
+                  }
+               }
+            }
+          }
+        }
+
+        res = Elasticsearch.search(query)
+        for item in res:
+            source = item['_source']
+            object_type = doc_type_dict[source['doc_type']]
+            sid = source['sid']
+
+            dn_dict[to_process_sid[sid]] = {"ObjectIdentifier": sid, "ObjectType": object_type}
+
+            output.append(dn_dict[to_process_sid[sid]])
+
+            del to_process_sid[sid]
+
+        for sid in to_process_sid:
+            object_type = "Base"
+
+            output.append({"ObjectIdentifier": sid, "ObjectType": object_type})
+
     return output
 
 def get_object_from_name(session, name):
@@ -216,7 +261,8 @@ def get_object_from_name(session, name):
         "bool": {
           "must": [
             { "match": {"session.keyword": session}, },
-            { "match": {"hostname.keyword": name} }
+            { "match": {"hostname.keyword": name} },
+            { "exists": { "field": "sid" } }
           ],
           "filter": []
         }

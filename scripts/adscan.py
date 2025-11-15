@@ -80,9 +80,9 @@ def main():
     # ADCS
     adcs_group = parser.add_argument_group("ADCS")
     adcs_group.add_argument("--adcs", action='store_true', help='Discover the domain root Certificate Authority')
-    adcs_group.add_argument("--ca-certs", action='store_true', help='List CA certificates from Active Directory', dest='ca_certs')
+    adcs_group.add_argument("--cas", action='store_true', help='List Certification Authorities from the Active Directory (AIACAs, ROOTCAs, EnterpriseCAs, NTAuthStores) (bloodhound)', dest='cas')
     adcs_group.add_argument("--certipy", action='store_true', help='Execute certipy', dest='certipy')
-    adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory', dest='cert_templates')
+    adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory (bloodhound)', dest='cert_templates')
 
     # Dump
     admin_group = parser.add_argument_group("Domain admin actions")
@@ -208,8 +208,8 @@ def main():
 
     if args.adcs:
         actions['casrv'] = {}
-    if args.ca_certs:
-        actions['ca_certs'] = {}
+    if args.cas:
+        actions['CAs'] = {}
     if args.certipy:
         actions['certipy'] = {}
     if args.cert_templates:

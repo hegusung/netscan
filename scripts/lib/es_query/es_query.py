@@ -61,7 +61,7 @@ service_nmap_translate = {
 def pprint(output_list):
     init()
 
-    COLUMN_1_LENGTH = 15
+    COLUMN_1_LENGTH = 20
     COLUMN_2_LENGTH = 60
     COLUMN_3_LENGTH = 30
 
@@ -471,6 +471,8 @@ def export_domain_hashes(session, output_dir):
         username = "%s\\%s" % (source['domain'], source['username'])
 
         enabled_users.append(username)
+
+    # NTLM
         
     query = {
       "query": {
@@ -513,6 +515,90 @@ def export_domain_hashes(session, output_dir):
         count += 1
 
     output.append(("Domain hashes", hashfile_filename, count,  "hashes written"))
+
+    # ASREPROASTING
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "krb5asrep" }},
+            { "match": { "session.keyword": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    hashfile_filename = os.path.join(output_dir, '%s_domain_username_krb5asrep_hash_enabled.txt' % session)
+    hashfile_file = open(hashfile_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    processed = []
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        if username in enabled_users:
+            if not username in processed:
+                hashfile_file.write('%s\n' % (source['hash'],))
+                processed.append(username)
+
+    hashfile_file.close()
+    # Make files unique
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
+    count = 0
+    for _ in open(hashfile_filename):
+        count += 1
+
+    output.append(("krb5asrep", hashfile_filename, count,  "hashes written"))
+
+    # KERBEROASTING
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "krb5tgs" }},
+            { "match": { "session.keyword": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    hashfile_filename = os.path.join(output_dir, '%s_domain_username_krb5tgs_hash_enabled.txt' % session)
+    hashfile_file = open(hashfile_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    processed = []
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        if username in enabled_users:
+            if not username in processed:
+                hashfile_file.write('%s\n' % (source['hash'],))
+                processed.append(username)
+
+    hashfile_file.close()
+    # Make files unique
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
+    count = 0
+    for _ in open(hashfile_filename):
+        count += 1
+
+    output.append(("krb5tgs", hashfile_filename, count,  "hashes written"))
 
 
 def export_local_hashes(session, output_dir):
@@ -582,21 +668,30 @@ def export_bloodhound(session, output_dir):
 
     user_info, user_sid, group_sid = get_user_group_data(session)
 
+    containedby_dict = generate_containedby(session)
+
     domains, domain_fqdn_to_name, domain_name_to_sid, output = export_bloodhound_domains(session, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output)
 
-    output = export_bloodhound_containers(session, domain_name_to_sid, output_dir, output)
+    output = export_bloodhound_containers(session, domain_name_to_sid, output_dir, containedby_dict, output)
 
-    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output)
+    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, containedby_dict, output)
 
-    output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
+    output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, containedby_dict, output)
 
     output = export_bloodhound_gpos(session, domain_name_to_sid, output_dir, output)
 
-    #group_sid = get_group_sid(session)
+    domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, containedby_dict, output)
 
-    domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, output)
+    output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, containedby_dict, output)
 
-    output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, output)
+    # ADCS
+
+    output = export_bloodhound_ntauthstores(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_rootcas(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_aiacas(session, output_dir, domains, containedby_dict, output)
+    output, templates = export_bloodhound_certificate_templates(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_enrollment_services(session, output_dir, domains, templates, containedby_dict, output)
+
 
     pprint(output)
 

@@ -3,7 +3,7 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
 class Group:
-    attributes = ['distinguishedName', 'sAMAccountname', 'description', 'objectSid', 'primaryGroupID', 'adminCount', 'member', 'nTSecurityDescriptor', 'sIDHistory']
+    attributes = ['distinguishedName', 'sAMAccountname', 'description', 'objectSid', 'primaryGroupID', 'adminCount', 'member', 'nTSecurityDescriptor', 'sIDHistory', 'whenCreated']
     schema_guid_attributes = ['group', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
     schema_guid_dict = None
 
@@ -92,6 +92,11 @@ class Group:
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.groupname = str(attr['sAMAccountName'])
         self.fullname = str(attr['displayName']) if 'displayName' in attr else ""
+
+        try:
+            self.created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+        except KeyError:
+            self.created_date = None
         
         if not 'description' in attr:
             self.comment = ""
@@ -147,5 +152,6 @@ class Group:
             'tags': self.tags,
             'aces': self.aces,
             'sid_history': self.sid_history,
+            'created_date': self.created_date,
         }
 

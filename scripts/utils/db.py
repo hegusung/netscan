@@ -36,6 +36,7 @@ es_ids = {
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
     'secret': 'secret_{session}_{filepath}_{line}',
     'snmp': 'snmp_{session}_{ip}_{port}_{snmp_key}',
+    # AD
     'domain': 'domain_domain_{session}_{domain}',
     'domain_container': 'domain_container_{session}_{domain}_{guid}',
     'domain_ou': 'domain_ou_{session}_{domain}_{guid}',
@@ -46,6 +47,13 @@ es_ids = {
     #'domain_spn': 'domain_spn_{session}_{domain}_{spn}',
     'domain_password': 'domain_password_{session}_{domain}_{username}_{password}',
     'domain_hash': 'domain_hash_{session}_{domain}_{username}_{format}_{hash}',
+    # ADCS
+    'domain_ntauthcertificate': 'domain_ntauthcertificate_{session}_{domain}_{name}',
+    'domain_rootca': 'domain_rootca_{session}_{domain}_{name}',
+    'domain_aiaca': 'domain_aiaca_{session}_{domain}_{name}',
+    'domain_enrollmentservice': 'domain_enrollmentservice_{session}_{domain}_{name}',
+    'domain_certificatetemplate': 'domain_certificatetemplate_{session}_{domain}_{name}',
+    # Linux
     'host_linux': 'host_linux_{session}_{ip}',
     'host_linux_pkg': 'host_linux_pkg_{session}_{ip}_{pkg_name}',
 }
@@ -976,6 +984,9 @@ class DB:
         if len(group_doc['domain']) == 0 or group_doc['domain'] == 'workgroup':
             return
 
+        if 'created_date' in group_doc and group_doc['created_date'] != None:
+            group_doc['created_date'] = int(group_doc['created_date'].timestamp()*1000)
+
         if 'user' in group_doc:
             if not 'append' in group_doc:
                 append = {'user': group_doc['user']}
@@ -986,23 +997,94 @@ class DB:
 
         self.send(group_doc)
 
-    """
     @classmethod
-    def insert_domain_spn(self, spn_doc):
-        spn_doc['doc_type'] = 'domain_spn'
-        spn_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        spn_doc = check_entry(spn_doc, ['domain', 'spn', 'username'], [])
+    def insert_domain_ntauthcertificate(self, ca_doc):
+        ca_doc['doc_type'] = 'domain_ntauthcertificate'
+        ca_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        ca_doc = check_entry(ca_doc, ['domain', 'name'], [])
 
-        spn_doc['domain'] = spn_doc['domain'].lower()
-        spn_doc['username'] = spn_doc['username'].lower()
+        ca_doc['domain'] = ca_doc['domain'].lower()
+        ca_doc['name'] = ca_doc['name'].lower()
 
-        print(spn_doc)
-
-        if len(spn_doc['domain']) == 0 or spn_doc['domain'] == 'workgroup':
+        if len(ca_doc['domain']) == 0 or ca_doc['domain'] == 'workgroup':
             return
 
-        self.send(spn_doc)
-    """
+        if 'created_date' in ca_doc and ca_doc['created_date'] != None:
+            ca_doc['created_date'] = int(ca_doc['created_date'].timestamp()*1000)
+
+        self.send(ca_doc)
+
+    @classmethod
+    def insert_domain_rootca(self, ca_doc):
+        ca_doc['doc_type'] = 'domain_rootca'
+        ca_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        ca_doc = check_entry(ca_doc, ['domain', 'name'], [])
+
+        ca_doc['domain'] = ca_doc['domain'].lower()
+        ca_doc['name'] = ca_doc['name'].lower()
+
+        if len(ca_doc['domain']) == 0 or ca_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in ca_doc and ca_doc['created_date'] != None:
+            ca_doc['created_date'] = int(ca_doc['created_date'].timestamp()*1000)
+
+        self.send(ca_doc)
+
+    @classmethod
+    def insert_domain_aiaca(self, ca_doc):
+        ca_doc['doc_type'] = 'domain_aiaca'
+        ca_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        ca_doc = check_entry(ca_doc, ['domain', 'name'], [])
+
+        ca_doc['domain'] = ca_doc['domain'].lower()
+        ca_doc['name'] = ca_doc['name'].lower()
+
+        if len(ca_doc['domain']) == 0 or ca_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in ca_doc and ca_doc['created_date'] != None:
+            ca_doc['created_date'] = int(ca_doc['created_date'].timestamp()*1000)
+
+        self.send(ca_doc)
+
+    @classmethod
+    def insert_domain_enrollment_service(self, es_doc):
+        es_doc['doc_type'] = 'domain_enrollmentservice'
+        es_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        es_doc = check_entry(es_doc, ['domain', 'name'], [])
+
+        es_doc['domain'] = es_doc['domain'].lower()
+        es_doc['name'] = es_doc['name'].lower()
+
+        if len(es_doc['domain']) == 0 or es_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in es_doc and es_doc['created_date'] != None:
+            es_doc['created_date'] = int(es_doc['created_date'].timestamp()*1000)
+
+        self.send(es_doc)
+
+    @classmethod
+    def insert_domain_certificate_template(self, ct_doc):
+        ct_doc['doc_type'] = 'domain_certificatetemplate'
+        ct_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        ct_doc = check_entry(ct_doc, ['domain', 'name'], [])
+
+        ct_doc['domain'] = ct_doc['domain'].lower()
+        ct_doc['name'] = ct_doc['name'].lower()
+
+        if len(ct_doc['domain']) == 0 or ct_doc['domain'] == 'workgroup':
+            return
+
+        if 'created_date' in ct_doc and ct_doc['created_date'] != None:
+            ct_doc['created_date'] = int(ct_doc['created_date'].timestamp()*1000)
+
+        self.send(ct_doc)
+
+
+
+
 
     @classmethod
     def insert_domain_vulnerability(self, vuln_doc):
