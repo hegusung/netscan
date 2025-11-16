@@ -7,6 +7,8 @@ from datetime import datetime
 
 from lib.adscan.accesscontrol import parse_accesscontrol, parse_sd, process_sid
 
+from lib.adscan.gpo_parser import GPOParser
+
 class GPO:
     attributes = ['name', 'displayName', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPCFileSysPath', 'description', 'whenCreated']
     schema_guid_attributes = ['Group-Policy-Container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
@@ -32,6 +34,7 @@ class GPO:
     # Can be removed ?
     @classmethod
     def resolve_effect(self, smbscan, ldap_obj, gpo_dn, gpo_path, gpo_effect):
+        raise Exception("To be removed")
 
         gpo_domain = ".".join([item.split("=", 1)[-1] for item in str(gpo_dn).split(',') if item.split("=",1)[0].lower() == "dc"])
 
@@ -432,7 +435,14 @@ class GPO:
 
         self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'group-policy-container', schema_guid_dict)
 
-        self.gpo_effect = GPO.resolve_gpo_effect(smb, ldap, self.dn, self.gpcpath)
+        #self.gpo_effect = GPO.resolve_gpo_effect(smb, ldap, self.dn, self.gpcpath)
+
+        gpo_parser = GPOParser(smb, ldap, self.dn, self.gpcpath)
+
+        gpo_parser.parse_gpo_files()
+
+        self.gpo_effect = gpo_parser.gpo_effect
+        self.gpo_changes = gpo_parser.gpo_changes
 
 
     def to_json(self):
@@ -444,6 +454,7 @@ class GPO:
             'gpcpath': self.gpcpath,
             'aces': self.aces,
             'gpo_effect': self.gpo_effect,
+            'gpo_changes': self.gpo_changes,
             'description': self.description,
             'created_date': self.created_date,
         }

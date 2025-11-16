@@ -41,6 +41,7 @@ es_ids = {
     'domain_container': 'domain_container_{session}_{domain}_{guid}',
     'domain_ou': 'domain_ou_{session}_{domain}_{guid}',
     'domain_gpo': 'domain_gpo_{session}_{domain}_{guid}',
+    'domain_gpochange': 'domain_gpochange_{session}_{domain}_{guid}_{action}',
     'domain_host': 'domain_host_{session}_{domain}_{hostname}',
     'domain_user': 'domain_user_{session}_{domain}_{username}',
     'domain_group': 'domain_group_{session}_{domain}_{groupname}',
@@ -823,6 +824,19 @@ class DB:
 
         if 'created_date' in gpo_doc:
             gpo_doc['created_date'] = int(gpo_doc['created_date'].timestamp()*1000)
+
+        self.send(gpo_doc)
+
+    @classmethod
+    def insert_domain_gpochange(self, gpo_doc):
+        gpo_doc['doc_type'] = 'domain_gpochange'
+        gpo_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+        gpo_doc = check_entry(gpo_doc, ['domain', 'guid', 'dn'], [])
+
+        gpo_doc['domain'] = gpo_doc['domain'].lower()
+
+        if len(gpo_doc['domain']) == 0 or gpo_doc['domain'] == 'workgroup':
+            return
 
         self.send(gpo_doc)
 

@@ -1017,12 +1017,15 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'created_date': entry['created_date'],
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   [%s]' % (entry['name'].ljust(30), entry['gpcpath'])})
-                        for effect in entry['gpo_effect']['Members']:
-                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
-                        for effect in entry['gpo_effect']['Memberof']:
-                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
-                        for effect in entry['gpo_effect']['Localgroup']:
-                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
+
+                        for action in entry['gpo_changes']:
+                            Output.highlight({'target': ldapscan.url(), 'message': '   > %s' % action['action']})
+                            action['guid'] = entry['guid']
+                            action['gpo_name'] = entry['name']
+                            action['dn'] = entry['dn']
+                            action['domain'] = entry['domain']
+
+                            DB.insert_domain_gpochange(action)
                 else:
                     raise NotImplementedError('Dumping GPOs through SMB')
 
