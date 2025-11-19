@@ -25,7 +25,7 @@ def bruteforce_worker(target, timeout, bruteforce_delay):
             if success:
                 Output.success({'target': ssh.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'ssh',
                     'url': ssh.url(),
@@ -36,7 +36,7 @@ def bruteforce_worker(target, timeout, bruteforce_delay):
                 DB.insert_credential(cred_info)
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'ssh',
                     'url': ssh.url(),

@@ -36,7 +36,7 @@ def jdwpscan_worker(target, actions, timeout):
 
         Output.write({'target': jdwp.url(), 'message': 'JDWP service: %s' % version})
         DB.insert_port({
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'protocol': 'tcp',
             'service': 'jdwp',
@@ -69,7 +69,7 @@ def jdwpscan_worker(target, actions, timeout):
                     flags.append("ERROR")
 
                 jdwp_class = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'url': jdwp.url(),
                     'signature': signature,

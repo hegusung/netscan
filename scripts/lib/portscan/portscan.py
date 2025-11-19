@@ -29,7 +29,7 @@ def portscan_worker(target, service_scan, actions, timeout):
                         output["target"] = "%s:%d" % (target['hostname'], target['port'])
                         Output.write(output)
                         data = {
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'port': target['port'],
                         }
                         if 'service' in output:
@@ -41,7 +41,7 @@ def portscan_worker(target, service_scan, actions, timeout):
                         message = "Script: %s\n%s" % (output['script']['name'], output['script']['output'])
                         Output.write({'target': '%s:%d' % (output['ip'], output['port']), 'message': message})
                         script_info = {
-                            'hostname': output['ip'],
+                            'host': output['ip'],
                             'port': output['port'],
                             'nmap_service': output['service'],
                             'url': '%s:%d' % (output['ip'], output['port']),
@@ -53,7 +53,7 @@ def portscan_worker(target, service_scan, actions, timeout):
                         message = "Vulnerability: %s\n%s" % (output['vuln']['name'], output['vuln']['description'])
                         Output.write({'target': '%s:%d' % (output['ip'], output['port']), 'message': message})
                         vuln_info = {
-                            'hostname': output['ip'],
+                            'host': output['ip'],
                             'port': output['port'],
                             'service': output['service'],
                             'url': '%s:%d' % (output['ip'], output['port']),
@@ -65,7 +65,7 @@ def portscan_worker(target, service_scan, actions, timeout):
             else:
                 Output.write({"target": "%s:%d" % (target['hostname'], target['port']), "message": "open"})
                 DB.insert_port({
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                 })
     except Exception as e:

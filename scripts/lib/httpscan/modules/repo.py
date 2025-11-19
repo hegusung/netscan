@@ -38,7 +38,7 @@ class Module:
                     Output.vuln({'target': http.url(check_url), 'message': '[%s] %s depot accessible' % (self.name, repo)})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(check_url),

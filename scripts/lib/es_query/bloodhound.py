@@ -1426,7 +1426,7 @@ def export_bloodhound_gpos(session, domain_name_to_sid, output_dir, output):
         object_identifier = source['guid'].upper()
         properties = {
             'domain': source['domain'].upper(),
-            'name': "%s@%s" % (source['name'].upper(), source['domain'].upper()),
+            'name': "%s@%s" % (source['gpo_name'].upper(), source['domain'].upper()),
             'distinguishedname': source['dn'].upper(),
             'gpcpath': source['gpcpath'].upper(),
         }

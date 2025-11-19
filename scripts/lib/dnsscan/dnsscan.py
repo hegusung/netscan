@@ -37,7 +37,7 @@ def dnsscan_worker(target, dn_server, do_tcp, actions, timeout):
                                 })
 
                                 DB.insert_port({
-                                    'hostname': ip,
+                                    'host': ip,
                                     'port': 445,
                                     'protocol': 'tcp',
                                     'service': 'smb',
@@ -203,7 +203,7 @@ class DNSScan:
                 continue
 
             vuln_info = {
-                'hostname': str(ns_ip),
+                'host': str(ns_ip),
                 'port': 53,
                 'service': 'dns',
                 'url': 'dns://%s:%d' % (str(ns_ip), 53),

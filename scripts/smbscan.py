@@ -59,7 +59,7 @@ def main():
     enum_group = parser.add_argument_group("Enumerate the target")
     enum_group.add_argument("--users", action='store_true', help='dump users from target systems')
     enum_group.add_argument("--groups", action='store_true', help='dump groups from target systems')
-    enum_group.add_argument("--admins", action='store_true', help='dump admins from target systems')
+    enum_group.add_argument("--admins", action='store_true', help='dump admins from target systems (Bloodhound)')
     enum_group.add_argument("--apps", action='store_true', help='dump applications list from target systems')
     enum_group.add_argument("--processes", action='store_true', help='dump processes list from target systems')
     enum_group.add_argument("--passpol", action='store_true', help='dump password policy from target systems')

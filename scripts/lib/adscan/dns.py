@@ -30,6 +30,7 @@ class DNS:
 
     def __init__(self, ldap, attr):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
+        self.domain = self.domain.split('.DomainDnsZones.')[-1]
         self.dn = str(attr["distinguishedName"]).split(",CN=MicrosoftDNS,",1)[0]
         self.dns_entry = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
 

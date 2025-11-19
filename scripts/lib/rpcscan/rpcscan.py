@@ -26,7 +26,7 @@ def rpcscan_worker(target, actions, timeout):
         if res:
             Output.write({'target': 'rpc://%s:%d' % (target['hostname'], 111) , 'message': 'Portmapper'})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': 111,
                 'protocol': 'tcp',
                 'service': 'portmapper',
@@ -55,7 +55,7 @@ def rpcscan_worker(target, actions, timeout):
             mount = Mount(target['hostname'], mount_port, timeout)
             mount.connect()
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': mount_port,
                 'protocol': 'tcp',
                 'service': 'mount',
@@ -74,7 +74,7 @@ def rpcscan_worker(target, actions, timeout):
             for mountpoint in mounts:
                 if '*' in mountpoint['authorized']:
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': nfs_port,
                         'service': 'nfs',
                         'url': 'nfs://%s:%d' % (target['hostname'], nfs_port),
@@ -90,7 +90,7 @@ def rpcscan_worker(target, actions, timeout):
 
             Output.write({'target': 'nfs://%s:%d' % (target['hostname'], nfs_port) , 'message': 'NFS'})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': nfs_port,
                 'protocol': 'tcp',
                 'service': 'nfs',
@@ -121,7 +121,7 @@ def rpcscan_worker(target, actions, timeout):
                                 contents += " "*60+"- %s/\n" % (content['file'],)
 
                             db_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': nfs_port,
                                 'url': 'nfs://%s:%d' % (target['hostname'], nfs_port),
                                 'service': 'nfs',

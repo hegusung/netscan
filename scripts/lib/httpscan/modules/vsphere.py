@@ -37,7 +37,7 @@ class Module:
                 exploit_url = result['response_url'].split('?SAMLRequest=')[0] + '?SAMLRequest='
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'http',
                     'url': http.url('/ui/login'),

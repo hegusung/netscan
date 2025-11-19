@@ -27,7 +27,7 @@ def vncscan_worker(target, actions, creds, timeout):
         version = vnc.version
         Output.write({'target': vnc.url(), 'message': '%s\t[%s]' % (version, '; '.join(vnc.supported_security_types))})
         DB.insert_port({
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'protocol': 'tcp',
             'service': 'vnc',
@@ -41,7 +41,7 @@ def vncscan_worker(target, actions, creds, timeout):
                 auth = True
                 Output.vuln({'target': vnc.url(), 'message': 'Authentication success without credentials'})
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'vnc',
                     'url': vnc.url(),
@@ -57,7 +57,7 @@ def vncscan_worker(target, actions, creds, timeout):
                     auth = True
                     Output.success({'target': vnc.url(), 'message': 'Authentication success with password: %s' % creds['password']})
                     cred_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'vnc',
                         'url': vnc.url(),
@@ -97,7 +97,7 @@ def vncscan_worker(target, actions, creds, timeout):
                         if code == 0:
                             Output.success({'target': vnc.url(), 'message': 'Authentication success with password: %s' % password})
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'vnc',
                                 'url': vnc.url(),

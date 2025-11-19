@@ -57,7 +57,7 @@ def smbscan_worker(target, actions, creds, timeout):
             smb_info['message_type'] = 'smb'
             Output.write(smb_info)
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': 445,
                 'protocol': 'tcp',
                 'service': 'smb',
@@ -72,7 +72,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 }
             })
             DB.insert_domain_host({
-                'hostname_ip': target['hostname'],
+                'host': target['hostname'],
                 'os': smb_info['server_os'],
                 'domain': smb_info['domain'],
                 'hostname': smb_info['hostname'],
@@ -83,7 +83,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMB protocol is not signed, vulnerable to relay attacks' % smb_info['hostname']})
 
                 vuln_info = {
-                    'hostname': ip,
+                    'host': ip,
                     'port': 445,
                     'service': 'smb',
                     'url': 'smb://%s' % (ip,),
@@ -96,7 +96,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMBv1 protocol is deprecated' % smb_info['hostname']})
 
                 vuln_info = {
-                    'hostname': ip,
+                    'host': ip,
                     'port': 445,
                     'service': 'smb',
                     'url': 'smb://%s' % (ip,),
@@ -171,7 +171,7 @@ def smbscan_worker(target, actions, creds, timeout):
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'smb',
                                 'url': smbscan.url(),
@@ -202,7 +202,7 @@ def smbscan_worker(target, actions, creds, timeout):
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'smb',
                                 'url': smbscan.url(),
@@ -264,7 +264,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             #share_list.append(share_info['name'])
 
                             db_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': 445,
                                 'url': smbscan.url("/%s" % share_info['name']),
                                 'share': share_info['name'],
@@ -324,7 +324,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                     contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
 
                                 db_info = {
-                                    'hostname': target['hostname'],
+                                    'host': target['hostname'],
                                     'port': 445,
                                     'url': smbscan.url("/%s" % share),
                                     'share': share,
@@ -401,7 +401,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'smb',
                                 'url': smbscan.url(),
@@ -484,7 +484,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             raise e
                 if 'admins' in actions:
                     host_info = {
-                        'hostname_ip': target['hostname'],
+                        'host': target['hostname'],
                         'os': smb_info['server_os'],
                         'domain': smb_info['domain'],
                         'hostname': smb_info['hostname'],
@@ -537,7 +537,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             msg += "- %s %s (%s)\n" % (name.ljust(30), version.ljust(15), installdate)
 
                             db_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': 445,
                                 'url': smbscan.url(),
                                 'name': name,
@@ -582,7 +582,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             raise e
                 if 'sessions' in actions:
                     host_info = {
-                        'hostname_ip': target['hostname'],
+                        'host': target['hostname'],
                         'os': smb_info['server_os'],
                         'domain': smb_info['domain'],
                         'hostname': smb_info['hostname'],

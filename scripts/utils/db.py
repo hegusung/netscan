@@ -23,10 +23,10 @@ MAX_BULK = 100
 
 es_ids = {
     'tool': 'ip_{session}_{@timestamp}',
-    'ip': 'ip_{session}_{ip}',
+    'ip': 'ip_{session}_{host}',
     'dns': 'dns_{session}_{source}_{query_type}_{target}',
-    'port': 'port_{session}_{ip}_{protocol}_{port}',
-    'script': 'script_{session}_{ip}_{protocol}_{port}_{name}',
+    'port': 'port_{session}_{host}_{protocol}_{port}',
+    'script': 'script_{session}_{host}_{protocol}_{port}_{name}',
     'http': 'http_{session}_{url}',
     'content': 'content_{session}_{url}_{account}_{share}_{path}',
     'application': 'application_{session}_{url}_{name}_{version}',
@@ -35,7 +35,7 @@ es_ids = {
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
     'secret': 'secret_{session}_{filepath}_{line}',
-    'snmp': 'snmp_{session}_{ip}_{port}_{snmp_key}',
+    'snmp': 'snmp_{session}_{host}_{port}_{snmp_key}',
     # AD
     'domain': 'domain_domain_{session}_{domain}',
     'domain_container': 'domain_container_{session}_{domain}_{guid}',
@@ -56,8 +56,8 @@ es_ids = {
     'domain_enrollmentservice': 'domain_enrollmentservice_{session}_{domain}_{name}',
     'domain_certificatetemplate': 'domain_certificatetemplate_{session}_{domain}_{name}',
     # Linux
-    'host_linux': 'host_linux_{session}_{ip}',
-    'host_linux_pkg': 'host_linux_pkg_{session}_{ip}_{pkg_name}',
+    'host_linux': 'host_linux_{session}_{host}',
+    'host_linux_pkg': 'host_linux_pkg_{session}_{host}_{pkg_name}',
 }
 
 es_mapping = {
@@ -182,14 +182,65 @@ class DB:
     def send(self, doc):
         if doc != None:
 
-            # Add generic data
-            if 'ip' in doc and 'port' in doc:
-                doc['ip_port'] = "%s:%d" % (doc['ip'], doc['port'])
+            # Add generic data : timestamp
+            doc['@timestamp'] = int(datetime.now().timestamp()*1000)
 
-            data = json.dumps(doc)
+            # tag system
+            if 'tags' in doc:
+                if not 'append' in doc:
+                    append = {'tags': doc['tags']}
+                    doc['append'] = append
+                else:
+                    doc['append']['tags'] = doc['tags']
+                del doc['tags']
+
+            # if host=hostname, try to resolve, save ip as host
+            if 'host' in doc:
+                to_send = []
+                if check_ip(doc['host']): # host = IP 
+                    # 'host' is an IP
+                    doc['ip'] = doc['host']
+
+                    to_send.append(doc)
+                else:
+                    # 'host' is an Hostname, try to resolve
+                    ip_list = resolve_hostname(doc['host'])
+
+                    if len(ip_list) == 0:
+                        for ip in ip_list:
+                            # insert hostname in DNS database
+                            self.insert_dns({
+                                'source': doc['host'],
+                                'query_type': 'A',
+                                'target': ip,
+                            })
+
+                            doc_tmp = copy(doc)
+                            doc_tmp['ip'] = ip
+                            if not 'hostname' in doc_tmp:
+                                doc_tmp['hostname'] = doc['host']
+                            doc_tmp['host'] = ip
+
+                            to_send.append(doc_tmp)
+                    else:
+                        # Fallback to host = hostname
+                        if not 'hostname' in doc:
+                            doc['hostname'] = doc['host']
+                        to_send.append(doc)
+
+                for to_send_doc in to_send:
+                    # Create the host_port key
+                    if 'host' in to_send_doc and 'port' in to_send_doc:
+                        to_send_doc['host_port'] = "%s:%d" % (to_send_doc['host'], to_send_doc['port'])
+
+                    data = json.dumps(to_send_doc)
+                    self.db_queue.put(data, True, 60)
+
+            else:
+                data = json.dumps(doc)
+                self.db_queue.put(data, True, 60)
         else:
-            data = None
-        self.db_queue.put(data, True, 60)
+            self.db_queue.put(None, True, 60)
 
     @classmethod
     def db_worker(self, db_queue):
@@ -287,7 +338,6 @@ class DB:
 
         tool_doc = {}
         tool_doc['doc_type'] = 'tool'
-        tool_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         tool_doc['cmdline'] = cmdline
         tool_doc['tool'] = tool
 
@@ -297,41 +347,13 @@ class DB:
     @classmethod
     def insert_ip(self, host_doc):
         host_doc['doc_type'] = 'ip'
-        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        host_doc = check_entry(host_doc, ['hostname'], ['rtt'])
+        host_doc = check_entry(host_doc, ['host'], ['rtt'])
 
-        to_insert = []
-        if check_ip(host_doc['hostname']):
-            # 'host' is an IP
-            host_doc['ip'] = host_doc['hostname']
-            del host_doc['hostname']
-
-            to_insert.append(host_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(host_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': host_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                host_doc_tmp = copy(host_doc)
-                host_doc_tmp['ip'] = ip
-                del host_doc_tmp['hostname']
-
-                to_insert.append(host_doc_tmp)
-
-        for doc in to_insert:
-            self.send(doc)
+        self.send(host_doc)
 
     @classmethod
     def insert_dns(self, dns_doc):
         dns_doc['doc_type'] = 'dns'
-        dns_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         dns_doc = check_entry(dns_doc, ['source', 'query_type', 'target'], [])
         if dns_doc['query_type'] in ['A']:
             dns_doc['ip'] = dns_doc['target']
@@ -345,8 +367,7 @@ class DB:
     @classmethod
     def insert_port(self, host_doc):
         host_doc['doc_type'] = 'port'
-        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        host_doc = check_entry(host_doc, ['hostname'], ['port', 'protocol', 'service', 'subservice', 'version', 'nmap_service', 'nmap_version', 'banner', 'tags'])
+        host_doc = check_entry(host_doc, ['host', 'port'], ['protocol', 'service', 'subservice', 'version', 'nmap_service', 'nmap_version', 'banner', 'tags'])
 
         # add protocol
         host_doc['protocol'] = host_doc['protocol'].lower() if 'protocol' in host_doc else 'tcp'
@@ -362,43 +383,12 @@ class DB:
                 if type(val) == str:
                     host_doc['service_info'][key] = val.strip()
 
-        to_insert = []
-        if check_ip(host_doc['hostname']):
-            # 'host' is an IP
-            host_doc['ip'] = host_doc['hostname']
-            del host_doc['hostname']
-
-            to_insert.append(host_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(host_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': host_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                host_doc_tmp = copy(host_doc)
-                host_doc_tmp['ip'] = ip
-                del host_doc_tmp['hostname']
-
-                to_insert.append(host_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(host_doc)
 
     @classmethod
     def insert_script(self, script_doc):
         script_doc['doc_type'] = 'script'
-        script_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        script_doc = check_entry(script_doc, ['hostname', 'port', 'nmap_service', 'name', 'output'], [])
+        script_doc = check_entry(script_doc, ['host', 'port', 'nmap_service', 'name', 'output'], [])
 
         # add protocol
         script_doc['protocol'] = script_doc['protocol'].lower() if 'protocol' in script_doc else 'tcp'
@@ -406,43 +396,12 @@ class DB:
         if 'port' in script_doc:
             script_doc['port'] = int(script_doc['port'])
 
-        to_insert = []
-        if check_ip(script_doc['hostname']):
-            # 'script' is an IP
-            script_doc['ip'] = script_doc['hostname']
-            del script_doc['hostname']
-
-            to_insert.append(script_doc)
-        else:
-            # 'script' is an IP
-            ip_list = resolve_hostname(script_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': script_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                script_doc_tmp = copy(script_doc)
-                script_doc_tmp['ip'] = ip
-                del script_doc_tmp['hostname']
-
-                to_insert.append(script_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(script_doc)
 
     @classmethod
     def insert_http_url(self, http_doc):
         http_doc['doc_type'] = 'http'
-        http_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        http_doc = check_entry(http_doc, ['hostname', 'port', 'service', 'url', 'http'], [])
+        http_doc = check_entry(http_doc, ['host', 'port', 'service', 'url', 'http'], [])
 
         # add protocol
         http_doc['protocol'] = http_doc['protocol'].lower() if 'protocol' in http_doc else 'tcp'
@@ -450,42 +409,11 @@ class DB:
         if 'port' in http_doc:
             http_doc['port'] = int(http_doc['port'])
 
-        to_insert = []
-        if check_ip(http_doc['hostname']):
-            # 'http' is an IP
-            http_doc['ip'] = http_doc['hostname']
-            del http_doc['hostname']
-
-            to_insert.append(http_doc)
-        else:
-            # 'http' is an IP
-            ip_list = resolve_hostname(http_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': http_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                http_doc_tmp = copy(http_doc)
-                http_doc_tmp['ip'] = ip
-                del http_doc_tmp['hostname']
-
-                to_insert.append(http_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(http_doc)
 
     @classmethod
     def insert_content(self, content_doc):
         content_doc['doc_type'] = 'content'
-        content_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         content_doc = check_entry(content_doc, ['url', 'path', 'share', 'service', 'account'], ['size', 'access'])
 
         content_doc['service'] = content_doc['service'].lower()
@@ -512,76 +440,18 @@ class DB:
                 access.append(a.lower())
             content_doc['access'] = access
 
-        to_insert = []
-        if check_ip(content_doc['hostname']):
-            # 'host' is an IP
-            content_doc['ip'] = content_doc['hostname']
-            del content_doc['hostname']
-
-            to_insert.append(content_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(content_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': content_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                content_doc_tmp = copy(content_doc)
-                content_doc_tmp['ip'] = ip
-                del content_doc_tmp['hostname']
-
-                to_insert.append(content_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(content_doc)
 
     @classmethod
     def insert_application(self, application_doc):
         application_doc['doc_type'] = 'application'
-        application_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         application_doc = check_entry(application_doc, ['url', 'name', 'version', 'installdate'], [])
 
-        to_insert = []
-        if check_ip(application_doc['hostname']):
-            # 'host' is an IP
-            application_doc['ip'] = application_doc['hostname']
-            del application_doc['hostname']
-
-            to_insert.append(application_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(application_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': application_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                application_doc_tmp = copy(application_doc)
-                application_doc_tmp['ip'] = ip
-                del application_doc_tmp['hostname']
-
-                to_insert.append(application_doc_tmp)
-
-        for doc in to_insert:
-            self.send(doc)
+        self.send(application_doc)
 
     @classmethod
     def insert_database(self, database_doc):
         database_doc['doc_type'] = 'database'
-        database_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         database_doc = check_entry(database_doc, ['url', 'service', 'database', 'table'], ['account'])
 
         database_doc['service'] = database_doc['service'].lower()
@@ -589,37 +459,7 @@ class DB:
         if not 'account' in database_doc:
             database_doc['account'] = 'unknown'
 
-        to_insert = []
-        if check_ip(database_doc['hostname']):
-            # 'host' is an IP
-            database_doc['ip'] = database_doc['hostname']
-            del database_doc['hostname']
-
-            to_insert.append(database_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(database_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': database_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                database_doc_tmp = copy(database_doc)
-                database_doc_tmp['ip'] = ip
-                del database_doc_tmp['hostname']
-
-                to_insert.append(database_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(database_doc)
 
     @classmethod
     def insert_credential(self, credential_doc):
@@ -629,7 +469,6 @@ class DB:
             credential_doc['doc_type'] = 'cred_hash'
         else:
             return
-        credential_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         credential_doc = check_entry(credential_doc, ['url', 'service', 'username'], ['password', 'format', 'hash'])
 
         credential_doc['service'] = credential_doc['service'].lower()
@@ -638,82 +477,20 @@ class DB:
             if credential_doc['hash'].startswith('aad3b435b51404eeaad3b435b51404ee:'):  # Remove empty LN
                 credential_doc['hash'] = credential_doc['hash'][len('aad3b435b51404eeaad3b435b51404ee:'):]
 
-        to_insert = []
-        if check_ip(credential_doc['hostname']):
-            # 'host' is an IP
-            credential_doc['ip'] = credential_doc['hostname']
-            del credential_doc['hostname']
-
-            to_insert.append(credential_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(credential_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS credential
-                self.insert_dns({
-                    'source': credential_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                credential_doc_tmp = copy(credential_doc)
-                credential_doc_tmp['ip'] = ip
-                del credential_doc_tmp['hostname']
-
-                to_insert.append(credential_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(credential_doc)
 
     @classmethod
     def insert_vulnerability(self, vulnerability_doc):
         vulnerability_doc['doc_type'] = 'vuln'
-        vulnerability_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         vulnerability_doc = check_entry(vulnerability_doc, ['url', 'service', 'name', 'description'], [])
 
         vulnerability_doc['service'] = vulnerability_doc['service'].lower()
 
-        to_insert = []
-        if check_ip(vulnerability_doc['hostname']):
-            # 'host' is an IP
-            vulnerability_doc['ip'] = vulnerability_doc['hostname']
-            del vulnerability_doc['hostname']
-
-            to_insert.append(vulnerability_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(vulnerability_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS vulnerability
-                self.insert_dns({
-                    'source': vulnerability_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                vulnerability_doc_tmp = copy(vulnerability_doc)
-                vulnerability_doc_tmp['ip'] = ip
-                del vulnerability_doc_tmp['hostname']
-
-                to_insert.append(vulnerability_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(vulnerability_doc)
 
     @classmethod
     def insert_secret(self, secret_doc):
         secret_doc['doc_type'] = 'secret'
-        secret_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         secret_doc = check_entry(secret_doc, ['filepath', 'secret_name', 'line', 'reliability'], [])
 
         if not secret_doc['filepath'].startswith("LSA:"):
@@ -728,45 +505,13 @@ class DB:
     @classmethod
     def insert_snmp_entry(self, snmp_doc):
         snmp_doc['doc_type'] = 'snmp'
-        snmp_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        snmp_doc = check_entry(snmp_doc, ['hostname', 'port', 'snmp_key', 'snmp_type', 'snmp_value'], [])
+        snmp_doc = check_entry(snmp_doc, ['host', 'port', 'snmp_key', 'snmp_type', 'snmp_value'], [])
 
-        to_insert = []
-        if check_ip(snmp_doc['hostname']):
-            # 'host' is an IP
-            snmp_doc['ip'] = snmp_doc['hostname']
-            del snmp_doc['hostname']
-
-            to_insert.append(snmp_doc)
-        else:
-            # 'host' is an IP
-            ip_list = resolve_hostname(snmp_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS snmp
-                self.insert_dns({
-                    'source': snmp_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                snmp_doc_tmp = copy(snmp_doc)
-                snmp_doc_tmp['ip'] = ip
-                del snmp_doc_tmp['hostname']
-
-                to_insert.append(snmp_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(snmp_doc)
 
     @classmethod
     def insert_domain_domain(self, domain_doc):
         domain_doc['doc_type'] = 'domain'
-        domain_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         domain_doc = check_entry(domain_doc, ['domain', 'parameters', 'sid', 'dn'], [])
 
         domain_doc['domain'] = domain_doc['domain'].lower()
@@ -782,7 +527,6 @@ class DB:
     @classmethod
     def insert_domain_container(self, container_doc):
         container_doc['doc_type'] = 'domain_container'
-        container_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         container_doc = check_entry(container_doc, ['domain', 'guid', 'dn'], [])
 
         container_doc['domain'] = container_doc['domain'].lower()
@@ -798,7 +542,6 @@ class DB:
     @classmethod
     def insert_domain_ou(self, ou_doc):
         ou_doc['doc_type'] = 'domain_ou'
-        ou_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         ou_doc = check_entry(ou_doc, ['domain', 'guid', 'dn'], [])
 
         ou_doc['domain'] = ou_doc['domain'].lower()
@@ -814,7 +557,6 @@ class DB:
     @classmethod
     def insert_domain_gpo(self, gpo_doc):
         gpo_doc['doc_type'] = 'domain_gpo'
-        gpo_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         gpo_doc = check_entry(gpo_doc, ['domain', 'guid', 'dn'], [])
 
         gpo_doc['domain'] = gpo_doc['domain'].lower()
@@ -830,7 +572,6 @@ class DB:
     @classmethod
     def insert_domain_gpochange(self, gpo_doc):
         gpo_doc['doc_type'] = 'domain_gpochange'
-        gpo_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         gpo_doc = check_entry(gpo_doc, ['domain', 'guid', 'dn'], [])
 
         gpo_doc['domain'] = gpo_doc['domain'].lower()
@@ -844,7 +585,6 @@ class DB:
     @classmethod
     def insert_domain_dns(self, dns_doc):
         dns_doc['doc_type'] = 'domain_dns'
-        dns_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         dns_doc = check_entry(dns_doc, ['domain', 'dns'], [])
 
         dns_doc['domain'] = dns_doc['domain'].lower()
@@ -858,7 +598,6 @@ class DB:
     @classmethod
     def insert_domain_host(self, host_doc):
         host_doc['doc_type'] = 'domain_host'
-        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         host_doc = check_entry(host_doc, ['domain', 'hostname', 'os'], ['hostname_ip'])
 
         host_doc['domain'] = host_doc['domain'].lower()
@@ -876,56 +615,25 @@ class DB:
             host_doc['last_password_change'] = int(host_doc['last_password_change'].timestamp()*1000) if host_doc['last_password_change'] != None else None
 
         if len(host_doc['hostname']) == 0:
-            if 'hostname_ip' in host_doc:
-                host_doc['hostname'] = host_doc['hostname_ip']
+            host_doc['hostname'] = "*no hostname*"
         else:
             host_doc['hostname'] = host_doc['hostname'].lower()
 
-        if 'hostname_ip' in host_doc:
-            if check_ip(host_doc['hostname_ip']):
-                # 'host' is an IP
-                host_doc['ip'] = [host_doc['hostname_ip']]
-                del host_doc['hostname_ip']
-            else:
-                # 'host' is a hostname
-                ip_list = resolve_hostname(host_doc['hostname_ip'])
-                host_doc['ip'] = [ip_list]
-                del host_doc['hostname_ip']
-        else:
-            # lets try to resolve from hostname + domain
-            if '.' in host_doc['domain'] and len(host_doc['hostname']) != 0:
-                hostname = '%s.%s' % (host_doc['hostname'], host_doc['domain'])
-                # too slow...
-                """
-                ip_list = resolve_hostname(hostname)
-                if len(ip_list) != 0:
-                    host_doc['ip'] = [ip_list]
-                """
-
         if 'admin' in host_doc:
-                # 'host' is a hostname
-                admin_list = host_doc['admin']
-                if type(admin_list) != list:
-                    admin_list = [admin_list]
+            # 'host' is a hostname
+            admin_list = host_doc['admin']
+            if type(admin_list) != list:
+                admin_list = [admin_list]
 
-                append = {'admin': admin_list}
-                del host_doc['admin']
-                host_doc['append'] = append
-
-        if 'tags' in host_doc:
-            if not 'append' in host_doc:
-                append = {'tags': host_doc['tags']}
-                host_doc['append'] = append
-            else:
-                host_doc['append']['tags'] = host_doc['tags']
-            del host_doc['tags']
+            append = {'admin': admin_list}
+            del host_doc['admin']
+            host_doc['append'] = append
 
         self.send(host_doc)
 
     @classmethod
     def insert_domain_user(self, user_doc):
         user_doc['doc_type'] = 'domain_user'
-        user_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         user_doc = check_entry(user_doc, ['domain', 'username'], [])
 
         user_doc['domain'] = user_doc['domain'].lower()
@@ -969,14 +677,6 @@ class DB:
                 user_doc['append']['group'] = [user_doc['group']]
             del user_doc['group']
 
-        if 'tags' in user_doc:
-            if not 'append' in user_doc:
-                append = {'tags': user_doc['tags']}
-                user_doc['append'] = append
-            else:
-                user_doc['append']['tags'] = user_doc['tags']
-            del user_doc['tags']
-
         self.send(user_doc)
 
     @classmethod
@@ -988,7 +688,6 @@ class DB:
         else:
             return
 
-        credential_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         credential_doc = check_entry(credential_doc, ['domain', 'username'], ['password', 'format', 'hash'])
 
         if 'hash' in credential_doc:
@@ -1003,7 +702,6 @@ class DB:
     @classmethod
     def insert_domain_group(self, group_doc):
         group_doc['doc_type'] = 'domain_group'
-        group_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         group_doc = check_entry(group_doc, ['domain', 'groupname'], [])
 
         group_doc['domain'] = group_doc['domain'].lower()
@@ -1028,7 +726,6 @@ class DB:
     @classmethod
     def insert_domain_ntauthcertificate(self, ca_doc):
         ca_doc['doc_type'] = 'domain_ntauthcertificate'
-        ca_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         ca_doc = check_entry(ca_doc, ['domain', 'name'], [])
 
         ca_doc['domain'] = ca_doc['domain'].lower()
@@ -1045,7 +742,6 @@ class DB:
     @classmethod
     def insert_domain_rootca(self, ca_doc):
         ca_doc['doc_type'] = 'domain_rootca'
-        ca_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         ca_doc = check_entry(ca_doc, ['domain', 'name'], [])
 
         ca_doc['domain'] = ca_doc['domain'].lower()
@@ -1062,7 +758,6 @@ class DB:
     @classmethod
     def insert_domain_aiaca(self, ca_doc):
         ca_doc['doc_type'] = 'domain_aiaca'
-        ca_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         ca_doc = check_entry(ca_doc, ['domain', 'name'], [])
 
         ca_doc['domain'] = ca_doc['domain'].lower()
@@ -1079,7 +774,6 @@ class DB:
     @classmethod
     def insert_domain_enrollment_service(self, es_doc):
         es_doc['doc_type'] = 'domain_enrollmentservice'
-        es_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         es_doc = check_entry(es_doc, ['domain', 'name'], [])
 
         es_doc['domain'] = es_doc['domain'].lower()
@@ -1096,7 +790,6 @@ class DB:
     @classmethod
     def insert_domain_certificate_template(self, ct_doc):
         ct_doc['doc_type'] = 'domain_certificatetemplate'
-        ct_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
         ct_doc = check_entry(ct_doc, ['domain', 'name'], [])
 
         ct_doc['domain'] = ct_doc['domain'].lower()
@@ -1111,12 +804,9 @@ class DB:
         self.send(ct_doc)
 
 
-
-
-
     @classmethod
     def insert_domain_vulnerability(self, vuln_doc):
-        vuln_doc = check_entry(vuln_doc, ['hostname', 'domain', 'name', 'description'], [])
+        vuln_doc = check_entry(vuln_doc, ['host', 'domain', 'name', 'description'], [])
 
         vuln_doc['port'] = 445
         vuln_doc['url'] = "domain:%s" % vuln_doc['domain'].lower()
@@ -1132,78 +822,16 @@ class DB:
     @classmethod
     def insert_host_linux(self, host_doc):
         host_doc['doc_type'] = 'host_linux'
-        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        host_doc = check_entry(host_doc, ['hostname', 'host'], [])
+        host_doc = check_entry(host_doc, ['host', 'host'], [])
 
-        to_insert = []
-        if check_ip(host_doc['hostname']):
-            # 'hostname' is an IP
-            host_doc['ip'] = host_doc['hostname']
-            del host_doc['hostname']
-
-            to_insert.append(host_doc)
-        else:
-            # 'hostname' is an IP
-            ip_list = resolve_hostname(host_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': host_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                host_doc_tmp = copy(host_doc)
-                host_doc_tmp['ip'] = ip
-                del host_doc_tmp['hostname']
-
-                to_insert.append(host_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(host_doc)
 
     @classmethod
     def insert_host_linux_pkg(self, host_doc):
         host_doc['doc_type'] = 'host_linux_pkg'
-        host_doc['@timestamp'] = int(datetime.now().timestamp()*1000)
-        host_doc = check_entry(host_doc, ['hostname', 'host'], [])
+        host_doc = check_entry(host_doc, ['host', 'host'], [])
 
-        to_insert = []
-        if check_ip(host_doc['hostname']):
-            # 'hostname' is an IP
-            host_doc['ip'] = host_doc['hostname']
-            del host_doc['hostname']
-
-            to_insert.append(host_doc)
-        else:
-            # 'hostname' is an IP
-            ip_list = resolve_hostname(host_doc['hostname'])
-
-            for ip in ip_list:
-                # insert hostname in DNS database
-                self.insert_dns({
-                    'source': host_doc['hostname'],
-                    'query_type': 'A',
-                    'target': ip,
-                })
-
-                host_doc_tmp = copy(host_doc)
-                host_doc_tmp['ip'] = ip
-                del host_doc_tmp['hostname']
-
-                to_insert.append(host_doc_tmp)
-
-        for doc in to_insert:
-            if 'tags' in doc:
-                append = {'tags': doc['tags']}
-                del doc['tags']
-                doc['append'] = append
-            self.send(doc)
+        self.send(host_doc)
 
 
 def check_entry(entry, required_list, optional_list):

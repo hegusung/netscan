@@ -23,7 +23,7 @@ class Module:
             Output.highlight({'target': http.url('/robots.txt'), 'message': '[%s] robots.txt present' % self.name})
 
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -59,7 +59,7 @@ class Module:
                     continue
 
                 http_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'http',

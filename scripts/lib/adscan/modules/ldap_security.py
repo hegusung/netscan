@@ -57,7 +57,7 @@ class Module:
             Output.vuln({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': '[%s] LDAP signing requirements not enforced' % self.name})
 
             vuln_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': 389,
                 'service': 'ldap',
                 'url': 'ldap://%s:%d' % (target['hostname'], 389),
@@ -77,7 +77,7 @@ class Module:
                 Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "when supported"' % self.name})
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': 636,
                     'service': 'ldaps',
                     'url': 'ldaps://%s:%d' % (target['hostname'], 636),
@@ -90,7 +90,7 @@ class Module:
                 Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "never"' % self.name})
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': 636,
                     'service': 'ldaps',
                     'url': 'ldaps://%s:%d' % (target['hostname'], 636),
