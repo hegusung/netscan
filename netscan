@@ -155,6 +155,8 @@ fi
 if [[ -n "${HELP:-}" ]]; then
   if [[ -n "${MODULE:-}" ]]; then
     python "${SCRIPTS_DIR}/${MODULE}.py" -h
+    printf "\n"
+    printf "\n"
     exit 0
   else
     usage 0

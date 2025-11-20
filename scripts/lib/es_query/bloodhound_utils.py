@@ -73,7 +73,7 @@ def get_affected_computers(session, dn, domain_sid):
             {
               "regexp": {
                 "dn.keyword": {
-                  "value": "[^,]+=[^,]+,%s" % dn,
+                  "value": ".*,%s" % dn,
                   "flags": "ALL",
                   "case_insensitive": True
                 }
@@ -281,6 +281,29 @@ def get_object_from_name(session, name):
             "ObjectIdentifier": source['sid'],
             "ObjectType": object_type,
         }
+
+def get_object_from_sid(session, sid):
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": {"session.keyword": session}, },
+            { "match": {"sid.keyword": sid} },
+          ],
+          "filter": []
+        }
+      }
+    }
+
+    res = Elasticsearch.search(query)
+    res = list(res)
+    if len(res) == 0:
+        return None
+    else:
+        source = res[0]['_source']
+
+        return source
+
 
 sid_dict = {}
 def resolve_sid(session, sid_list):
