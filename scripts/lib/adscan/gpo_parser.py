@@ -40,6 +40,11 @@ class GPOParser:
 
         self.resolve_scheduledtasks_changes()
 
+        self.resolve_files_changes()
+        self.resolve_folder_changes()
+        self.resolve_inifiles_changes()
+        self.resolve_lnk_changes()
+
     def get_file(self, path):
 
         share_pattern = re.compile("\\\\\\\\([^\\\\]+)\\\\([^\\\\]+)(\\\\.*)")
@@ -139,6 +144,141 @@ class GPOParser:
                                 "value": value,
                                 "action": "%s registry key %s\\%s with name \"%s\" and value \"%s\"" % (action.title(), hive, key, name, value)
                             })
+
+    def resolve_files_changes(self):
+        for path in ["User", "Machine"]:
+            file_data = self.get_file(path + "\\Preferences\\Files\\Files.xml")
+
+            if file_data != None:
+                try:
+                    file_data = file_data.decode('utf-8')
+                except UnicodeDecodeError as e:
+                    file_data = file_data.decode('utf-16')
+
+                root = ET.fromstring(file_data)
+
+                if root.tag == "Files":
+                    for item in root:
+                        if item.tag != "File":
+                            continue
+
+                        for prop in item:
+                            if prop.tag != "Properties":
+                                continue
+
+                            action = self.action_dict[prop.attrib['action']]
+                            srcfile = prop.attrib['fromPath'] if 'fromPath' in prop.attrib else None
+                            dstfile = prop.attrib['targetPath'] if 'targetPath' in prop.attrib else None
+
+                            self.gpo_changes.append({
+                                "type": "%s_file" % action,
+                                "srcfile": srcfile,
+                                "dstfile": dstfile,
+                                "action": "%s file. Copied from file \"%s\" to \"%s\"" % (action.title(), srcfile, dstfile)
+                            })
+
+    def resolve_folder_changes(self):
+        for path in ["User", "Machine"]:
+            file_data = self.get_file(path + "\\Preferences\\Folders\\Folders.xml")
+
+            if file_data != None:
+                try:
+                    file_data = file_data.decode('utf-8')
+                except UnicodeDecodeError as e:
+                    file_data = file_data.decode('utf-16')
+
+                root = ET.fromstring(file_data)
+
+                if root.tag == "Folders":
+                    for item in root:
+                        if item.tag != "Folder":
+                            continue
+
+                        for prop in item:
+                            if prop.tag != "Properties":
+                                continue
+
+                            action = self.action_dict[prop.attrib['action']]
+                            folder = prop.attrib['path'] if 'path' in prop.attrib else None
+
+                            self.gpo_changes.append({
+                                "type": "%s_folder" % action,
+                                "folder": folder,
+                                "action": "%s folder \"%s\"" % (action.title(), folder)
+                            })
+
+    def resolve_inifiles_changes(self):
+        for path in ["User", "Machine"]:
+            file_data = self.get_file(path + "\\Preferences\\IniFiles\\IniFiles.xml")
+
+            if file_data != None:
+                try:
+                    file_data = file_data.decode('utf-8')
+                except UnicodeDecodeError as e:
+                    file_data = file_data.decode('utf-16')
+
+                root = ET.fromstring(file_data)
+
+                if root.tag == "IniFiles":
+                    for item in root:
+                        if item.tag != "Ini":
+                            continue
+
+                        for prop in item:
+                            if prop.tag != "Properties":
+                                continue
+
+                            action = self.action_dict[prop.attrib['action']]
+                            inifile = prop.attrib['path'] if 'path' in prop.attrib else None
+                            section = prop.attrib['section'] if 'section' in prop.attrib else None
+                            key = prop.attrib['property'] if 'property' in prop.attrib else None
+                            value = prop.attrib['value'] if 'value' in prop.attrib else None
+
+                            self.gpo_changes.append({
+                                "type": "%s_inifiles" % action,
+                                "inifile": inifile,
+                                "section": section,
+                                "property": key,
+                                "value": value,
+                                "action": "%s ini file \"%s\". In section \"%s\" adds \"%s\" = \"%s\"" % (action.title(), inifile, section, key, value)
+                            })
+
+    def resolve_lnk_changes(self):
+        for path in ["User", "Machine"]:
+            file_data = self.get_file(path + "\\Preferences\\Shortcuts\\Shortcuts.xml")
+
+            if file_data != None:
+                try:
+                    file_data = file_data.decode('utf-8')
+                except UnicodeDecodeError as e:
+                    file_data = file_data.decode('utf-16')
+
+                root = ET.fromstring(file_data)
+
+                if root.tag == "Shortcuts":
+                    for item in root:
+                        if item.tag != "Shortcut":
+                            continue
+
+                        for prop in item:
+                            if prop.tag != "Properties":
+                                continue
+
+                            action = self.action_dict[prop.attrib['action']]
+                            lnkfile = prop.attrib['shortcutPath'] if 'shortcutPath' in prop.attrib else None
+                            target = prop.attrib['targetPath'] if 'targetPath' in prop.attrib else None
+                            arguments = prop.attrib['arguments'] if 'arguments' in prop.attrib else None
+
+                            self.gpo_changes.append({
+                                "type": "%s_lnk" % action,
+                                "file": lnkfile,
+                                "target": target,
+                                "arguments": arguments,
+                                "action": "%s shortcut file \"%s\". Target \"%s\" arguments \"%s\"" % (action.title(), lnkfile, target, arguments)
+                            })
+
+
+
 
     def resolve_environment_changes(self):
         for path in ["User", "Machine"]:

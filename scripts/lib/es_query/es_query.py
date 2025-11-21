@@ -867,7 +867,7 @@ def enrich_gpos(session):
                     else:
                         object_name_list.append(object_sid)
 
-                source['action'] = "Adds %s as members of group %s" % (", ".join(object_name_list), localgroup_name)
+                source['action_display'] = "Adds %s as members of group %s" % (", ".join(object_name_list), localgroup_name)
 
             Output.highlight("Updating GPO %s" % source['gpo_name'])
             DB.send(source)

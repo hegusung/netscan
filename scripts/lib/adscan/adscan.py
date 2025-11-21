@@ -1023,6 +1023,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             action['gpo_name'] = entry['name']
                             action['dn'] = entry['dn']
                             action['domain'] = entry['domain']
+                            action['action_display'] = action['action']
 
                             DB.insert_domain_gpochange(action)
                 else:
