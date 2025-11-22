@@ -45,6 +45,8 @@ class GPOParser:
         self.resolve_inifiles_changes()
         self.resolve_lnk_changes()
 
+        self.resolve_registry_pol()
+
     def get_file(self, path):
 
         share_pattern = re.compile("\\\\\\\\([^\\\\]+)\\\\([^\\\\]+)(\\\\.*)")
@@ -608,3 +610,319 @@ class GPOParser:
                                             })
 
 
+    def resolve_registry_pol(self):
+        """
+        Contains (at least) Firewall and AppLocker config
+        """
+
+        for path in ["User", "Machine"]:
+            file_data = self.get_file(path + "\\Registry.pol")
+
+            if file_data != None:
+                registry_data = parse_registry_pol(file_data)
+
+                firewall_data = []
+                applocker_data = {}
+
+                for e in registry_data:
+                    # Firewall
+                    if e.key.lower() == "software\\policies\\microsoft\\windowsfirewall\\firewallrules":
+                        firewall_data.append(e.decoded)
+                    if e.key.lower().startswith("software\\policies\\microsoft\\windows\\srpv2\\"):
+                        parts = e.key.split("\\")
+                        if len(parts) > 5:
+                            section = parts[5]
+
+                            if not section in applocker_data:
+                                applocker_data[section] = {
+                                    "rules": [],
+                                }
+
+                            if len(parts) == 6:
+                                applocker_data[section][e.value_name] = e.decoded
+                            else:
+
+                                applocker_rule = {}
+                                # Parse the XML
+                                root = ET.fromstring(e.decoded)
+
+                                applocker_rule['type'] = root.tag
+                                applocker_rule['name'] = root.attrib['Name']
+                                applocker_rule['description'] = root.attrib['Description']
+                                applocker_rule['sid'] = root.attrib['UserOrGroupSid']
+                                applocker_rule['action'] = root.attrib['Action']
+                                applocker_rule['conditions'] = []
+
+                                for condition in root:
+                                    if not condition.tag == 'Conditions':
+                                        continue
+
+                                    for item in condition:
+                                        if item.tag == 'FilePathCondition':
+                                            applocker_rule['conditions'].append({'path': item.attrib['Path']})
+                                        elif item.tag == 'FileHashCondition':
+                                            hash_conditions = []
+                                            for item2 in item:
+                                                if item2.tag == 'FileHash':
+                                                    hash_conditions.append({
+                                                        'format': item2.attrib['Type'],
+                                                        'hash': item2.attrib['Data'],
+                                                        'file': item2.attrib['SourceFileName'],
+                                                    })
+
+                                            applocker_rule['conditions'].append({'hashs': hash_conditions})
+                                        elif item.tag == 'FilePublisherCondition':
+
+                                            version_ranges = []
+                                            for item2 in item:
+                                                if item2.tag == 'BinaryVersionRange':
+                                                    version_ranges.append({
+                                                        'low': item2.attrib['LowSection'],
+                                                        'high': item2.attrib['HighSection'],
+                                                    })
+                                            publisher_condition = {
+                                                'publisher': item.attrib['PublisherName'],
+                                                'product': item.attrib['ProductName'],
+                                                'binary': item.attrib['BinaryName'],
+                                                'version_range': version_ranges,
+                                            }
+                                            applocker_rule['conditions'].append({'publisher': publisher_condition})
+
+                                applocker_data[section]['rules'].append(applocker_rule)
+
+                if len(firewall_data) != 0:
+                    self.gpo_changes.append({
+                        "type": "firewall",
+                        "firewall_rules": firewall_data,
+                        "action": "Firewall rules:\n" + "\n".join(firewall_data),
+                    })
+                elif applocker_data != {}:
+                    self.gpo_changes.append({
+                        "type": "applocker",
+                        "applocker": applocker_data,
+                        "action": applocker_rules_to_string(applocker_data),
+                    })
+
+
+def applocker_rules_to_string(rules):
+
+    applocker_str = "Applocker rules:\n"
+    for section, content in rules.items():
+        applocker_str += "=========== %s ===========\n" % section
+        for key, value in content.items():
+            if key == 'rules':
+                continue
+
+            applocker_str += " - %s: %d\n" % (key, value)
+
+        applocker_str += " - Rules:\n"
+        for rule in content['rules']:
+            applocker_str += "   * [%s] %s   (%s)  applies to: %s\n" % (rule['action'], rule['name'], rule['description'], rule['sid'])
+            applocker_str += "     Conditions:\n"
+            for cond in rule['conditions']:
+                if 'path' in cond:
+                    applocker_str += "       => Path: %s\n" % cond['path']
+                elif 'hashs' in cond:
+                    for h in cond['hashs']:
+                        applocker_str += "       => Hash: (%s) %s:%s\n" % (h['file'], h['format'], h['hash'])
+                elif 'publisher' in cond:
+                    applocker_str += "       => Publisher: publisher:%s product:%s binary:%s  (%s)\n" % (cond['publisher']['publisher'], cond['publisher']['product'], cond['publisher']['binary'], ', '.join(["%s-%s" % (v['low'], v['high']) for v in cond['publisher']['version_range']]))
+                else:
+                    applocker_str += "       => %s\n" % cond
+            applocker_str += "\n"
+    return applocker_str 
+                
+
+
+
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, List, Union
+
+# Registry value type constants from MS-GPREG
+# https://learn.microsoft.com/openspecs/windows_protocols/ms-gpreg
+REG_SZ        = 0x01
+REG_EXPAND_SZ = 0x02
+REG_BINARY    = 0x03
+REG_DWORD     = 0x04
+REG_DWORD_BE  = 0x05
+REG_MULTI_SZ  = 0x07
+REG_QWORD     = 0x0B
+
+
+@dataclass
+class PolEntry:
+    key: str
+    value_name: str
+    type: int          # numeric REG_* constant
+    size: int          # size of raw_data in bytes (as stored in file)
+    raw_data: bytes    # raw bytes from Data field
+    decoded: Any       # best-effort decoded value (str/list/int/bytes)
+
+
+def _decode_string(data: bytes) -> str:
+    """
+    Decode UTF-16LE string and strip trailing NULs.
+    """
+    return data.decode("utf-16le", errors="replace").rstrip("\x00")
+
+
+def _decode_value(value_type: int, data: bytes) -> Any:
+    """
+    Interpret the Data field according to the registry type.
+    """
+    if value_type in (REG_SZ, REG_EXPAND_SZ):
+        return _decode_string(data)
+
+    if value_type == REG_MULTI_SZ:
+        # MULTI_SZ: multiple UTF-16LE strings, separated by \x00, terminated by \x00\x00
+        s = _decode_string(data)
+        parts = [p for p in s.split("\x00") if p]
+        return parts
+
+    if value_type == REG_DWORD:
+        if len(data) < 4:
+            data = data.ljust(4, b"\x00")
+        return int.from_bytes(data[:4], "little", signed=False)
+
+    if value_type == REG_DWORD_BE:
+        if len(data) < 4:
+            data = data.rjust(4, b"\x00")
+        return int.from_bytes(data[-4:], "big", signed=False)
+
+    if value_type == REG_QWORD:
+        if len(data) < 8:
+            data = data.ljust(8, b"\x00")
+        return int.from_bytes(data[:8], "little", signed=False)
+
+    # REG_BINARY or unknown types → keep raw bytes
+    return data
+
+
+def _read_unicode_field(buf: bytes, idx: int, what: str) -> tuple[str, int]:
+    """
+    Read a UTF-16LE, NUL-terminated string followed by a ';' (UTF-16LE).
+
+    Layout: <UTF-16 chars> 00 00 3B 00
+                           ^^^^ ^^^^^^
+                            NUL  ';'
+    Returns (string, new_index).
+    """
+    terminator = b"\x00\x00;\x00"
+    end = buf.find(terminator, idx)
+    if end == -1:
+        raise ValueError(f"Could not find terminator for {what} at offset {idx}")
+
+    field_bytes = buf[idx:end]
+    # Remove trailing NUL if present
+    if field_bytes.endswith(b"\x00\x00"):
+        field_bytes = field_bytes[:-2]
+
+    text = field_bytes.decode("utf-16le", errors="replace")
+    new_idx = end + len(terminator)
+    return text, new_idx
+
+
+def parse_registry_pol(data) -> List[PolEntry]:
+    """
+    Parse a Registry.pol / ntuser.pol file and return a list of PolEntry objects.
+    """
+    if len(data) < 8:
+        raise ValueError("File too short to be a valid Registry.pol")
+
+    # Header: Signature (4 bytes) + Version (4 bytes)
+    signature = data[0:4]
+    if signature != b"PReg":
+        raise ValueError(f"Invalid signature {signature!r}, expected b'PReg'")
+
+    version = int.from_bytes(data[4:8], "little", signed=False)
+    # MS-GPREG currently documents version 1; others are rare but we just warn.
+    if version != 1:
+        # Don’t hard-fail, but you might want to log/raise depending on your use-case
+        print(f"Warning: unexpected Registry.pol version {version}")
+
+    idx = 8
+    entries: List[PolEntry] = []
+
+    wchar_open_bracket = "[".encode("utf-16le")  # b'[\x00'
+    wchar_close_bracket = "]".encode("utf-16le") # b']\x00'
+    wchar_semicolon = ";".encode("utf-16le")     # b';\x00'
+
+    while idx + 2 <= len(data):
+        # Skip padding NULs if present
+        while idx + 2 <= len(data) and data[idx:idx+2] == b"\x00\x00":
+            idx += 2
+
+        if idx + 2 > len(data):
+            break
+
+        # Expect '[' (UTF-16LE)
+        if data[idx:idx+2] != wchar_open_bracket:
+            # No more instructions – most files end here
+            break
+        idx += 2
+
+        # Key (UTF-16LE, NUL-terminated, then ';')
+        key, idx = _read_unicode_field(data, idx, "key")
+
+        # Value name (UTF-16LE, NUL-terminated, then ';')
+        value_name, idx = _read_unicode_field(data, idx, "value_name")
+
+        # Type: 4-byte little-endian DWORD, then ';' (UTF-16LE)
+        if idx + 4 > len(data):
+            raise ValueError("Unexpected end of file while reading value type")
+
+        value_type = int.from_bytes(data[idx:idx+4], "little", signed=False)
+        idx += 4
+
+        if data[idx:idx+2] != wchar_semicolon:
+            raise ValueError("Missing ';' after value type")
+        idx += 2
+
+        # Size: 4-byte little-endian DWORD, then ';' (UTF-16LE)
+        if idx + 4 > len(data):
+            raise ValueError("Unexpected end of file while reading value size")
+
+        size = int.from_bytes(data[idx:idx+4], "little", signed=False)
+        idx += 4
+
+        if data[idx:idx+2] != wchar_semicolon:
+            raise ValueError("Missing ';' after value size")
+        idx += 2
+
+        # Data: "size" bytes
+        if idx + size > len(data):
+            raise ValueError("Unexpected end of file while reading data")
+
+        raw = data[idx:idx+size]
+        idx += size
+
+        # Closing ']' (UTF-16LE) – spec says Instruction ends with ']' character
+        # Some writers may leave extra NULs before it for string types.
+        # Skip any trailing NULs before the bracket.
+        while idx + 2 <= len(data) and data[idx:idx+2] == b"\x00\x00":
+            idx += 2
+
+        if idx + 2 <= len(data) and data[idx:idx+2] == wchar_close_bracket:
+            idx += 2
+        else:
+            # We don't strictly require it to keep the parser robust,
+            # but if you want to be strict, uncomment the next line:
+            # raise ValueError("Missing closing ']' after data")
+            pass
+
+        decoded = _decode_value(value_type, raw)
+
+        entries.append(
+            PolEntry(
+                key=key,
+                value_name=value_name,
+                type=value_type,
+                size=size,
+                raw_data=raw,
+                decoded=decoded,
+            )
+        )
+
+    return entries

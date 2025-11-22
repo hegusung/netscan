@@ -12,6 +12,9 @@ from lib.es_query.bloodhound_utils import *
 
 from lib.adscan.ou import OU
 
+from lib.adscan.accesscontrol import sid_name_dict
+from lib.adscan.gpo_parser import applocker_rules_to_string
+
 #from utils.utils import open
 
 output = []
@@ -868,6 +871,32 @@ def enrich_gpos(session):
                         object_name_list.append(object_sid)
 
                 source['action_display'] = "Adds %s as members of group %s" % (", ".join(object_name_list), localgroup_name)
+            elif source['type'] == 'applocker':
+                applocker_rules = source['applocker']
+
+                for section, info in applocker_rules.items():
+                    for rule in info['rules']:
+                        sid = rule['sid']
+
+                        if sid in sid_name_dict:
+                            rule['sid'] = sid_name_dict[sid]
+                        elif sid in OU.privileged_sid_dict:
+                            rule['sid'] = OU.privileged_sid_dict[sid]
+                        else:
+                            obj = get_object_from_sid(session, sid)
+                            if obj:
+                                if 'username' in obj:
+                                    name = obj['username']
+                                elif 'groupname' in obj:
+                                    name = obj['groupname']
+                                elif 'hostname' in obj:
+                                    name = obj['hostname']
+                                else:
+                                    name = obj['sid'] # Fallback... 
+
+                                rule['sid'] = name
+
+                source['action_display'] = applocker_rules_to_string(applocker_rules)
 
             Output.highlight("Updating GPO %s" % source['gpo_name'])
             DB.send(source)
