@@ -30,7 +30,7 @@ def mongoscan_worker(target, actions, creds, timeout):
             version_printed = True
             Output.write({'target': mongo.url(), 'message': 'Mongodb %s' % version})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'mongo',
@@ -40,7 +40,7 @@ def mongoscan_worker(target, actions, creds, timeout):
             Output.vuln({'target': mongo.url(), 'message': 'Authentication success with anonymous credentials'})
             account = 'anonymous'
             vuln_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'service': 'mongo',
                 'url': mongo.url(),
@@ -58,7 +58,7 @@ def mongoscan_worker(target, actions, creds, timeout):
                 if not version_printed:
                     Output.write({'target': mongo.url(), 'message': version})
                     DB.insert_port({
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'protocol': 'tcp',
                         'service': 'mongo',
@@ -67,7 +67,7 @@ def mongoscan_worker(target, actions, creds, timeout):
 
                 Output.success({'target': mongo.url(), 'message': 'Authentication success with username %s and password %s for database \'%s\'' % (creds['username'], creds['password'], target['database'])})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'mongo',
                     'url': mongo.url(),
@@ -84,7 +84,7 @@ def mongoscan_worker(target, actions, creds, timeout):
         if not auth:
             Output.write({'target': mongo.url(), 'message': 'Unknown'})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'mongo',
@@ -100,7 +100,7 @@ def mongoscan_worker(target, actions, creds, timeout):
                         output += " "*60+"\t- %s\n" % table
 
                         db_info = {
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'port': target['port'],
                             'url': mongo.url(),
                             'service': 'mongo',

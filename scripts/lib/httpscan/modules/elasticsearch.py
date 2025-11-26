@@ -30,7 +30,7 @@ class Module:
                     Output.vuln({'target': http.url("/"), 'message': '[%s] Vulnerable to CVE-2015-1427' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url("/"),
@@ -46,7 +46,7 @@ class Module:
                     Output.vuln({'target': http.url("/_cat/indices"), 'message': '[%s] Accessible without authentication' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url("/_cat/indices"),

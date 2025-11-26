@@ -28,7 +28,7 @@ def bruteforce_worker(target, bruteforce_delay, timeout):
             if domain in [None, 'WORKGROUP']:
                 # local account
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'smb',
                     'url': smbscan.url(),
@@ -94,7 +94,7 @@ def bruteforce_ntlm_worker(target, bruteforce_delay, timeout):
             if domain in [None, 'WORKGROUP']:
                 # local account
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'smb',
                     'url': smbscan.url(),

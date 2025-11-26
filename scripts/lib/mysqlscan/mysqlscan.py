@@ -28,7 +28,7 @@ def mysqlscan_worker(target, actions, creds, timeout):
         mysql_info['message_type'] = 'mysql'
         Output.write(mysql_info)
         db_data = {
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'protocol': 'tcp',
             'service': 'mysql',
@@ -51,7 +51,7 @@ def mysqlscan_worker(target, actions, creds, timeout):
                 success, version = mysqlscan.auth(username, password)
                 Output.success({'target': mysqlscan.url(), 'message': 'Successful authentication with credentials %s and password %s' % (username, password)})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'mysql',
                     'url': mysqlscan.url(),
@@ -74,7 +74,7 @@ def mysqlscan_worker(target, actions, creds, timeout):
                             output += " "*60+"\t- %s\n" % table
 
                             db_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'url': mysqlscan.url(),
                                 'service': 'mysql',

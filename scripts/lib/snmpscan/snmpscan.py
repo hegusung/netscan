@@ -97,7 +97,7 @@ def snmpscan_worker(target, actions, creds, timeout):
     if len(protocols) != 0:
         Output.write({'target': snmp.url(), 'message': 'SNMP Service'})
         DB.insert_port({
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'protocol': 'udp',
             'service': 'snmp',
@@ -110,7 +110,7 @@ def snmpscan_worker(target, actions, creds, timeout):
             Output.success({'target': snmp.url(), 'message': '(SNMPv2) Authentication success with community string: %s' % community})
 
             cred_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'service': 'snmp',
                 'url': snmp.url(),
@@ -135,7 +135,7 @@ def snmpscan_worker(target, actions, creds, timeout):
                             Output.highlight({'target': snmp.url(), 'message': '%s: (%s) %s' % tuple(res)})
 
                             DB.insert_snmp_entry({
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'snmp_key': res[0],
                                 'snmp_type': res[1],
@@ -195,7 +195,7 @@ def bruteforce_v2_worker(target, timeout):
 
         Output.success({'target': snmp.url(), 'message': '(SNMPv2) Authentication success with community: %s' % community})
         cred_info = {
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'service': 'snmp',
             'url': snmp.url(),
@@ -308,58 +308,4 @@ class SNMP:
             raise SNMPError(f"{int(err_stat)}: {err_stat.prettyPrint()}")
         return True
     
-"""
-    def url(self):
-        return 'snmp://%s:%d' % (self.hostname, self.port)
-
-    def request_v2(self, community='public', oid='1.3.6.1.2.1.1.1'):
-
-        oid_list = [ObjectType(ObjectIdentity(item)) for item in oid.split(',')]
-        
-        result = []
-        for (error_indication, error_status, error_index, var_binds) in nextCmd(
-                SnmpEngine(),
-                CommunityData(community),
-                UdpTransportTarget((self.hostname, self.port), timeout=self.timeout/6.0), # 10 = 60 sec timeout... so divide by 6
-                ContextData(),
-                *oid_list,
-                lexicographicMode=False):
-
-            if error_indication or error_status:
-                if str(error_indication) == "No SNMP response received before timeout": # timeout
-                    raise SNMPTimeout(error_indication)
-                else:
-                    raise SNMPError("%d: %s" % (error_status, error_indication))
-
-            for var_bind in var_binds:
-                if type(var_bind[1]) == pysnmp.proto.rfc1905.EndOfMibView:
-                    continue
-
-                res = [x.prettyPrint() for x in var_bind]
-
-                result.append([var_bind[0].prettyPrint(), var_bind[1].__class__.__name__, var_bind[1].prettyPrint()])
-
-        return result
-
-    def request_v3_noauth(self):
-
-        iterator = getCmd(
-            SnmpEngine(),
-            UsmUserData('user-none-none'),
-            UdpTransportTarget((self.hostname, self.port), timeout=self.timeout/6.0), # 10 = 60sec timeout....
-            ContextData(),
-            ObjectType(ObjectIdentity('IF-MIB', 'ifInOctets', 1))
-        )
-
-        error_indication, error_status, error_index, var_binds = next(iterator)
-
-        if error_indication or error_status:
-            if str(error_indication) == "No SNMP response received before timeout": # timeout
-                raise SNMPTimeout(error_indication)
-            elif str(error_indication) == "Unknown USM user": # Auth error
-                raise SNMPAuthFailure(error_indication)
-            else:
-                raise SNMPError("%d: %s" % (error_status, error_indication))
-"""
-
 

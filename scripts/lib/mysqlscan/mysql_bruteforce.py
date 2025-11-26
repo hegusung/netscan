@@ -16,7 +16,7 @@ def bruteforce_worker(target, timeout):
             success, _ = mysqlscan.auth(target['b_username'], password)
             Output.success({'target': mysqlscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
             cred_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'service': 'mysql',
                 'url': mysqlscan.url(),
@@ -27,7 +27,7 @@ def bruteforce_worker(target, timeout):
             DB.insert_credential(cred_info)
 
             vuln_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'service': 'mysql',
                 'url': mysqlscan.url(),

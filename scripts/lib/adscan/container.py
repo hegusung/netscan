@@ -5,7 +5,7 @@ from lib.adscan.ou import OU
 from lib.adscan.gpo import GPO
 
 class Container:
-    attributes = ['name', 'distinguishedName', 'nTSecurityDescriptor', 'objectGUID']
+    attributes = ['name', 'distinguishedName', 'nTSecurityDescriptor', 'objectGUID', 'description', 'whenCreated']
     schema_guid_attributes = ['container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
 
     @classmethod
@@ -28,6 +28,12 @@ class Container:
         self.dn = str(attr['distinguishedName'])
         self.guid = ldap.parse_guid(bytes(attr['objectGUID']))
         self.name = str(attr['name'])
+        self.description = str(attr['description']) if 'description' in attr else ''
+
+        try:
+            self.created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+        except KeyError:
+            self.created_date = None
 
         self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'container', schema_guid_dict)
 
@@ -39,5 +45,7 @@ class Container:
             'dn': self.dn,
             'guid': self.guid,
             'aces': self.aces,
+            'description': self.description,
+            'created_date': self.created_date,
         }
 

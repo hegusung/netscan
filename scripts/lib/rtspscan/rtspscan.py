@@ -31,7 +31,7 @@ def rtspscan_worker(target, actions, creds, timeout):
         if status_code:
             Output.write({'target': rtsp.url(""), 'message': 'RTSP protocol'})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'rtsp',

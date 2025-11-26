@@ -3,7 +3,7 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from lib.adscan.accesscontrol import parse_sd, process_sid
 
 class Host:
-    attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'lastLogonTimestamp', 'pwdLastSet', 'msDS-AllowedToDelegateTo', 'msDS-AllowedToActOnBehalfOfOtherIdentity', 'msDS-SupportedEncryptionTypes', 'ms-Mcs-AdmPwdExpirationTime']
+    attributes = ['distinguishedName', 'sAMAccountname', 'dNSHostName', 'name', 'operatingSystem', 'description', 'objectSid', 'userAccountControl', 'nTSecurityDescriptor', 'primaryGroupID', 'servicePrincipalName', 'whenCreated', 'lastLogon', 'lastLogonTimestamp', 'pwdLastSet', 'msDS-AllowedToDelegateTo', 'msDS-AllowedToActOnBehalfOfOtherIdentity', 'msDS-SupportedEncryptionTypes', 'ms-Mcs-AdmPwdExpirationTime', 'msDS-HostServiceAccount']
     schema_guid_attributes = ['computer', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
     schema_guid_dict = None
 
@@ -211,6 +211,15 @@ class Host:
             #name = ldap._resolve_sid_to_name(self.domain, sid_obj) 
             self.allowed_to_act_on_behalf_of_other_identity.append(sid_obj)
 
+        self.host_service_account = []
+        if 'msDS-HostServiceAccount' in attr:
+            if type(attr['msDS-HostServiceAccount']) != list:
+                attr['msDS-HostServiceAccount'] = [attr['msDS-HostServiceAccount']]
+
+            for msa in attr['msDS-HostServiceAccount']:
+                self.host_service_account.append(str(msa))
+
+
     def to_json(self):
         return {
             'domain': self.domain,
@@ -232,4 +241,5 @@ class Host:
             'last_logon': self.last_logon_date,
             'last_logon_timestamp': self.last_logon_timestamp_date,
             'last_password_change': self.last_password_change_date,
+            'host_service_account': self.host_service_account,
         }

@@ -142,12 +142,26 @@ class ADCS:
             }
 
     @classmethod
-    def list_adcs_certs(self, ldap):
+    def list_adcs_ntauthstores(self, ldap):
         sbase = 'CN=NTAuthCertificates,CN=Public Key Services,CN=Services,%s' % ldap.configurationnamingcontext
         search_filter = '(cn=*)'
-        attributes = ['distinguishedName', 'cACertificate']
+        attributes = ['name', 'distinguishedName', 'objectGUID', 'cACertificate', 'nTSecurityDescriptor', 'description', 'whenCreated']
 
         for attr in ldap.query_generator(sbase, search_filter, attributes, query_sd=True):
+            domain = ldap.dn_to_domain(str(attr['distinguishedName']))
+            name = str(attr['name'])
+            whenCreated = int(attr['whenCreated'])
+            description = str(attr['description']) if 'description' in attr else ''
+            dn = str(attr['distinguishedName'])
+            guid = ldap.parse_guid(bytes(attr['objectGUID']))
+
+            # Check the ACEs
+            try:
+                aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'certificationAuthority', schema_guid_dict)
+            except KeyError:
+                aces = {}
+
+
 
             if type(attr['cACertificate']) != list:
                 attr['cACertificate'] = [attr['cACertificate']]
@@ -169,6 +183,13 @@ class ADCS:
                     cert_algo = "Unknown: %s" % type(public_key)
 
                 yield {
+                    'domain': domain,
+                    'name': name,
+                    'whenCreated': whenCreated,
+                    'description': description,
+                    'dn': dn,
+                    'guid': guid,
+                    'aces': aces,
                     'algo': cert_algo,
                     'common_names': common_names,
                 }

@@ -87,6 +87,9 @@ class SMBScan:
         if not self.conn:
             Output.write({'target': self.url(), 'message': 'auth(): please connect first'})
 
+        if type(hash) == str and len(hash) == 0:
+            hash = None
+
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
         success = False

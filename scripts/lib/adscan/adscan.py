@@ -30,6 +30,9 @@ from .host import Host
 from .dns import DNS
 from .trust import Trust
 from .adcs import ADCS
+from .ca import CA
+from .enrollment_service import EnrollmentService
+from .certificate_template import CertificateTemplate
 
 from utils.output import Output
 from utils.utils import check_ip, AuthFailure
@@ -87,7 +90,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 smb_info['message_type'] = 'smb'
                 Output.write(smb_info)
                 DB.insert_port({
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': 445,
                     'protocol': 'tcp',
                     'service': 'smb',
@@ -245,7 +248,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                 Output.write({'target': ldapscan.url(), 'message': 'LDAP: %s  %s' % (ldap_info['default_domain_naming_context'].ljust(50), ldap_info['domain_sid'])})
                 DB.insert_port({
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': 389,
                     'protocol': 'tcp',
                     'service': 'ldap',
@@ -343,7 +346,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         Output.write({'target': ldapscan.url(), 'message': '   Forest fonctional level: %s' % entry['functionallevel']})
                         if not entry['functionallevel'].strip() in ['2016', '2019', '2022']:
                                 DB.insert_domain_vulnerability({
-                                    'hostname': ldapscan.hostname,
+                                    'host': ldapscan.hostname,
                                     'domain': entry['domain'],
                                     'name': 'Insecure Forest functional level',
                                     'description': 'Insecure Forest functional level, is %s, should be at least 2016' % (entry['functionallevel'],),
@@ -356,7 +359,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                             if param_name == 'ms-DS-MachineAccountQuota' and param_value != 0:
                                 DB.insert_domain_vulnerability({
-                                    'hostname': ldapscan.hostname,
+                                    'host': ldapscan.hostname,
                                     'domain': entry['domain'],
                                     'name': 'Insecure ms-DS-MachineAccountQuota value',
                                     'description': 'Insecure ms-DS-MachineAccountQuota, is %d, should be 0' % (param_value,),
@@ -378,6 +381,8 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 # For bloodhound
                                 'aces': entry['aces'],
                                 'owner': get_owner(entry['aces']),
+                                'description': entry['description'],
+                                'created_date': entry['created_date'],
                             })
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
 
@@ -388,7 +393,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 continue
 
                             entry = ou.to_json()
-                            DB.insert_domain_ou({
+                            ou_doc = {
                                 'domain': entry['domain'],
                                 'name': entry['name'],
                                 'domain_sid': domain_sid,
@@ -400,7 +405,12 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 #'links': entry['links'],
                                 'aces': entry['aces'],
                                 'owner': get_owner(entry['aces']),
-                            })
+                                'description': entry['description'],
+                                'created_date': entry['created_date'],
+                            }
+                            if entry['gPOptions'] != None:
+                                ou_doc['gPOptions'] = entry['gPOptions']
+                            DB.insert_domain_ou(ou_doc)
                             Output.write({'target': ldapscan.url(), 'message': '    - %s' % (entry['name'],)})
 
                 else:
@@ -635,6 +645,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'aces': entry['aces'],
                             'owner': get_owner(entry['aces']),
                             'sid_history': entry['sid_history'],
+                            'created_date': entry['created_date'],
                         })
 
                         Output.write({'target': ldapscan.url(), 'message': '- %s   (%d members)   %s  [%s]' % (group.ljust(40), len(entry['members']), entry['comment'].ljust(30), ",".join(entry['tags']))})
@@ -668,6 +679,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                             'last_logon': entry['last_logon'],
                             'last_logon_timestamp': entry['last_logon_timestamp'],
                             'last_password_change': entry['last_password_change'],
+                            'host_service_account': entry['host_service_account'],
                         })
 
                         host = '%s\\%s' % (entry['domain'], entry['hostname'])
@@ -680,9 +692,14 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 if ldap_authenticated:
                     dns_timeout = False
                     for dns_entry in DNS.list_dns(ldapscan):
-                        entry = dns_entry.to_json()['dns']
+                        entry = dns_entry.to_json()
+
+                        dns = entry['dns']
+                        dns_domain = entry['domain']
+
                         # resolve dns entry
 
+                        """
                         if not dns_timeout:
                             try:
                                 resolver = dns.resolver.Resolver()
@@ -703,9 +720,23 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                 dns_timeout = True
                         else:
                             ips = []
+                        """
 
-                        Output.write({'target': ldapscan.url(), 'message': '- %s (%s)' % (entry.ljust(50), ','.join(ips))})
+                        #Output.write({'target': ldapscan.url(), 'message': '- %s (%s)' % (entry.ljust(50), ','.join(ips))})
+                        if ".RootDNSServers" in dns:
+                            continue
 
+                        if "DnsZones." in dns:
+                            continue
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s' % (dns, )})
+
+                        DB.insert_domain_dns({
+                            'domain': dns_domain,
+                            'dns': dns,
+                        })
+
+                        """
                         if len(ips) != 0:
                             for ip in ips:
                                 DB.insert_dns({
@@ -713,6 +744,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                                     'query_type': 'A',
                                     'target': ip,
                                 })
+                        """
 
                 else:
                     raise NotImplementedError('Dumping DNS through SMB')
@@ -723,7 +755,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     for entry in smbscan.list_gpps():
                         # insert domain vulnerability
                         DB.insert_domain_vulnerability({
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'domain': smb_info['domain'],
                             'name': 'Password in GPP',
                             'description': 'Password in GPP file %s: Username => %s, Newname => %s, Password => %s' % (entry['path'], entry['username'], entry['newname'], entry['password']),
@@ -834,76 +866,76 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
             if 'asreproasting' in actions:
                 Output.highlight({'target': smbscan.url(), 'message': 'ASREP-roasting:'})
-                if ldap_authenticated:
 
-                    if 'all' in actions['asreproasting']['users']:
+                if 'all' in actions['asreproasting']['users']:
+                    if ldap_authenticated:
                         user_list = User.list_donotrequirepreauth(ldapscan)
                     else:
-                        user_list = actions['asreproasting']['users']
-
-                    for user_roast in user_list:
-                        if type(user_roast) == User:
-                            entry = user_roast.to_json()
-
-                            user = '%s\\%s' % (entry['domain'], entry['username'])
-                            DB.insert_domain_user({
-                                'domain': entry['domain'],
-                                'username': entry['username'],
-                                'user': user,
-                                'fullname': entry['fullname'],
-                                'comment': entry['comment'],
-                                'created_date': entry['created_date'],
-                                'last_logon': entry['last_logon'],
-                                'last_logon_timestamp': entry['last_logon_timestamp'],
-                                'last_password_change': entry['last_password_change'],
-                                'primary_gid': entry['primary_gid'],
-                                'sid': entry['sid'],
-                                'rid': entry['rid'],
-                                'dn': entry['dn'],
-                                'tags': entry['tags'],
-                                'group': entry['group'],
-                                'aces': entry['aces'],
-                                'owner': get_owner(entry['aces']),
-                                'spns': entry['spns'],
-                                'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
-                                'sid_history': entry['sid_history'],
-                            })
-                            Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
-
-                            target_user = entry['username']
-                        else:
-                            target_user = user_roast
-                            user = '%s\\%s' % (smb_info['domain'], user_roast)
-
-                        kerberos = Kerberos(target['hostname'], smb_info['domain'])
-                        try:
-                            asrep = kerberos.asrep_roasting(target_user)
-
-                            Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberos pre-auth disabled !!!)\n%s' % (user.ljust(50), asrep)})
-
-                            # insert domain vulnerability
-                            DB.insert_domain_vulnerability({
-                                'hostname': target['hostname'],
-                                'domain': smb_info['domain'],
-                                'name': 'Kerberos pre-auth disabled',
-                                'description': 'Kerberos pre-auth is disabled for user %s\\%s' % (smb_info['domain'], target_user),
-                            })
-
-                            cred_info = {
-                                'domain': smb_info['domain'],
-                                'username': target_user,
-                                'type': 'hash',
-                                'format': 'krb5asrep',
-                                'hash': asrep,
-                            }
-                            DB.insert_domain_credential(cred_info)
-
-
-                        except Exception as e:
-                            Output.error({'target': ldapscan.url(), 'message': 'Error while ASREP-Roasting: %s' % str(e)})
-
+                        user_list = []
                 else:
-                    raise NotImplementedError('Dumping users through SMB')
+                    user_list = actions['asreproasting']['users']
+
+                for user_roast in user_list:
+                    if type(user_roast) == User:
+                        entry = user_roast.to_json()
+
+                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        DB.insert_domain_user({
+                            'domain': entry['domain'],
+                            'username': entry['username'],
+                            'user': user,
+                            'fullname': entry['fullname'],
+                            'comment': entry['comment'],
+                            'created_date': entry['created_date'],
+                            'last_logon': entry['last_logon'],
+                            'last_logon_timestamp': entry['last_logon_timestamp'],
+                            'last_password_change': entry['last_password_change'],
+                            'primary_gid': entry['primary_gid'],
+                            'sid': entry['sid'],
+                            'rid': entry['rid'],
+                            'dn': entry['dn'],
+                            'tags': entry['tags'],
+                            'group': entry['group'],
+                            'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'spns': entry['spns'],
+                            'allowed_to_delegate_to': entry['allowed_to_delegate_to'],
+                            'sid_history': entry['sid_history'],
+                        })
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s  [%s]' % (user.ljust(30), entry['fullname'].ljust(30), ",".join(entry['tags']))})
+
+                        target_user = entry['username']
+                    else:
+                        target_user = user_roast
+                        user = '%s\\%s' % (smb_info['domain'], user_roast)
+
+                    kerberos = Kerberos(target['hostname'], smb_info['domain'])
+                    try:
+                        asrep = kerberos.asrep_roasting(target_user)
+
+                        Output.vuln({'target': smbscan.url(), 'message': '- %s  (Kerberos pre-auth disabled !!!)\n%s' % (user.ljust(50), asrep)})
+
+                        # insert domain vulnerability
+                        DB.insert_domain_vulnerability({
+                            'host': target['hostname'],
+                            'domain': smb_info['domain'],
+                            'name': 'Kerberos pre-auth disabled',
+                            'description': 'Kerberos pre-auth is disabled for user %s\\%s' % (smb_info['domain'], target_user),
+                        })
+
+                        cred_info = {
+                            'domain': smb_info['domain'],
+                            'username': target_user,
+                            'type': 'hash',
+                            'format': 'krb5asrep',
+                            'hash': asrep,
+                        }
+                        DB.insert_domain_credential(cred_info)
+
+
+                    except Exception as e:
+                        Output.error({'target': ldapscan.url(), 'message': 'Error while ASREP-Roasting: %s' % str(e)})
+
 
             if 'passpol' in actions:
                 if smb_authenticated:
@@ -923,7 +955,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         # insert domain vulnerability if lock_threshold == 0
                         if password_policy['lock_threshold'] == 0:
                             DB.insert_domain_vulnerability({
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'domain': password_policy['domain'],
                                 'name': 'No account lockout',
                                 'description': 'No account lockout for domain %s, accounts can be bruteforced' % (password_policy['domain'],),
@@ -973,21 +1005,27 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         DB.insert_domain_gpo({
                             'domain': entry['domain'],
                             #'domain_sid': entry['domain_sid'],
-                            'name': entry['name'],
+                            'gpo_name': entry['name'],
                             'guid': entry['guid'],
                             'dn': entry['dn'],
                             'gpcpath': entry['gpcpath'],
                             'aces': entry['aces'],
                             'owner': get_owner(entry['aces']),
                             'gpo_effect': entry['gpo_effect'],
+                            'description': entry['description'],
+                            'created_date': entry['created_date'],
                         })
                         Output.write({'target': ldapscan.url(), 'message': '- %s   [%s]' % (entry['name'].ljust(30), entry['gpcpath'])})
-                        for effect in entry['gpo_effect']['Members']:
-                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
-                        for effect in entry['gpo_effect']['Memberof']:
-                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
-                        for effect in entry['gpo_effect']['Localgroup']:
-                            Output.write({'target': ldapscan.url(), 'message': '   > %s' % effect})
+
+                        for action in entry['gpo_changes']:
+                            Output.highlight({'target': ldapscan.url(), 'message': '   > %s' % action['action']})
+                            action['guid'] = entry['guid']
+                            action['gpo_name'] = entry['name']
+                            action['dn'] = entry['dn']
+                            action['domain'] = entry['domain']
+                            action['action_display'] = action['action']
+
+                            DB.insert_domain_gpochange(action)
                 else:
                     raise NotImplementedError('Dumping GPOs through SMB')
 
@@ -999,11 +1037,73 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 else:
                     raise NotImplementedError('Dumping CA servers through SMB')
 
-            if 'ca_certs' in actions:
-                Output.highlight({'target': ldapscan.url(), 'message': 'CA certs:'})
+            if 'CAs' in actions:
+                Output.highlight({'target': ldapscan.url(), 'message': 'Certification Authorities:'})
                 if ldap_authenticated:
-                    for entry in ADCS.list_adcs_certs(ldapscan):
-                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['algo'].ljust(30), ','.join(entry['common_names']))})
+                    Output.highlight({'target': ldapscan.url(), 'message': 'NTAuthStores:'})
+                    for ca in CA.list_ntauthstores(ldapscan):
+                        entry = ca.to_json()
+                        DB.insert_domain_ntauthcertificate({
+                            'domain': entry['domain'],
+                            'name': entry['name'],
+                            'created_date': entry['created_date'],
+                            'description': entry['description'],
+                            'dn': entry['dn'],
+                            'guid': entry['guid'],
+                            'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'certthumbprints': entry['certthumbprints'],
+                            'certname': entry['certname'],
+                            'certchain': entry['certchain'],
+                            'hasbasicconstraints': entry['hasbasicconstraints'],
+                            'basicconstraintpathlength': entry['basicconstraintpathlength'],
+                        })
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(30), entry['description'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'Root CAs:'})
+                    for ca in CA.list_rootcas(ldapscan):
+                        entry = ca.to_json()
+                        DB.insert_domain_rootca({
+                            'domain': entry['domain'],
+                            'name': entry['name'],
+                            'created_date': entry['created_date'],
+                            'description': entry['description'],
+                            'dn': entry['dn'],
+                            'guid': entry['guid'],
+                            'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'certthumbprints': entry['certthumbprints'],
+                            'certname': entry['certname'],
+                            'certchain': entry['certchain'],
+                            'hasbasicconstraints': entry['hasbasicconstraints'],
+                            'basicconstraintpathlength': entry['basicconstraintpathlength'],
+                        })
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(30), entry['description'])})
+
+                    Output.highlight({'target': ldapscan.url(), 'message': 'AIA CAs:'})
+                    for ca in CA.list_aiacas(ldapscan):
+                        entry = ca.to_json()
+                        DB.insert_domain_aiaca({
+                            'domain': entry['domain'],
+                            'name': entry['name'],
+                            'created_date': entry['created_date'],
+                            'description': entry['description'],
+                            'dn': entry['dn'],
+                            'guid': entry['guid'],
+                            'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'certthumbprints': entry['certthumbprints'],
+                            'certname': entry['certname'],
+                            'certchain': entry['certchain'],
+                            'hasbasicconstraints': entry['hasbasicconstraints'],
+                            'basicconstraintpathlength': entry['basicconstraintpathlength'],
+                            'hascrosscertificatepair': entry['hascrosscertificatepair'],
+                            'crosscertificatepair': entry['crosscertificatepair'],
+                        })
+
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(30), entry['description'])})
                 else:
                     raise NotImplementedError('Dumping CA Cert through SMB')
 
@@ -1017,7 +1117,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['ca']).ljust(20), vuln['vuln_name'], vuln['description'])})
 
                         DB.insert_domain_vulnerability({
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'domain': smb_info['domain'],
                             'name': vuln['vuln_name'],
                             'description': vuln['description'],
@@ -1028,7 +1128,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                         Output.vuln({'target': ldapscan.url(), 'message': '%s (%s) %s' % (('[%s]' % vuln['template']).ljust(20), vuln['vuln_name'], vuln['description'])})
 
                         DB.insert_domain_vulnerability({
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'domain': smb_info['domain'],
                             'name': vuln['vuln_name'],
                             'description': vuln['description'],
@@ -1038,24 +1138,61 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 if ldap_authenticated:
                     enrollment_services = []
                     Output.highlight({'target': ldapscan.url(), 'message': 'Enrollment Services:'})
-                    for entry in ADCS.list_adcs_servers(ldapscan):
-                        enrollment_services.append(entry)
-                        Output.write({'target': ldapscan.url(), 'message': "- %s   %s" % (entry['name'].ljust(30), entry['dns'])})
+                    for enrollmentservice in EnrollmentService.list_enrollment_services(ldapscan):
+                        entry = enrollmentservice.to_json()
+                        #print(entry)
+                        DB.insert_domain_enrollment_service({
+                            'domain': entry['domain'],
+                            'name': entry['name'],
+                            'created_date': entry['created_date'],
+                            'description': entry['description'],
+                            'dn': entry['dn'],
+                            'dnshostname': entry['dnshostname'],
+                            'guid': entry['guid'],
+                            'aces': entry['aces'],
+                            'owner': get_owner(entry['aces']),
+                            'certthumbprints': entry['certthumbprints'],
+                            'certname': entry['certname'],
+                            'certchain': entry['certchain'],
+                            'caname': entry['caname'],
+                            'hasbasicconstraints': entry['hasbasicconstraints'],
+                            'basicconstraintpathlength': entry['basicconstraintpathlength'],
+                            'flags': entry['flags'],
+                            'certificate_templates': entry['certificate_templates'],
+                            'casecurity': entry['casecurity'],
+                            'enrollmentagentrights': entry['enrollmentagentrights'],
+                            'isissuerspecifiessamenabled': entry['isissuerspecifiessamenabled'],
+                        })
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(30), entry['description'])})
 
                     Output.highlight({'target': ldapscan.url(), 'message': 'Certificate templates:'})
-                    for entry in ADCS.list_adcs_templates(ldapscan):
-                        enabled = False
-                        enrollment_service = None
-                        for e_s in enrollment_services:
-                            if entry['name'] in e_s['templates']:
-                                enabled = True
-                                enrollment_service = e_s['name']
-                                break
+                    for template in CertificateTemplate.list_certificate_templates(ldapscan):
+                        entry = template.to_json()
 
-                        if enabled: 
-                            Output.write({'target': ldapscan.url(), 'message': "- %s   (Enabled)  => %s" % (entry['name'].ljust(30), enrollment_service)})
-                        else:
-                            Output.minor({'target': ldapscan.url(), 'message': "- %s   (Disabled)" % (entry['name'].ljust(30),)})
+                        DB.insert_domain_certificate_template({
+                            'domain': entry['domain'],
+                            'name': entry['name'],
+                            'displayname': entry['displayname'],
+                            'created_date': entry['created_date'],
+                            'description': entry['description'],
+                            'dn': entry['dn'],
+                            'guid': entry['guid'],
+                            'aces': entry['aces'],
+                            'validityperiod': entry['validityperiod'],
+                            'renewalperiod': entry['renewalperiod'],
+                            'schemaversion': entry['schemaversion'],
+                            'oid': entry['oid'],
+                            'enrollment_flag': entry['enrollment_flag'],
+                            'cert_name_flag': entry['cert_name_flag'],
+                            'eku': entry['eku'], 
+                            'certificateapplicationpolicy': entry['certificateapplicationpolicy'],
+                            'authorizedsignature': entry['authorizedsignature'],
+                            'applicationpolicies': entry['applicationpolicies'],
+                            'issuancepolicies': entry['issuancepolicies'],
+                            'authenticationenabled': entry['authenticationenabled'],
+                            'effectiveekus': entry['effectiveekus'],
+                        })
+                        Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(30), entry['description'])})
 
 
                 else:
@@ -1284,7 +1421,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
 
                                     # insert domain vulnerability
                                     DB.insert_domain_vulnerability({
-                                        'hostname': target['hostname'],
+                                        'host': target['hostname'],
                                         'domain': valid_user['domain'],
                                         'name': 'Kerberos pre-auth disabled',
                                         'description': 'Kerberos pre-auth is disabled for user %s\\%s' % (valid_user['domain'], valid_user['username']),
@@ -1345,13 +1482,13 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     Output.highlight({'target': ldapscan.url(), 'message': 'LAPS entries:'})
                     for host, password in Host.dump_laps(ldapscan):
                         entry = host.to_json()
-                        user = '%s\\%s' % (entry['domain'], entry['username'])
+                        user = '%s\\%s' % (entry['domain'], entry['hostname'])
                         if not 'Error: ' in password:
                             Output.write({'target': ldapscan.url(), 'message': '- %s   %s   %s' % (user.ljust(40), entry['dns'].ljust(40), password)})
 
                             cred_info = {
                                 'domain': entry['domain'],
-                                'username': entry['username'],
+                                'username': entry['hostname'],
                                 'type': 'password',
                                 'password': password,
                             }

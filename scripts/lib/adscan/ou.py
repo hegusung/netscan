@@ -1,10 +1,11 @@
 from impacket.ldap import ldap, ldapasn1
 from lib.adscan.accesscontrol import parse_accesscontrol, parse_sd, process_sid
+from datetime import datetime
 
 from lib.adscan.gpo import GPO
 
 class OU:
-    attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink']
+    attributes = ['name', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPLink', 'description', 'whenCreated', 'gPOptions']
     schema_guid_attributes = ['Organizational-Unit', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
 
     privileged_sid_dict = {
@@ -34,9 +35,17 @@ class OU:
     def __init__(self, ldap, smb, attr, schema_guid_dict):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.name = str(attr['name'])
+        self.description = str(attr['description']) if 'description' in attr else ''
 
-        #if ou_domain.lower() != domain.lower():
-        #    return
+        try:
+            self.created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+        except KeyError:
+            self.created_date = None
+
+        if 'gPOptions' in attr:
+            self.gPOptions = int(attr['gPOptions'])
+        else:
+            self.gPOptions = None
 
         self.dn = str(attr['distinguishedName'])
 
@@ -47,53 +56,6 @@ class OU:
         else:
             self.gplink = ""
 
-        # Process GPO
-        """
-        self.links = {}
-        self.gpo_paths = []
-        if 'gPLink' in attr:
-            for l in str(attr['gPLink']).split(']'):
-                if len(l) == 0:
-                    continue
-                # Remove initial [
-                l = l[1:]
-                # Take after ://
-                l = l.split('://')[-1]
-                # Take before ;
-                if len(l) == 0:
-                    continue
-                status = l.split(';')[1]
-                link = l.split(';')[0]
-
-                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
-                if status in ['1', '3']:
-                    continue
-
-                self.links[link.lower()] = {'IsEnforced': False if status == '0' else True}
-
-            for link_dn, link_guid_path in ldap._resolve_links(self.links.keys()).items():
-                self.links[link_dn.lower()]['GUID'] = link_guid_path[0].upper()
-                self.gpo_paths.append((link_guid_path[1], link_dn))
-
-        # Resolve GPO effects
-        self.gpo_effect = {}
-        for sid in OU.privileged_sid_dict:
-            self.gpo_effect[sid] = {}
-            for t in ['Memberof', 'Members', 'Localgroup']:
-                self.gpo_effect[sid][t] = []
-
-        print(self.gpo_paths)
-        print(self.gpo_effect)
-
-        for gpo_path, gpo_dn in self.gpo_paths:
-            GPO.resolve_effect(smb, ldap, gpo_dn, gpo_path, self.gpo_effect)
-        print(self.gpo_effect)
-        self.gpo_effect = GPO.merge_gpo_effect(self.gpo_effect)
-        print(self.gpo_effect)
-        """
-
-
-
         self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'organizational-unit', schema_guid_dict)
 
     def to_json(self):
@@ -102,9 +64,10 @@ class OU:
             'name': self.name,
             'dn': self.dn,
             'guid': self.guid,
-            #'links': list(self.links.values()),
-            #'gpo_effect': self.gpo_effect,
             'gplink': self.gplink, 
             'aces': self.aces,
+            'description': self.description,
+            'created_date': self.created_date,
+            'gPOptions': self.gPOptions,
         }
 

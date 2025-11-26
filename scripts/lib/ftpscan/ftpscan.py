@@ -18,7 +18,7 @@ def ftpscan_worker(target, actions, creds, timeout, passive):
         if ftp_code:
             Output.write({'target': ftpscan.url(), 'message': '%d   %s' % (ftp_code, version)})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'ftp',
@@ -33,7 +33,7 @@ def ftpscan_worker(target, actions, creds, timeout, passive):
                 if 'username' in creds and 'password' in creds:
                     Output.success({'target': ftpscan.url(), 'message': 'Successful connection with credentials %s:%s' % (creds['username'], creds['password'])})
                     cred_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'ftp',
                         'url': ftpscan.url(),
@@ -46,7 +46,7 @@ def ftpscan_worker(target, actions, creds, timeout, passive):
                 else:
                     Output.vuln({'target': ftpscan.url(), 'message': 'Successful anonymous connection'})
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'ftp',
                         'url': ftpscan.url(),
@@ -73,7 +73,7 @@ def ftpscan_worker(target, actions, creds, timeout, passive):
 
                             # Add to database
                             content_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'url': ftpscan.url(),
                                 'service': 'ftp',

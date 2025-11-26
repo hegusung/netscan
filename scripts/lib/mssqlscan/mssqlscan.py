@@ -28,7 +28,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
             mssql_info['message_type'] = 'mssql'
             Output.write(mssql_info)
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'mssql',
@@ -71,7 +71,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
                         # local account
                         if password:
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'mssql',
                                 'url': mssqlscan.url(),
@@ -83,7 +83,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
                         else:
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'mssql',
                                 'url': mssqlscan.url(),
@@ -133,7 +133,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
                                 output += " "*60+"\t- %s\n" % table
 
                                 db_info = {
-                                    'hostname': target['hostname'],
+                                    'host': target['hostname'],
                                     'port': target['port'],
                                     'url': mssqlscan.url(),
                                     'service': 'mssql',
@@ -175,7 +175,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
                             output += " "*60+"- %s   %s\n" % (account['name'].ljust(30), password_hash)
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'mssql',
                                 'url': mssqlscan.url(),

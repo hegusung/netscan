@@ -49,7 +49,7 @@ class Module:
             Output.vuln({'target': 'smb://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Vulnerable to CVE-2020-0796 (SMBGhost)' % self.name})
 
             vuln_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'service': 'smb',
                 'url': 'smb://%s:%d' % (target['hostname'], target['port']),

@@ -13,7 +13,6 @@ class DNS:
         search_filter='(objectClass=dnsNode)'
 
         for sbase in sbase_list:
-            print(sbase)
             try:
                 for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
                     dns = DNS(ldap, attr)
@@ -30,6 +29,8 @@ class DNS:
     # ==================
 
     def __init__(self, ldap, attr):
+        self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
+        self.domain = self.domain.split('.DomainDnsZones.')[-1]
         self.dn = str(attr["distinguishedName"]).split(",CN=MicrosoftDNS,",1)[0]
         self.dns_entry = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
 
@@ -38,6 +39,7 @@ class DNS:
 
     def to_json(self):
         return {
+            'domain': self.domain,
             'dns': self.dns_entry,
         }
 

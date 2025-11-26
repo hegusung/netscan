@@ -44,7 +44,7 @@ class Module:
                 Output.vuln({'target': url, 'message': '[%s] Vulnerable to OpenSSL Heartbleed (CVE-2014-0160)' % self.name})
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'http',
                     'url': url,

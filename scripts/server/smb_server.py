@@ -33,7 +33,7 @@ def query_file_callback(client_ip, share_name, file_path):
             Output.vuln({'target': '[Vuln] smb://%s:%d' % (client_ip, 445), 'message': 'Has PrintSpooler service enabled and exploitable'})
 
             vuln_info = {
-                'hostname': client_ip,
+                'host': client_ip,
                 'port': 445,
                 'service': 'smb',
                 'url': 'smb://%s:%d' % (client_ip, 445),

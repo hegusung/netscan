@@ -29,7 +29,7 @@ def sshscan_worker(target, actions, creds, timeout):
             return
         Output.write({'target': ssh.url(), 'message': '%s' % version})
         DB.insert_port({
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'protocol': 'tcp',
             'service': 'ssh',
@@ -48,7 +48,7 @@ def sshscan_worker(target, actions, creds, timeout):
                 elif 'key_file' in creds:
                     Output.success({'target': ssh.url(), 'message': 'Successful authentication with username %s and key %s' % (creds['username'], creds['key_file'])})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'ssh',
                     'url': ssh.url(),

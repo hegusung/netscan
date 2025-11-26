@@ -174,7 +174,7 @@ class Module:
 
         if success:
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',

@@ -13,7 +13,7 @@ def rsyncscan_worker(target, timeout):
 
         Output.write({'target': rsync.url(), 'message': 'RSync server: %s' % version})
         DB.insert_port({
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'protocol': 'tcp',
             'service': 'rsync',
@@ -26,7 +26,7 @@ def rsyncscan_worker(target, timeout):
             if share['anon'] == True:
                 output += ' '*60+'- %s   %s  (Anonymous access !!!)\n' % (share['name'].ljust(30), share['description'].ljust(60))
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'rsync',
                     'url': rsync.url(),
@@ -41,7 +41,7 @@ def rsyncscan_worker(target, timeout):
                 output += ' '*60+'- %s   %s  (%s)\n' % (share['name'].ljust(30), share['description'].ljust(60), share['auth_message'])
 
             db_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'url': rsync.url(),
                 'service': 'rsync',

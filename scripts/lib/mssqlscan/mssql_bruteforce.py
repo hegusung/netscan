@@ -31,7 +31,7 @@ def bruteforce_worker(target, timeout):
             if domain in [None, 'WORKGROUP']:
                 # local account
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'mssql',
                     'url': mssqlscan.url(),
@@ -42,7 +42,7 @@ def bruteforce_worker(target, timeout):
                 DB.insert_credential(cred_info)
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'mssql',
                     'url': mssqlscan.url(),

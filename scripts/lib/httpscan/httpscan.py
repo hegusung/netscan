@@ -36,7 +36,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
             output['target'] = httpscan.url(target['path'], params=target['params'] if 'params' in target else None)
             Output.write(output)
             db_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -64,7 +64,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
             # Insert http info
             # TODO: insert redirection url also if there is one
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',

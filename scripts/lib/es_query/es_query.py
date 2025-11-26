@@ -10,6 +10,11 @@ from utils.output import Output
 from lib.es_query.bloodhound import *
 from lib.es_query.bloodhound_utils import *
 
+from lib.adscan.ou import OU
+
+from lib.adscan.accesscontrol import sid_name_dict
+from lib.adscan.gpo_parser import applocker_rules_to_string
+
 #from utils.utils import open
 
 output = []
@@ -61,7 +66,7 @@ service_nmap_translate = {
 def pprint(output_list):
     init()
 
-    COLUMN_1_LENGTH = 15
+    COLUMN_1_LENGTH = 20
     COLUMN_2_LENGTH = 60
     COLUMN_3_LENGTH = 30
 
@@ -471,6 +476,8 @@ def export_domain_hashes(session, output_dir):
         username = "%s\\%s" % (source['domain'], source['username'])
 
         enabled_users.append(username)
+
+    # NTLM
         
     query = {
       "query": {
@@ -513,6 +520,90 @@ def export_domain_hashes(session, output_dir):
         count += 1
 
     output.append(("Domain hashes", hashfile_filename, count,  "hashes written"))
+
+    # ASREPROASTING
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "krb5asrep" }},
+            { "match": { "session.keyword": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    hashfile_filename = os.path.join(output_dir, '%s_domain_username_krb5asrep_hash_enabled.txt' % session)
+    hashfile_file = open(hashfile_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    processed = []
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        if username in enabled_users:
+            if not username in processed:
+                hashfile_file.write('%s\n' % (source['hash'],))
+                processed.append(username)
+
+    hashfile_file.close()
+    # Make files unique
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
+    count = 0
+    for _ in open(hashfile_filename):
+        count += 1
+
+    output.append(("krb5asrep", hashfile_filename, count,  "hashes written"))
+
+    # KERBEROASTING
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "krb5tgs" }},
+            { "match": { "session.keyword": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    hashfile_filename = os.path.join(output_dir, '%s_domain_username_krb5tgs_hash_enabled.txt' % session)
+    hashfile_file = open(hashfile_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    processed = []
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        if username in enabled_users:
+            if not username in processed:
+                hashfile_file.write('%s\n' % (source['hash'],))
+                processed.append(username)
+
+    hashfile_file.close()
+    # Make files unique
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
+    count = 0
+    for _ in open(hashfile_filename):
+        count += 1
+
+    output.append(("krb5tgs", hashfile_filename, count,  "hashes written"))
 
 
 def export_local_hashes(session, output_dir):
@@ -582,23 +673,241 @@ def export_bloodhound(session, output_dir):
 
     user_info, user_sid, group_sid = get_user_group_data(session)
 
+    containedby_dict = generate_containedby(session)
+
     domains, domain_fqdn_to_name, domain_name_to_sid, output = export_bloodhound_domains(session, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output)
 
-    output = export_bloodhound_containers(session, domain_name_to_sid, output_dir, output)
+    output = export_bloodhound_containers(session, domain_name_to_sid, output_dir, containedby_dict, output)
 
-    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output)
+    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, containedby_dict, output)
 
-    output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
+    output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, containedby_dict, output)
 
     output = export_bloodhound_gpos(session, domain_name_to_sid, output_dir, output)
 
-    #group_sid = get_group_sid(session)
+    domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, containedby_dict, output)
 
-    domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, output)
+    output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, containedby_dict, output)
 
-    output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, output)
+    # ADCS
+
+    output = export_bloodhound_ntauthstores(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_rootcas(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_aiacas(session, output_dir, domains, containedby_dict, output)
+    output, templates = export_bloodhound_certificate_templates(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_enrollment_services(session, output_dir, domains, templates, containedby_dict, output)
+
 
     pprint(output)
+
+def enrich_gpos(session):
+
+    # Process computer objects
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    computer_dict = {}
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d computers" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        computer_dict[source['sid']] = source['dns']
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "bool": {
+                "should": [
+                  { "match": { "doc_type.keyword": "domain_ou" } },
+                  { "match": { "doc_type.keyword": "domain" } }
+                ]
+              }
+            },
+            { "match": { "session.keyword": session } }
+          ],
+          "filter": []
+        }
+      }
+    }
+
+    affected_computer_dict = {}
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d OUs & domains" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if 'sid' in source:
+            sid = source['sid']
+        else:
+            sid = source['domain_sid']
+
+        affected_computers = []
+        affected_computers_sids = list(set([item['ObjectIdentifier'] for item in get_affected_computers(session, source['dn'], sid)]))
+        for computer_sid in affected_computers_sids:
+            if computer_sid in computer_dict:
+                affected_computers.append(computer_dict[computer_sid])
+            else:
+                affected_computers.append(computer_sid)
+
+        links = []
+        if 'links' in source:
+            links = source['links']
+        elif 'gplink' in source:
+            for l in str(source['gplink']).split(']'):
+                if len(l) == 0:
+                    continue
+                # Remove initial [
+                l = l[1:]
+                # Take after ://
+                l = l.split('://')[-1]
+                # Take before ;
+                status = l.split(';')[1]
+                link = l.split(';')[0]
+
+                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
+                if status in ['1', '3']:
+                    continue
+
+                links.append(link.lower())
+
+        for link in links:
+            if link in affected_computer_dict:
+                affected_computer_dict[link] += affected_computers
+            else:
+                affected_computer_dict[link] = affected_computers
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+ 
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_gpochange"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d GPO changes" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if source['dn'].lower() in affected_computer_dict:
+
+            affected_computers = list(set(affected_computer_dict[source['dn'].lower()]))
+            source['affected_computers'] = affected_computers
+
+            # Update description for add_members GPOChanges
+            if source['type'] == 'add_members':
+                localgroup_sid = source['group']
+                if localgroup_sid in OU.privileged_sid_dict:
+                    localgroup_name = OU.privileged_sid_dict[localgroup_sid]
+                else:
+                    localgroup_name = localgroup_sid
+               
+                object_sid_list = source['members']
+                object_name_list = []
+                for object_sid in object_sid_list:
+                    obj = get_object_from_sid(session, object_sid)
+                    if obj:
+                        if 'username' in obj:
+                            name = obj['username']
+                        elif 'groupname' in obj:
+                            name = obj['groupname']
+                        elif 'hostname' in obj:
+                            name = obj['hostname']
+                        else:
+                            name = obj['sid'] # Fallback... 
+
+                        object_name_list.append("%s@%s" % (name, obj['domain']))
+                    else:
+                        object_name_list.append(object_sid)
+
+                source['action_display'] = "Adds %s as members of group %s" % (", ".join(object_name_list), localgroup_name)
+            elif source['type'] == 'applocker':
+                applocker_rules = source['applocker']
+
+                for section, info in applocker_rules.items():
+                    for rule in info['rules']:
+                        sid = rule['sid']
+
+                        if sid in sid_name_dict:
+                            rule['sid'] = sid_name_dict[sid]
+                        elif sid in OU.privileged_sid_dict:
+                            rule['sid'] = OU.privileged_sid_dict[sid]
+                        else:
+                            obj = get_object_from_sid(session, sid)
+                            if obj:
+                                if 'username' in obj:
+                                    name = obj['username']
+                                elif 'groupname' in obj:
+                                    name = obj['groupname']
+                                elif 'hostname' in obj:
+                                    name = obj['hostname']
+                                else:
+                                    name = obj['sid'] # Fallback... 
+
+                                rule['sid'] = name
+
+                source['action_display'] = applocker_rules_to_string(applocker_rules)
+
+            Output.highlight("Updating GPO %s" % source['gpo_name'])
+            DB.send(source)
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+   
+
 
 def get_gpos_admins(session):
     links_dict, links_effect = get_gpos_links(session)

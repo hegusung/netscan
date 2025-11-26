@@ -28,7 +28,7 @@ def rdpscan_worker(target, actions, creds, timeout):
 
                 Output.write({'target': rdp.url(), 'message': 'RDP protocol: %s' % rdp_info['hostname']})
                 DB.insert_port({
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'rdp',
@@ -39,7 +39,7 @@ def rdpscan_worker(target, actions, creds, timeout):
             except ConnectionResetError:
                 Output.write({'target': rdp.url(), 'message': 'RDP Protocol'})
                 DB.insert_port({
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'rdp',
@@ -69,7 +69,7 @@ def rdpscan_worker(target, actions, creds, timeout):
                         # local account
                         if password:
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'rdp',
                                 'url': rdp.url(),
@@ -79,7 +79,7 @@ def rdpscan_worker(target, actions, creds, timeout):
                             }
                         else:
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'rdp',
                                 'url': rdp.url(),

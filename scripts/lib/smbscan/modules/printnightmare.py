@@ -79,7 +79,7 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerbe
         return
 
     vuln_info = {
-        'hostname': ip,
+        'host': ip,
         'port': port,
         'service': 'smb',
         'url': 'smb://%s:%d' % (ip, port),

@@ -113,7 +113,7 @@ class Module:
                 Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to Apache Tomcat RCE (CVE-2017-12617)' % self.name})
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'http',
                     'url': http.url(target['path']),
@@ -129,7 +129,7 @@ class Module:
                 continue
 
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -163,7 +163,7 @@ class Module:
                             Output.success({'target': http.url(os.path.join(target['path'], url)), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(os.path.join(target['path'], url)),
@@ -175,7 +175,7 @@ class Module:
                             DB.insert_credential(cred_info)
 
                             vuln_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(os.path.join(target['path'], url)),

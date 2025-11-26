@@ -54,7 +54,7 @@ def tlsscan_worker(target, tls_config, timeout):
         if res.scan_result.certificate_info.result != None:
             certificate_domain = res.scan_result.certificate_info.result.hostname_used_for_server_name_indication
         else:
-            certificate_domain = "<No domain>
+            certificate_domain = "<No domain>"
 
         mozilla_checker = MozillaTlsConfigurationChecker.get_default()
         try:
@@ -76,7 +76,7 @@ def tlsscan_worker(target, tls_config, timeout):
             for criteria, error_description in e.issues.items():
                 Output.vuln({'target': 'ssl://%s:%d' % (target['hostname'], target['port']), 'message': '  - %s: %s' % (criteria, error_description)}) 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'ssl',
                     'url': 'ssl://%s:%d' % (target['hostname'], target['port']),
