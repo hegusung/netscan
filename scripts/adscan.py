@@ -42,6 +42,7 @@ def main():
     user_group.add_argument("--passpol", action='store_true', help='dump password policy from the Active Directory')
     user_group.add_argument("--trusts", action='store_true', help='dump trusts from the Active Directory')
     user_group.add_argument("--gpos", action='store_true', help='dump GPOs from the Active Directory (Bloodhound)', dest='gpos')
+    user_group.add_argument('--search', metavar='keyword', nargs='?', help='Search for secrets, set a keyword for keyword search or use the regex file (no args) in files mentionned in GPOs', default=None, const='', dest='search')
     user_group.add_argument("--list-groups", metavar='username', type=str, nargs='?', help='List groups of a specific user / group', default=None, const='', dest='list_groups')
     user_group.add_argument("--list-users", metavar='groupname', type=str, nargs='?', help='List users of a specific group', default=None, dest='list_users')
     user_group.add_argument("--constrained-delegation", action='store_true', help='List constrained delegations', dest='constrained_delegation')
@@ -204,7 +205,7 @@ def main():
     if args.trusts:
         actions['trusts'] = {}
     if args.gpos:
-        actions['gpos'] = {}
+        actions['gpos'] = {'search': args.search}
 
     if args.adcs:
         actions['casrv'] = {}

@@ -4,6 +4,9 @@ import impacket
 from impacket.smbconnection import SessionError
 from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
 
+from lib.smbscan.smb import SMBScan
+from lib.search_secret.search_secret import SearchSecret
+
 class GPOParser:
 
     def __init__(self, smb, ldap, dn, gpcpath):
@@ -26,11 +29,11 @@ class GPOParser:
             "D": "delete",
         }
 
-    def parse_gpo_files(self):
+    def parse_gpo_files(self, search=None):
 
         self.resolve_local_admin_changes()
         
-        self.resolve_script_changes()
+        self.resolve_script_changes(search)
 
         self.resolve_registry_changes()
         self.resolve_environment_changes()
@@ -40,7 +43,7 @@ class GPOParser:
 
         self.resolve_scheduledtasks_changes()
 
-        self.resolve_files_changes()
+        self.resolve_files_changes(search)
         self.resolve_folder_changes()
         self.resolve_inifiles_changes()
         self.resolve_lnk_changes()
@@ -48,25 +51,73 @@ class GPOParser:
         self.resolve_registry_pol()
 
     def get_file(self, path):
-
         share_pattern = re.compile("\\\\\\\\([^\\\\]+)\\\\([^\\\\]+)(\\\\.*)")
-        m = share_pattern.match(self.gpcpath)
 
-        if m:
-            tid = self.smb.conn.connectTree(m.group(2))
+        try:
 
-            try:
-                file_path = m.group(3) + "\\" + path
-                #print(file_path)
-                fid = self.smb.conn.openFile(tid, file_path, desiredAccess=FILE_READ_DATA)
-                file_data = self.smb.conn.readFile(tid, fid)
-                self.smb.conn.closeFile(tid, fid)
-            except SessionError:
-                file_data = None
+            if not path.lower().startswith("\\\\"):
+                m = share_pattern.match(self.gpcpath)
 
-            return file_data
-        else:
-            return None
+                if m:
+                    tid = self.smb.conn.connectTree(m.group(2))
+
+                    try:
+                        file_path = m.group(3) + "\\" + path
+                        #print(file_path)
+                        fid = self.smb.conn.openFile(tid, file_path, desiredAccess=FILE_READ_DATA)
+                        file_data = self.smb.conn.readFile(tid, fid)
+                        self.smb.conn.closeFile(tid, fid)
+                    except SessionError:
+                        file_data = None
+
+                    return file_data
+
+            else:
+                sysvol_pattern = re.compile("\\\\\\\\[Ss][Yy][Ss][Vv][Oo][Ll]\\\\(\\\\.*)")
+                m2 = sysvol_pattern.match(path)
+
+                if m2:
+                    tid = self.smb.conn.connectTree("SYSVOL")
+
+                    try:
+                        file_path = m2.group(1)
+                        #print(file_path)
+                        fid = self.smb.conn.openFile(tid, file_path, desiredAccess=FILE_READ_DATA)
+                        file_data = self.smb.conn.readFile(tid, fid)
+                        self.smb.conn.closeFile(tid, fid)
+                    except SessionError:
+                        file_data = None
+
+                    return file_data
+                else:
+                    # Check if the provided path is just a standard \\server\share\path
+                    m = share_pattern.match(path)
+
+                    if m:
+                        smb = SMBScan(m.group(1), 445, self.smb.timeout)
+                        success = smb.connect()
+
+                        if success:
+                            success, _ = smb.auth(**self.smb.creds)
+
+                            if success:
+                                tid = smb.conn.connectTree(m.group(2))
+
+                                try:
+                                    file_path = m.group(3)
+
+                                    fid = smb.conn.openFile(tid, file_path, desiredAccess=FILE_READ_DATA)
+                                    file_data = smb.conn.readFile(tid, fid)
+                                    smb.conn.closeFile(tid, fid)
+                                except SessionError:
+                                    file_data = None
+
+                                return file_data
+
+        except impacket.nmb.NetBIOSTimeout:
+            pass
+
+        return None
 
     def list_files(self, path):
 
@@ -79,12 +130,13 @@ class GPOParser:
 
             for file in self.smb.conn.listPath(m.group(2), file_path + '\\*'):
                 filename = file.get_longname()
+                size = file.get_filesize()
 
                 if filename in ['.', '..']:
                     continue
 
-                filepath = "\\\\%s\\%s\\%s\\%s" % (m.group(2), m.group(3), path, filename)
-                contents.append(filepath)
+                filepath = "\\\\%s\\%s\\%s\\%s\\%s" % (m.group(1), m.group(2), m.group(3), path, filename)
+                contents.append((filepath, size))
 
         except SessionError:
             pass
@@ -92,10 +144,51 @@ class GPOParser:
             pass
         except BrokenPipeError:
             pass
+        except impacket.nmb.NetBIOSTimeout:
+            pass
 
         return contents
 
-    def resolve_script_changes(self):
+    def list_shared_files(self, path):
+
+        share_pattern = re.compile("\\\\\\\\([^\\\\]+)\\\\([^\\\\]+)(\\\\.*)")
+        m = share_pattern.match(path)
+
+        contents = []
+        try:
+            if m:
+                smb = SMBScan(m.group(1), 445, self.smb.timeout)
+                success = smb.connect()
+
+                if success:
+                    success, _ = smb.auth(**self.smb.creds)
+
+                    for file in smb.conn.listPath(m.group(2), m.group(3)):
+                        filename = file.get_longname()
+                        size = file.get_filesize()
+
+                        if filename in ['.', '..']:
+                            continue
+
+                        if '*' in m.group(3):
+                            filepath = "\\\\%s\\%s\\%s\\%s" % (m.group(1), m.group(2), m.group(3).split('*')[0], filename)
+                        else:
+                            filepath = "\\\\%s\\%s\\%s" % (m.group(1), m.group(2), m.group(3))
+                        contents.append((filepath, size))
+
+        except SessionError:
+            pass
+        except impacket.nmb.NetBIOSError:
+            pass
+        except BrokenPipeError:
+            pass
+        except impacket.nmb.NetBIOSTimeout:
+            pass
+
+        return contents
+
+
+    def resolve_script_changes(self, search):
         for path in ["User\\Scripts\\Logon", "User\\Scripts\\Logoff", "Machine\\Scripts\\Startup", "Machine\\Scripts\\Shutdown"]:
             files = self.list_files(path)
 
@@ -103,6 +196,9 @@ class GPOParser:
                 continue
 
             for file in files:
+                file_size = file[1]
+                file = file[0]
+
                 script_type = path.split('\\')[-1].lower()
 
                 self.gpo_changes.append({
@@ -110,6 +206,17 @@ class GPOParser:
                     "file": file,
                     "action": "Executing %s script at path %s" % (script_type, file)
                 })
+
+                if search != None:
+                    ss = SearchSecret(keyword=search)
+
+                    to_search = ss.to_check(file, file_size)
+
+                    if to_search:
+                        file_data = self.get_file(file)
+
+                        if file_data != None:
+                            ss.search_secret(file.split('\\')[-1], file, file_data, {})
 
 
     def resolve_registry_changes(self):
@@ -147,7 +254,7 @@ class GPOParser:
                                 "action": "%s registry key %s\\%s with name \"%s\" and value \"%s\"" % (action.title(), hive, key, name, value)
                             })
 
-    def resolve_files_changes(self):
+    def resolve_files_changes(self, search):
         for path in ["User", "Machine"]:
             file_data = self.get_file(path + "\\Preferences\\Files\\Files.xml")
 
@@ -178,6 +285,22 @@ class GPOParser:
                                 "dstfile": dstfile,
                                 "action": "%s file. Copied from file \"%s\" to \"%s\"" % (action.title(), srcfile, dstfile)
                             })
+
+                            if srcfile != None and srcfile.startswith('\\\\'):
+                                ss = SearchSecret(keyword=search)
+
+                                for file in self.list_shared_files(srcfile):
+                                    file_size = file[1]
+                                    file = file[0]
+                                    print("> %s" % file)
+
+                                    to_search = ss.to_check(file, file_size)
+
+                                    if to_search:
+                                        file_data = self.get_file(file)
+                                        
+                                        if file_data != None:
+                                            ss.search_secret(file.split('\\')[-1], file, file_data, {})
 
     def resolve_folder_changes(self):
         for path in ["User", "Machine"]:
@@ -627,7 +750,12 @@ class GPOParser:
                 for e in registry_data:
                     # Firewall
                     if e.key.lower() == "software\\policies\\microsoft\\windowsfirewall\\firewallrules":
-                        firewall_data.append(e.decoded)
+                        if type(e.decoded) == bytes:
+                            data = e.decoded.decode()
+                        else:
+                            data = e.decoded
+
+                        firewall_data.append(data)
                     if e.key.lower().startswith("software\\policies\\microsoft\\windows\\srpv2\\"):
                         parts = e.key.split("\\")
                         if len(parts) > 5:
@@ -639,7 +767,8 @@ class GPOParser:
                                 }
 
                             if len(parts) == 6:
-                                applocker_data[section][e.value_name] = e.decoded
+                                if len(e.value_name) != 0:
+                                    applocker_data[section][e.value_name] = e.decoded
                             else:
 
                                 applocker_rule = {}
@@ -713,7 +842,7 @@ def applocker_rules_to_string(rules):
             if key == 'rules':
                 continue
 
-            applocker_str += " - %s: %d\n" % (key, value)
+            applocker_str += " - %s: %s\n" % (key, str(value))
 
         applocker_str += " - Rules:\n"
         for rule in content['rules']:

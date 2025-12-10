@@ -759,6 +759,7 @@ def enrich_gpos(session):
     }
 
     affected_computer_dict = {}
+    TEST = 0
 
     count = Elasticsearch.count(query)
     Output.write("Processing %d OUs & domains" % count)
@@ -777,6 +778,7 @@ def enrich_gpos(session):
 
         affected_computers = []
         affected_computers_sids = list(set([item['ObjectIdentifier'] for item in get_affected_computers(session, source['dn'], sid)]))
+
         for computer_sid in affected_computers_sids:
             if computer_sid in computer_dict:
                 affected_computers.append(computer_dict[computer_sid])
@@ -805,17 +807,16 @@ def enrich_gpos(session):
                 links.append(link.lower())
 
         for link in links:
-            if link in affected_computer_dict:
-                affected_computer_dict[link] += affected_computers
-            else:
-                affected_computer_dict[link] = affected_computers
+            if not link in affected_computer_dict:
+                affected_computer_dict[link] = []
+
+            affected_computer_dict[link] += affected_computers
 
         pg.update(1)
         c += 1
 
     pg.close()
 
- 
     query = {
       "query": {
         "bool": {
@@ -839,65 +840,71 @@ def enrich_gpos(session):
     for item in res:
         source = item['_source']
 
+        update = False
         if source['dn'].lower() in affected_computer_dict:
 
             affected_computers = list(set(affected_computer_dict[source['dn'].lower()]))
+
+            update = True
             source['affected_computers'] = affected_computers
 
-            # Update description for add_members GPOChanges
-            if source['type'] == 'add_members':
-                localgroup_sid = source['group']
-                if localgroup_sid in OU.privileged_sid_dict:
-                    localgroup_name = OU.privileged_sid_dict[localgroup_sid]
-                else:
-                    localgroup_name = localgroup_sid
-               
-                object_sid_list = source['members']
-                object_name_list = []
-                for object_sid in object_sid_list:
-                    obj = get_object_from_sid(session, object_sid)
-                    if obj:
-                        if 'username' in obj:
-                            name = obj['username']
-                        elif 'groupname' in obj:
-                            name = obj['groupname']
-                        elif 'hostname' in obj:
-                            name = obj['hostname']
-                        else:
-                            name = obj['sid'] # Fallback... 
-
-                        object_name_list.append("%s@%s" % (name, obj['domain']))
+        # Update description for add_members GPOChanges
+        if source['type'] == 'add_members':
+            localgroup_sid = source['group']
+            if localgroup_sid in OU.privileged_sid_dict:
+                localgroup_name = OU.privileged_sid_dict[localgroup_sid]
+            else:
+                localgroup_name = localgroup_sid
+           
+            object_sid_list = source['members']
+            object_name_list = []
+            for object_sid in object_sid_list:
+                obj = get_object_from_sid(session, object_sid)
+                if obj:
+                    if 'username' in obj:
+                        name = obj['username']
+                    elif 'groupname' in obj:
+                        name = obj['groupname']
+                    elif 'hostname' in obj:
+                        name = obj['hostname']
                     else:
-                        object_name_list.append(object_sid)
+                        name = obj['sid'] # Fallback... 
 
-                source['action_display'] = "Adds %s as members of group %s" % (", ".join(object_name_list), localgroup_name)
-            elif source['type'] == 'applocker':
-                applocker_rules = source['applocker']
+                    object_name_list.append("%s@%s" % (name, obj['domain']))
+                else:
+                    object_name_list.append(object_sid)
 
-                for section, info in applocker_rules.items():
-                    for rule in info['rules']:
-                        sid = rule['sid']
+            update = True
+            source['action_display'] = "Adds %s as members of group %s" % (", ".join(object_name_list), localgroup_name)
+        elif source['type'] == 'applocker':
+            applocker_rules = source['applocker']
 
-                        if sid in sid_name_dict:
-                            rule['sid'] = sid_name_dict[sid]
-                        elif sid in OU.privileged_sid_dict:
-                            rule['sid'] = OU.privileged_sid_dict[sid]
-                        else:
-                            obj = get_object_from_sid(session, sid)
-                            if obj:
-                                if 'username' in obj:
-                                    name = obj['username']
-                                elif 'groupname' in obj:
-                                    name = obj['groupname']
-                                elif 'hostname' in obj:
-                                    name = obj['hostname']
-                                else:
-                                    name = obj['sid'] # Fallback... 
+            for section, info in applocker_rules.items():
+                for rule in info['rules']:
+                    sid = rule['sid']
 
-                                rule['sid'] = name
+                    if sid in sid_name_dict:
+                        rule['sid'] = sid_name_dict[sid]
+                    elif sid in OU.privileged_sid_dict:
+                        rule['sid'] = OU.privileged_sid_dict[sid]
+                    else:
+                        obj = get_object_from_sid(session, sid)
+                        if obj:
+                            if 'username' in obj:
+                                name = obj['username']
+                            elif 'groupname' in obj:
+                                name = obj['groupname']
+                            elif 'hostname' in obj:
+                                name = obj['hostname']
+                            else:
+                                name = obj['sid'] # Fallback... 
 
-                source['action_display'] = applocker_rules_to_string(applocker_rules)
+                            rule['sid'] = name
 
+            update = True
+            source['action_display'] = applocker_rules_to_string(applocker_rules)
+
+        if update == True:
             Output.highlight("Updating GPO %s" % source['gpo_name'])
             DB.send(source)
 
@@ -1366,7 +1373,7 @@ def parse_spns(session, output_dir):
     output = []
 
     spn_rules = {
-        "HTTP": {
+        "http": {
             "name": "HTTP",
             "default_port": None,
         },
@@ -1382,7 +1389,7 @@ def parse_spns(session, output_dir):
             "name": "FTP",
             "default_port": None,
         },
-        "MSSQLSvc": {
+        "mssqlsvc": {
             "name": "MSSQL",
             "default_port": 1433,
         },
@@ -1410,7 +1417,7 @@ def parse_spns(session, output_dir):
         source = item['_source']
 
         for spn in source['spns']:
-            spn_type = spn.split('/')[0]
+            spn_type = spn.split('/')[0].lower()
             spn_target = spn.split('/', 1)[1]
 
             if not spn_type in spn_dict:
@@ -1423,16 +1430,17 @@ def parse_spns(session, output_dir):
 
     for spn_type, spn_data in spn_rules.items():
         spn_list = []
-        for spn in spn_dict[spn_type]:
-            if "." in spn:
-                if spn_data["default_port"] != None:
-                    if not ":" in spn:
-                        spn = "%s:%d" % (spn, spn_data["default_port"])
-                    else:
-                        try:
-                            port = int(spn.split(":")[1])
-                        except ValueError:
-                            continue
+        if spn_type in spn_dict:
+            for spn in spn_dict[spn_type]:
+                if "." in spn:
+                    if spn_data["default_port"] != None:
+                        if not ":" in spn:
+                            spn = "%s:%d" % (spn, spn_data["default_port"])
+                        else:
+                            try:
+                                port = int(spn.split(":")[1])
+                            except ValueError:
+                                continue
 
                 spn_list.append(spn)
 

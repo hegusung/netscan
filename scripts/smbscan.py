@@ -38,7 +38,7 @@ def main():
     share_group.add_argument('--shares', action='store_true', help='List shares', dest='shares')
     share_group.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
     share_group.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
-    share_group.add_argument('--search', action='store_true', help='Search for secrets', dest='search')
+    share_group.add_argument('--search', metavar='keyword', nargs='?', help='Search for secrets, set a keyword for keyword search or use the regex file (no args)', default=None, const='', dest='search')
     share_group.add_argument('--get-file', metavar=('share', 'path'), type=str, nargs=2, help='Get a file in a shares folder.', default=None, dest='get_file')
     
     # Execution-related
@@ -160,8 +160,8 @@ def main():
         actions['list_shares'] = {}
     if args.get_file:
         actions['get_file'] = {'share': args.get_file[0], 'path': args.get_file[1]}
-    if args.search:
-        actions['search'] = {}
+    if args.search != None:
+        actions['search'] = {'keyword': args.search}
     if args.command:
         actions['command'] = {'command': args.command, 'method': args.exec_method, 'code_page': args.code_page}
     if args.powershell:

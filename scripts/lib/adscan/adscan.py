@@ -999,7 +999,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
             if 'gpos' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'GPOs:'})
                 if ldap_authenticated:
-                    for gpo in GPO.list_gpos(ldapscan, smbscan ):
+                    for gpo in GPO.list_gpos(ldapscan, smbscan, search=actions['gpos']['search']):
                         entry = gpo.to_json()
 
                         DB.insert_domain_gpo({

@@ -21,13 +21,13 @@ class GPO:
     }
 
     @classmethod
-    def list_gpos(self, ldap, smb):
+    def list_gpos(self, ldap, smb, search=None):
         schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
         sbase = "%s" % ldap.defaultdomainnamingcontext
         search_filter = '(objectCategory=groupPolicyContainer)'
 
         for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
-            gpo = GPO(ldap, smb, attr, schema_guid_dict)
+            gpo = GPO(ldap, smb, attr, schema_guid_dict, search=search)
 
             yield gpo
 
@@ -417,7 +417,7 @@ class GPO:
     # === GPO object ===
     # ==================
 
-    def __init__(self, ldap, smb, attr, schema_guid_dict):
+    def __init__(self, ldap, smb, attr, schema_guid_dict, search=None):
         self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
         self.domain_dn = ",".join(["DC=%s" % p for p in self.domain.split('.')])
         self.gpcpath = str(attr['gPCFileSysPath'])
@@ -439,7 +439,7 @@ class GPO:
 
         gpo_parser = GPOParser(smb, ldap, self.dn, self.gpcpath)
 
-        gpo_parser.parse_gpo_files()
+        gpo_parser.parse_gpo_files(search=search)
 
         self.gpo_effect = gpo_parser.gpo_effect
         self.gpo_changes = gpo_parser.gpo_changes

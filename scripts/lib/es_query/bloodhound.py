@@ -721,7 +721,7 @@ def export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, c
             'admincount': 'adminCount>0' in source['tags'],
             'samaccountname': source['username'],
             'description': source['comment'] if 'comment' in source else '',
-            'whencreated': int(source['created_date'] / 1000),
+            'whencreated': int(source['created_date'] / 1000) if 'created_date' in source and source['created_date'] else -1,
             'lastlogon': int(source['last_logon'] / 1000) if 'last_logon' in source and source['last_logon'] != None else -1,
             'lastlogontimestamp': int(source['last_logon_timestamp'] / 1000) if 'last_logon_timestamp' in source and source['last_logon_timestamp'] != None else -1,
             'pwdlastset':  int(source['last_password_change'] / 1000) if 'last_password_change' in source and source['last_password_change'] != None else -1,

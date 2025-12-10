@@ -345,7 +345,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                 if 'search' in actions:
                                     if db_info['type'] == 'file':
 
-                                        ss = SearchSecret()
+                                        ss = SearchSecret(keyword=actions['search']['keyword'])
                                         filename = content['name'].replace('\\','/').split('/')[-1]
                                         to_search = ss.to_check(filename, db_info['size'])
                                         if to_search:
