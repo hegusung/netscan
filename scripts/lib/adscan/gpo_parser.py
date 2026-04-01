@@ -659,6 +659,7 @@ class GPOParser:
 
                         if not groupSid:
                             if groupName:
+                                from lib.adscan.gpo import GPO as gpo_obj
                                 if groupName.lower() in gpo_obj.name_to_sid:
                                     groupSid = gpo_obj.name_to_sid[groupName.lower()]
 

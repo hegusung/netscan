@@ -25,6 +25,16 @@ class Module:
 
                 Output.highlight({'target': http.url(os.path.join(target['path'], uri)), 'message': '[%s] Actuator endpoint' % self.name})
 
+                vuln_info = {
+                    'host': target['hostname'],
+                    'port': target['port'],
+                    'service': 'http',
+                    'url': http.url(os.path.join(target['path'], uri)),
+                    'name': 'Actuator endpoint available',
+                    'description': 'Actuator endpoint is accessible at %s' % http.url(os.path.join(target['path'], uri)),
+                }
+                DB.insert_vulnerability(vuln_info)
+
             # With /actuator
             response = http.get(os.path.join(target['path'], 'actuator', uri))
 
@@ -32,5 +42,15 @@ class Module:
                 #data = json.loads(response['html'])
 
                 Output.highlight({'target': http.url(os.path.join(target['path'], 'actuator', uri)), 'message': '[%s] Actuator endpoint' % self.name})
+
+                vuln_info = {
+                    'host': target['hostname'],
+                    'port': target['port'],
+                    'service': 'http',
+                    'url': http.url(os.path.join(target['path'], uri)),
+                    'name': 'Actuator endpoint available',
+                    'description': 'Actuator endpoint is accessible at %s' % http.url(os.path.join(target['path'], uri)),
+                }
+                DB.insert_vulnerability(vuln_info)
 
 

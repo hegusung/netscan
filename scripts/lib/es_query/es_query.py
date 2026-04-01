@@ -1343,6 +1343,10 @@ def restore(session, input_file):
 
         document = json.loads(line)
 
+        # Allow old versions
+        if not 'host' in document and 'ip' in document:
+            document['host'] = document['ip']
+
         document['session'] = session
 
         DB.send(document)

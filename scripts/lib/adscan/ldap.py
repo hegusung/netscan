@@ -19,6 +19,7 @@ from impacket.ldap.ldaptypes import LDAP_SID
 from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
 from impacket.ldap.ldapasn1 import Scope
 from impacket.ldap.ldap import LDAPSearchError
+from OpenSSL.SSL import SysCallError
 from functools import partial
 
 import ldap3
@@ -255,7 +256,17 @@ class LDAPScan:
         def search_ldap():
             conn = self.get_impacket_connection()
 
-            conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, attributes=attributes, scope=scope, perRecordCallback=callback)
+            try:
+                conn.search(searchBase=search_base, searchFilter=search_filter, searchControls=search_controls, attributes=attributes, scope=scope, perRecordCallback=callback)
+            except LDAPSearchError as e:
+                if "noSuchObject" in str(e):
+                    Output.error("Unable to query: %s: %s" % (search_filter, str(e)))
+                elif "busy" in str(e):
+                    Output.error("LDAP server is busy: %s" % (str(e),))
+                else:
+                    raise e
+            except SysCallError as e
+                Output.error("Error: %s" % (str(e),))
 
             conn.close()
 

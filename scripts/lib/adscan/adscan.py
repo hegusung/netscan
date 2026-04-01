@@ -1198,34 +1198,6 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 else:
                     raise NotImplementedError('Dumping hosts through LDAP')
 
-            if 'vuln_gpos' in actions:
-                Output.highlight({'target': ldapscan.url(), 'message': 'Vulnerable GPOs:'})
-                if smb_authenticated and ldap_authenticated:
-                    share_pattern = re.compile("\\\\\\\\([^\\\\]+)\\\\([^\\\\]+)(\\\\.*)")
-
-                    for gpo in GPO.list_gpos(ldapscan):
-                        entry = gpo.to_json()
-
-                        gpo_path = entry['gpcpath']
-                        m = share_pattern.match(gpo_path)
-
-                        if m:
-                            tid = None
-                            fid = None
-                            try:
-                                tid = smbscan.conn.connectTree(m.group(2))
-                                fid = smbscan.conn.openFile(tid, m.group(3) + "\\GPT.INI", desiredAccess=FILE_READ_DATA | FILE_WRITE_DATA)
-                                smbscan.conn.closeFile(tid, fid)
-
-                                writable = True
-                            except impacket.smb.SessionError:
-                                writable = False
-                            except impacket.smbconnection.SessionError:
-                                writable = False
-
-                            if writable:
-                                Output.write({'target': ldapscan.url(), 'message': '- %s   %s' % (entry['name'].ljust(40), entry['gpcpath'])})
-
             if 'constrained_delegation' in actions:
                 Output.highlight({'target': ldapscan.url(), 'message': 'Constrained delegation:'})
                 if ldap_authenticated:

@@ -70,7 +70,6 @@ def main():
 
     # ACLs / ACEs
     acls_group = parser.add_argument_group("Enumerate ACLs/ACEs")
-    acls_group.add_argument("--vuln-gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory', dest='vuln_gpos')
     acls_group.add_argument("--acl", metavar='object', type=str, nargs='?', help='List the interesting ACLs of a specific object (LDAP DN, name or sid)', default=None, dest='acl')
 
     # Kerberos
@@ -216,8 +215,6 @@ def main():
     if args.cert_templates:
         actions['cert_templates'] = {}
 
-    if args.vuln_gpos:
-        actions['vuln_gpos'] = {}
     if args.acl != None:
         actions['acl'] = {'object': args.acl}
     if args.constrained_delegation:
