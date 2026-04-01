@@ -124,6 +124,7 @@ def smbscan_worker(target, actions, creds, timeout):
                     domain = ccache.principal.realm['data'].decode('utf-8')
                     principal = 'cifs/%s@%s' % (smb_info['hostname'].upper(), domain.upper())
                     ticket_creds = ccache.getCredential(principal)
+                    user = ''
                     if ticket_creds is not None:
                         user = ticket_creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
                     elif len(ccache.principal.components) > 0:
@@ -672,7 +673,7 @@ def smbscan_worker(target, actions, creds, timeout):
             if 'modules' in actions:
                 smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
             if 'bruteforce' in actions:
-                if 'username_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('username_file') is not None:
                     Output.highlight({'target': smbscan.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:

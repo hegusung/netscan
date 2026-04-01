@@ -206,7 +206,7 @@ class DB:
                     # 'host' is an Hostname, try to resolve
                     ip_list = resolve_hostname(doc['host'])
 
-                    if len(ip_list) == 0:
+                    if len(ip_list) != 0:
                         for ip in ip_list:
                             # insert hostname in DNS database
                             self.insert_dns({

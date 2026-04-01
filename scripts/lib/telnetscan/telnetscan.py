@@ -55,7 +55,7 @@ def telnetscan_worker(target, actions, creds, timeout):
                 Output.minor({'target': telnet.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
 
         if 'bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
+            if actions['bruteforce'].get('username_file') is not None:
                 Output.highlight({'target': telnet.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']

@@ -128,6 +128,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                     domain = ccache.principal.realm['data'].decode('utf-8')
                     principal = 'cifs/%s@%s' % (smb_info['hostname'].upper(), domain.upper())
                     ticket_creds = ccache.getCredential(principal)
+                    user = ''
                     if ticket_creds is not None:
                         user = ticket_creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
                     elif len(ccache.principal.components) > 0:
@@ -240,7 +241,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 except OpenSSL.SSL.SysCallError as e:
                     pass
             else:
-                Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAP'})
+                Output.minor({'target': "ldap://%s" % target['hostname'], 'message': 'LDAP: Unable to connect to LDAP'})
 
             if success:
                 ldap_available = True
@@ -1313,7 +1314,7 @@ def adscan_worker(target, actions, creds, ldap_protocol, python_ldap, timeout):
                 Output.highlight({'target': smbscan.url(), 'message': 'Dumping the TGT of the current user...'})
                 
                 if 'kerberos' in creds:
-                    output.error({'target': smbscan.url(), 'message': 'You are already specifying a ticket'})
+                    Output.error({'target': smbscan.url(), 'message': 'You are already specifying a ticket'})
                 else:
                     if 'password' in creds_smb:
                         kerberos = Kerberos(target['hostname'], domain, username=username, password=password)

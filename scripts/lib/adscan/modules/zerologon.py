@@ -33,7 +33,7 @@ class Module:
             vuln_info = {
                 'host': target['hostname'],
                 'port': 445,
-                'service': 'http',
+                'service': 'smb',
                 'url': 'smb://%s:%d' % (target['hostname'], 445),
                 'name': 'CVE-2020-1472 (ZeroLogon)',
                 'description': 'Server smb://%s:%d is vulnerable to CVE-2020-1472 (ZeroLogon)' % (target['hostname'], 445),

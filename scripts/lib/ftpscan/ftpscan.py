@@ -99,7 +99,7 @@ def ftpscan_worker(target, actions, creds, timeout, passive):
 
 
         if 'bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
+            if actions['bruteforce'].get('username_file') is not None:
                 # Try random creds
                 ftpscan = FTPScan(target['hostname'], target['port'], timeout)
                 rnd_user = gen_random_string()

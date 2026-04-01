@@ -265,7 +265,7 @@ class LDAPScan:
                     Output.error("LDAP server is busy: %s" % (str(e),))
                 else:
                     raise e
-            except SysCallError as e
+            except SysCallError as e:
                 Output.error("Error: %s" % (str(e),))
 
             conn.close()
@@ -384,7 +384,7 @@ class LDAPScan:
                 except OpenSSL.SSL.SysCallError as e:
                     pass
             else:
-                Output.minor({'target': ldapscan.url(), 'message': 'LDAP: Unable to connect to LDAP'})
+                Output.minor({'target': "ldap://%s" % self.hostname, 'message': 'LDAP: Unable to connect to LDAP'})
         else:
             ldap_conn = self
 

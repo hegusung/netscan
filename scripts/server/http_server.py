@@ -128,6 +128,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_PUT(self):
         if self.path.endswith('/'):
             self.send_response(405, "Method not allowed")
+            self.end_headers()
             return
         else:
             path = os.path.join(os.path.dirname(__file__), '..', '..', 'server_data', "files" + self.path)
@@ -135,6 +136,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             with open(path, 'wb') as f:
                 f.write(self.rfile.read(length))
         self.send_response(201, "File created")
+        self.end_headers()
 
     def deal_register_vuln_callback(self):
         remainbytes = int(self.headers['content-length'])
@@ -426,4 +428,4 @@ if __name__ == '__main__':
 
     print('Starting listrening server on http://%s:%d/' % (args.ip, args.port))
 
-    run(args.ip, args.port)
+    run_http_server(args.ip, args.port)

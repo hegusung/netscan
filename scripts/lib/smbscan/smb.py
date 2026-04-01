@@ -706,6 +706,7 @@ class SMBScan:
                 contents = self.conn.listPath(share, request_path)
             except UnicodeDecodeError as e:
                 Output.error({'target': self.url(), 'message': "Impacket decode error: Share:%s Path:%s" % (share, request_path)})
+                return
             except SessionError as e:
                 if 'STATUS_ACCESS_DENIED' not in str(e):
                     Output.write({'target': self.url(), 'message': "Failed listing files on share {} in directory {}: {}".format(share, path, e)})
@@ -814,11 +815,11 @@ class SMBScan:
                 Output.error({'target': self.url(), 'message': "Unknown execution method: %s" % method})
 
         if exec == None:
-            return None
+            return None, None
 
         output = exec.execute(command, get_output, code_page)
         if output == None:
-            return None
+            return None, None
         return output, method
 
     def enable_remoteops(self, regsecret=False):
@@ -1097,7 +1098,7 @@ class SMBScan:
             data = buf.getvalue()
         except UnicodeDecodeError:
             Output.error({'target': self.url(), 'message': "Error while reading file %s%s: UnicodeDecodeError" % (share, path)})
-
+            data = None
 
         return data
 

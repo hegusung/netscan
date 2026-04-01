@@ -73,7 +73,7 @@ def sshscan_worker(target, actions, creds, timeout):
             ssh_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
 
         if 'bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
+            if actions['bruteforce'].get('username_file') is not None:
                 Output.highlight({'target': ssh.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']
