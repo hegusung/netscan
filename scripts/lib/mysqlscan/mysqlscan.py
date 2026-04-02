@@ -102,7 +102,7 @@ def mysqlscan_worker(target, actions, creds, timeout):
 
 
         if 'bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
+            if actions['bruteforce'].get('username_file') is not None:
                 Output.highlight({'target': mysqlscan.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']

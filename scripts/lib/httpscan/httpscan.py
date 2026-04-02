@@ -119,7 +119,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
 
             if dir_bruteforce:
                 if not safe:
-                    Output.highlight({"target": httpscan.url(target['path']), "message": "Directory bruteforce aborted because this server will generate a lot of false positives"})
+                    Output.highlight({"target": httpscan.url(target['path']), "message": "Trying smart Directory bruteforce because otherwise this server will generate a lot of false positives"})
 
                     random_uri = os.path.join(target['path'], gen_random_string())
                     inexistant_url = []

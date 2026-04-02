@@ -23,6 +23,8 @@ class SSH:
 
             banner_raw = sock.recv(1024)
 
+            sock.close()
+
             if banner_raw[:3] == b"SSH":
                 try:
                     return banner_raw.decode().rstrip()
@@ -57,7 +59,7 @@ class SSH:
     def download_file(self, remote_path, local_path):
         # Function to download files on server
         sftp = paramiko.SFTPClient.from_transport(self.conn)
-        sftp.put(remote_path, local_path)
+        sftp.get(remote_path, local_path)
         sftp.close()
 
     def read_file(self, remote_path):

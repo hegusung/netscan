@@ -115,7 +115,7 @@ def rdpscan_worker(target, actions, creds, timeout):
                 rdp_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
 
             if 'bruteforce' in actions:
-                if 'username_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('username_file') is not None:
                     Output.highlight({'target': rdp.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:
@@ -134,15 +134,15 @@ def rdpscan_worker(target, actions, creds, timeout):
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
             if 'simple_bruteforce' in actions:
-                if 'username_file' in actions['simple_bruteforce'] != None:
+                if actions['simple_bruteforce'].get('username_file') is not None:
                     Output.highlight({'target': rdp.url(), 'message': 'Starting simple bruteforce:'})
 
                     if 'domain' in creds:
                         domain = creds['domain']
                     else:
                         domain = 'WORKGROUP'
-                    username_file = actions['bruteforce']['username_file']
-                    bruteforce_workers = actions['bruteforce']['workers']
+                    username_file = actions['simple_bruteforce']['username_file']
+                    bruteforce_workers = actions['simple_bruteforce']['workers']
 
                     # The generator will provide a username:password_list couple
                     gen = bruteforce_generator(target, domain, username_file, None, simple_bruteforce=True)

@@ -139,7 +139,7 @@ class HTTP:
                 pass
             elif len(auth) == 2:
                 # Get auth type
-                res = self.request(method, path, params, ssl_version, data, (), cookies, recurse, headers)
+                res = self.request(method, path, params, ssl_version, data, (), cookies, recurse-1, headers)
                 if not res:
                     return res
                 if not 'auth_type' in res:

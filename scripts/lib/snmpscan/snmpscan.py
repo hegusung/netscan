@@ -148,7 +148,7 @@ def snmpscan_worker(target, actions, creds, timeout):
 
         if actions:
             if 'bruteforce' in actions:
-                if 'community_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('community_file') is not None:
                     Output.highlight({'target': snmp.url(), 'message': 'Starting bruteforce:'})
 
                     community_file = actions['bruteforce']['community_file']

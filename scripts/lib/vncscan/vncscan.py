@@ -87,7 +87,7 @@ def vncscan_worker(target, actions, creds, timeout):
 
         if 'bruteforce' in actions:
             if "VNC Authentication" in vnc.supported_security_types:
-                if 'password_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('password_file') is not None:
                     Output.highlight({'target': vnc.url(), 'message': 'Starting bruteforce:'})
                     for password in open(actions['bruteforce']['password_file']):
                         password = password.strip()
@@ -115,8 +115,6 @@ def vncscan_worker(target, actions, creds, timeout):
         pass
     except OSError as e:
         pass
-    except ConnectionRefusedError as e:
-        Output.write({'target': vnc.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     except Exception as e:
         Output.write({'target': vnc.url(), 'message': '%s: %s\n%s' % (type(e), e, traceback.format_exc())})
     finally:

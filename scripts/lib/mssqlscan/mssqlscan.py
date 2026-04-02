@@ -220,7 +220,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
 
             if 'bruteforce' in actions:
-                if 'username_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('username_file') is not None:
                     Output.highlight({'target': mssqlscan.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:

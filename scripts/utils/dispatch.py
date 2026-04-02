@@ -192,3 +192,6 @@ def feedqueue_worker(target_gen, feed_queue, nb_workers, bulk_nb):
         pass
     except Exception as e:
         print("%s: %s" % (type(e), e))
+    finally:
+        for _ in range(nb_workers):
+            feed_queue.put(json.dumps(None))
