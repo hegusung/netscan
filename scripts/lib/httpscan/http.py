@@ -67,6 +67,12 @@ class HTTP:
 
         return response_data
 
+    def propfind(self, path, params=None, data=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
+
+        response_data = self.request('PROPFIND', path, params=params, data=data, ssl_version=ssl_version, auth=auth, cookies=cookies, headers=headers)
+
+        return response_data
+
     def put(self, path, data, params=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
         response_data = self.request('PUT', path, params=params, ssl_version=ssl_version, data=data, auth=auth, cookies=cookies, headers=headers)
 
@@ -320,6 +326,9 @@ class HTTP:
         return out
 
     def parse_title(self, html):
+        if html.startswith('<?xml'):
+            return 'N/A'
+
         soup = BeautifulSoup(html, 'html.parser')
         title = soup.find('title')
 
@@ -330,6 +339,9 @@ class HTTP:
             return 'N/A'
 
     def parse_forms(self, html):
+        if html.startswith('<?xml'):
+            return []
+
         soup = BeautifulSoup(html, 'html.parser')
 
         forms = []
@@ -370,6 +382,9 @@ class HTTP:
         return forms
 
     def parse_meta_refresh(self, html):
+        if html.startswith('<?xml'):
+            return None
+
         soup = BeautifulSoup(html, 'html.parser')
 
         result=soup.find("meta",attrs={"http-equiv":"Refresh"})
