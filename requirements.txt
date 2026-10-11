@@ -36,3 +36,4 @@ sslyze
 gssapi
 jinja2
 neo4j
+ipwhois

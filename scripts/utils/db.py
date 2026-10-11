@@ -36,6 +36,8 @@ es_ids = {
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
     'secret': 'secret_{session}_{filepath}_{line}',
     'snmp': 'snmp_{session}_{host}_{port}_{snmp_key}',
+    'whois_ip': 'whois_ip_{session}_{ip}',
+    'whois_domain': 'whois_domain_{session}_{domain}',
     # AD
     'domain': 'domain_domain_{session}_{domain}',
     'domain_container': 'domain_container_{session}_{domain}_{guid}',
@@ -508,6 +510,20 @@ class DB:
         snmp_doc = check_entry(snmp_doc, ['host', 'port', 'snmp_key', 'snmp_type', 'snmp_value'], [])
 
         self.send(snmp_doc)
+
+    @classmethod
+    def insert_whois_ip(self, whois_ip_doc):
+        whois_ip_doc['doc_type'] = 'whois_ip'
+        whois_ip_doc = check_entry(whois_ip_doc, ['ip', 'cidr', 'name', 'country'], [])
+
+        self.send(whois_ip_doc)
+
+    @classmethod
+    def insert_whois_domain(self, whois_domain_doc):
+        whois_domain_doc['doc_type'] = 'whois_domain'
+        whois_domain_doc = check_entry(whois_domain_doc, ['domain', 'registrar'], [])
+
+        self.send(whois_domain_doc)
 
     @classmethod
     def insert_domain_domain(self, domain_doc):
