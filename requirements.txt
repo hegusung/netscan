@@ -37,3 +37,4 @@ gssapi
 jinja2
 neo4j
 ipwhois
+mcp>=2,<3

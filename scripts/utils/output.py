@@ -9,6 +9,7 @@ from utils.config import Config
 import tqdm
 from tqdm import tqdm
 import configparser
+import json
 from jinja2 import Template
 
 # Sometimes tqdm hangs during write
@@ -144,6 +145,20 @@ class Output:
         return message
 
     @classmethod
+    def write_mcp_event(self, message):
+        """Optionally mirror pre-rendered output as JSON Lines for the MCP parent."""
+        event_file = os.environ.get('NETSCAN_MCP_EVENT_FILE')
+        if not event_file:
+            return
+        try:
+            event = copy.deepcopy(dict(message))
+            with open(event_file, 'a', encoding='utf-8') as output:
+                output.write(json.dumps(event, default=str, ensure_ascii=False) + '\n')
+        except (OSError, TypeError, ValueError):
+            # Structured capture must never make a scanner fail.
+            pass
+
+    @classmethod
     def output_worker(self, output_queue):
         try:
             while True:
@@ -174,6 +189,9 @@ class Output:
                     message_type = message['type']
                 else:
                     message_type = 'normal'
+
+                # Preserve the semantic event before logging/color rendering mutates it.
+                self.write_mcp_event(message)
 
                 # Log to a file before coloring
                 self.log(message, output_format)

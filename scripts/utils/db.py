@@ -135,6 +135,9 @@ class DB:
         self.es_file_storage = Config.config.get('Elasticsearch', 'document_storage_file')
         self.es_file_storage_enabled = False if Config.config.get('Elasticsearch', 'enable_file_storage') in ['false', 'False'] else True
         self.es_file_storage_count = 0
+        self.documents_processed = 0
+        self.documents_indexed = 0
+        self.documents_failed = 0
 
         # Check elasticsearch status
         if not self.nodb:
@@ -178,6 +181,21 @@ class DB:
                 Output.error('Some documents failed to insert into the database, they have been stored in a file')
                 Output.error('%d Documents has been written to the following file: %s' % (self.es_file_storage_count, self.es_file_storage))
                 Output.error('Please restore the data to an elasticsearch database using: ./es_query.py --restore %s' % (self.es_file_storage,))
+
+        result_file = os.environ.get('NETSCAN_MCP_DB_RESULT_FILE')
+        if result_file:
+            try:
+                with open(result_file, 'w', encoding='utf-8') as output:
+                    json.dump({
+                        'session': self.session,
+                        'persistence_disabled': self.nodb,
+                        'documents_processed': self.documents_processed,
+                        'documents_indexed': self.documents_indexed,
+                        'documents_failed': self.documents_failed,
+                        'documents_written_to_file': self.es_file_storage_count,
+                    }, output)
+            except OSError:
+                pass
 
 
     @classmethod
@@ -252,7 +270,12 @@ class DB:
                 insert = db_queue.get(True, 5)
                 if insert == None:
                     if len(inserts) > 0:
+                        batch_size = len(inserts)
                         error = Elasticsearch.insert_bulk(inserts)
+                        if error:
+                            self.documents_failed += batch_size
+                        else:
+                            self.documents_indexed += batch_size
                         if error and not self.es_file_storage_enabled:
                             # Backup in the file
                             f = open(normalize_path(self.es_file_storage), 'a')
@@ -273,6 +296,8 @@ class DB:
                 if not insert['doc_type'] in es_ids:
                     continue
 
+                self.documents_processed += 1
+
                 if self.es_file_storage_enabled:
                     f = open(normalize_path(self.es_file_storage), 'a')
                     insert_file = json.dumps(insert)
@@ -291,7 +316,12 @@ class DB:
                     inserts.append((document_id_hash, insert, append))
 
                     if len(inserts) >= MAX_BULK:
+                        batch_size = len(inserts)
                         error = Elasticsearch.insert_bulk(inserts)
+                        if error:
+                            self.documents_failed += batch_size
+                        else:
+                            self.documents_indexed += batch_size
                         if error and not self.es_file_storage_enabled:
                             # Backup in the file
                             f = open(normalize_path(self.es_file_storage), 'a')
@@ -307,7 +337,12 @@ class DB:
                         inserts = []
             except queue.Empty:
                 if len(inserts) > 0:
+                    batch_size = len(inserts)
                     error = Elasticsearch.insert_bulk(inserts)
+                    if error:
+                        self.documents_failed += batch_size
+                    else:
+                        self.documents_indexed += batch_size
                     if error and not self.es_file_storage_enabled:
                         # Backup in the file
                         f = open(normalize_path(self.es_file_storage), 'a')

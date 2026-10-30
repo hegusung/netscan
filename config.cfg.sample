@@ -11,6 +11,8 @@ username =
 password = 
 enable_file_storage = false
 document_storage_file = /tmp/es_file_storage.txt
+# Optional Elastic Agent Builder MCP endpoint used in agent handoff metadata
+mcp_url = http://127.0.0.1:5601/api/agent_builder/mcp
 
 [Neo4J]
 host = 127.0.0.1

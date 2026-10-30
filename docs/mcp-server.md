@@ -1,0 +1,223 @@
+# NetScan MCP server
+
+NetScan includes an MCP server that exposes its scanner commands as tools. Use it
+only for targets you are authorized to assess.
+
+The server exposes one strongly typed tool for every NetScan command, generated
+directly from that command's `argparse` declarations. Examples include:
+
+- `netscan_portscan`
+- `netscan_httpscan`
+- `netscan_smbscan`
+- `netscan_adscan`
+- `netscan_generate_payload`
+- `netscan_es_query`
+
+Types, arrays, enums, descriptions, and native defaults are included in each MCP
+input schema. Typed values are converted back to native CLI arguments internally.
+For example, a typed port scan call is:
+
+```json
+{
+  "targets": "192.0.2.0/24",
+  "port": [22, 80, 443],
+  "service_scan": true,
+  "workers": 20,
+  "nodb": false,
+  "mcp_timeout_seconds": 600
+}
+```
+
+Scanner tools return immediately with a background `scan_id`. Use the job tools
+to follow and collect a scan:
+
+```json
+{
+  "scan_id": "23af...",
+  "state": "queued",
+  "module": "portscan",
+  "output": {"resource_uri": "netscan://scans/23af.../output"},
+  "persistence_expected": true
+}
+```
+
+General-purpose tools are also available:
+
+- `netscan_status`: inspect configuration, policy, and typed tool names.
+- `netscan_context`: get the session, index, Elasticsearch reachability, and a
+  credential-safe Elastic MCP handoff.
+- `netscan_module_help`: get the native help for a command.
+- `netscan_list_scans`: list queued, active, and completed jobs.
+- `netscan_scan_status`: poll one job and its output progress.
+- `netscan_cancel_scan`: cancel a job and its complete subprocess group.
+- `netscan_scan_result`: get its semantic summary, findings, and persistence
+  metadata.
+- `netscan_scan_output`: page through retained terminal output.
+- `run_netscan`: enqueue a command using an argv-style list.
+
+Clients that support MCP resources can read the same output from
+`netscan://scans/{scan_id}/output`. Output is bounded by
+`NETSCAN_MCP_MAX_OUTPUT`, keeping server memory use predictable.
+
+Agents should prefer `netscan_<module>`. `run_netscan` remains useful as a
+compatibility escape hatch when a newly added or unusual CLI behavior cannot be
+represented by the generated schema.
+
+### Agent workflow with Elasticsearch
+
+NetScan is the collection layer. When an Elasticsearch MCP server is connected,
+agents should use it as the preferred analysis layer for persisted results:
+
+1. Call `netscan_status` and `netscan_context`, then select the appropriate typed
+   NetScan tool.
+2. Start the authorized scan without `--nodb` when its results need analysis.
+3. Poll `netscan_scan_status` using the returned `scan_id`, then retrieve
+   `netscan_scan_result` when it reaches a terminal state.
+4. Pass the result's `elasticsearch.analysis_handoff` to the Elasticsearch MCP
+   and inspect the configured index mapping.
+5. Scope every search, aggregation, or ES|QL query to the exact index and session
+   from the handoff so separate engagements are never mixed.
+6. Retrieve credentials, hashes, secrets, or recorded command lines only when the
+   operator explicitly requires them.
+
+The Elasticsearch MCP identity should be read-only and restricted to the NetScan
+index. If Elasticsearch MCP is unavailable, or a NetScan-specific export is
+needed, `netscan_es_query` remains available but must be used carefully because it
+also exposes destructive operations. A scan performed with `--nodb` has no results
+for Elasticsearch to analyze.
+
+### Nested scanner modules
+
+The module-capable commands (`adscan`, `httpscan`, `rdpscan`, `smbscan`, and
+`sshscan`) publish their nested modules as enums. Names and descriptions are
+extracted from each module's `Module` class, so adding a new module updates the
+MCP schema the next time the server starts.
+
+Select multiple modules with an array and use `module_args` only for positional
+arguments consumed by those modules:
+
+```json
+{
+  "targets": "192.0.2.10",
+  "modules": ["MS17-010", "PrintSpooler"],
+  "module_args": ["192.0.2.20"],
+  "nodb": true
+}
+```
+
+This is converted to the native form:
+
+```text
+-m MS17-010,PrintSpooler 192.0.2.20
+```
+
+Unknown module names are rejected by the MCP schema before NetScan starts, and
+`module_args` is rejected unless at least one module is selected.
+
+All user-facing NetScan commands are available, including commands that delete
+stored data, generate payloads, start listeners, or expose network services.
+Scan execution is disabled until the operator explicitly enables it. The allowlist
+is module-level: individual scanners may also offer brute-force, exploit, or
+remote-command options. Enable execution only for a trusted MCP host and set
+`NETSCAN_MCP_ALLOWED_MODULES` when a deployment should use a smaller subset.
+
+The server runs a bounded pool of background commands (four by default). Each
+scanner can still use NetScan's own worker concurrency. MCP cancellation and wall
+clock timeout terminate the scanner's complete process group. Completed jobs are
+held in memory for the life of the MCP process and evicted according to the
+configured retention limit; restarting the server clears all retained jobs.
+
+## Local stdio server
+
+Install the project as described in the main README and create `config.cfg`. The
+MCP SDK is included in `requirements.txt`. Configure an MCP host to launch:
+
+```json
+{
+  "mcpServers": {
+    "netscan": {
+      "command": "/absolute/path/to/netscan/.venv/bin/python",
+      "args": ["/absolute/path/to/netscan/scripts/netscan_mcp_server.py"],
+      "env": {
+        "NETSCAN_MCP_ENABLE_RUN": "true"
+      }
+    }
+  }
+}
+```
+
+Do not launch the stdio server through `./netscan`: launcher status messages are
+ordinary stdout and can corrupt an MCP stdio connection.
+
+To route supported TCP connections through proxychains, make proxychains the host
+command and put Python first in its arguments:
+
+```json
+{
+  "mcpServers": {
+    "netscan-proxied": {
+      "command": "proxychains4",
+      "args": [
+        "-q",
+        "/absolute/path/to/netscan/.venv/bin/python",
+        "/absolute/path/to/netscan/scripts/netscan_mcp_server.py"
+      ],
+      "env": {
+        "NETSCAN_MCP_ENABLE_RUN": "true",
+        "NETSCAN_MCP_ALLOWED_MODULES": "httpscan,sshscan,smbscan,portscan"
+      }
+    }
+  }
+}
+```
+
+Proxychains limitations still apply: raw sockets, ICMP, UDP, statically linked
+programs, and some subprocesses may bypass or be incompatible with it. SOCKS-aware
+scanner options should be preferred where a module provides them.
+
+## Streamable HTTP
+
+For a localhost MCP endpoint at `http://127.0.0.1:8765/mcp`:
+
+```bash
+NETSCAN_MCP_ENABLE_RUN=true .venv/bin/python scripts/netscan_mcp_server.py \
+  --transport streamable-http --host 127.0.0.1 --port 8765
+```
+
+The server refuses non-loopback binds unless
+`NETSCAN_MCP_ALLOW_REMOTE_HTTP=true` is set. That override does not add
+authentication; place any remote deployment behind an authenticated, encrypted
+reverse proxy.
+
+## Docker stdio server
+
+After building the normal NetScan image, an MCP host can launch it over stdio:
+
+```bash
+docker run --rm -i --network host \
+  --env NETSCAN_MCP_ENABLE_RUN=true \
+  --volume "$PWD/config.cfg:/app/config.cfg:ro" \
+  --entrypoint python \
+  netscan:latest /app/scripts/netscan_mcp_server.py
+```
+
+Use the same command and arguments in the MCP host configuration. `--entrypoint`
+bypasses the regular NetScan launcher so it cannot write status text to the MCP
+stdio channel.
+
+## Policy settings
+
+- `NETSCAN_MCP_ENABLE_RUN`: must be `true` to execute scans.
+- `NETSCAN_MCP_ALLOWED_MODULES`: comma-separated subset of scanner modules.
+- `NETSCAN_MCP_MAX_TIMEOUT`: maximum tool timeout in seconds; default `3600`.
+- `NETSCAN_MCP_MAX_OUTPUT`: maximum captured output bytes; default `200000`.
+- `NETSCAN_MCP_MAX_JOBS`: maximum concurrently running background commands;
+  default `4`.
+- `NETSCAN_MCP_JOB_RETENTION`: maximum recent job records retained in memory;
+  default `100` (active jobs are never evicted).
+- `NETSCAN_MCP_MAX_FINDINGS`: maximum structured findings retained per job;
+  default `200`. Summary counters still cover every captured event.
+- `NETSCAN_ELASTIC_MCP_URL`: optional override for the Elastic Agent Builder MCP
+  URL returned in analysis handoffs.
+- `NETSCAN_MCP_ALLOW_REMOTE_HTTP`: permits non-loopback HTTP binding but does not
+  provide authentication.
