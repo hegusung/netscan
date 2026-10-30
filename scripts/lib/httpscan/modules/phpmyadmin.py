@@ -57,7 +57,7 @@ class Module:
 
             if res and res['code'] in [200] and 'phpmyadmin' in res['title'].lower():
                 http_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'http',
@@ -89,7 +89,7 @@ class Module:
 
                 if not form:
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(url),
@@ -146,7 +146,7 @@ class Module:
                             Output.success({'target': http.url(url), 'message': '[%s] Authentication success to PhpMyAdmin with login %s and password %s' % (self.name, username, password)})
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(url),
@@ -158,7 +158,7 @@ class Module:
                             DB.insert_credential(cred_info)
 
                             vuln_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(url),

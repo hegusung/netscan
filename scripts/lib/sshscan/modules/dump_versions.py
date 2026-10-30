@@ -24,7 +24,7 @@ def check(hostname, port, user, password, timeout):
 
     if connected:
         doc = {
-            "hostname": hostname,
+            "host": hostname,
         }
 
         # Get hostname
@@ -38,7 +38,7 @@ def check(hostname, port, user, password, timeout):
             Output.minor({'target': 'ssh://%s:%d' % (hostname, port), 'message': '[DumpVersions] Unable to retrieve hostname, aborting module Dumpversions'})
             return
 
-        doc["host"] = host
+        doc["ssh_hostname"] = host
 
         # Command to get kernel info
         command = "uname -r"
@@ -82,8 +82,8 @@ def check(hostname, port, user, password, timeout):
                         pkg_version = line.split()[2]
 
                         doc = {
-                            "hostname": hostname,
-                            "host": host,
+                            "host": hostname,
+                            "ssh_hostname": host,
                             "pkg_name": pkg_name,
                             "pkg_version": pkg_version,
                         }
@@ -101,8 +101,8 @@ def check(hostname, port, user, password, timeout):
                     pkg_version = line.split()[1]
 
                     doc = {
-                        "hostname": hostname,
-                        "host": host,
+                        "host": hostname,
+                        "ssh_hostname": host,
                         "pkg_name": pkg_name,
                         "pkg_version": pkg_version,
                     }

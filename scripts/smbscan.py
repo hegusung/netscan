@@ -11,10 +11,12 @@ from server.payload_manager import PayloadManager
 from lib.smbscan.smbscan import smbscan_worker, smb_modules
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 
 def main():
-    parser = argparse.ArgumentParser(description='SMBScan')
+    parser = argparse.ArgumentParser(description='SMBScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     target_group = parser.add_argument_group("Targets")
     target_group.add_argument('targets', type=str, nargs='?')
     target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
@@ -36,26 +38,28 @@ def main():
     share_group.add_argument('--shares', action='store_true', help='List shares', dest='shares')
     share_group.add_argument('--list', metavar='share', type=str, nargs='?', help='List share content', const='list_all', default=None, dest='list')
     share_group.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=0, dest='recurse')
-    share_group.add_argument('--search', action='store_true', help='Search for secrets', dest='search')
+    share_group.add_argument('--search', metavar='keyword', nargs='?', help='Search for secrets, set a keyword for keyword search or use the regex file (no args)', default=None, const='', dest='search')
+    share_group.add_argument('--get-file', metavar=('share', 'path'), type=str, nargs=2, help='Get a file in a shares folder.', default=None, dest='get_file')
     
     # Execution-related
     cmd_group = parser.add_argument_group("Command execution (admin rights required)")
     cmd_group.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
     cmd_group.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
+    cmd_group.add_argument("--powershell", metavar="COMMAND", help="execute the specified command with powershell", dest='powershell')
     cmd_group.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
     cmd_group.add_argument("--list-payloads", action='store_true', help='List payloads', dest='list_payloads')
     cmd_group.add_argument("--code-page", metavar="CODEPAGE", help='System code page', default="cp850", dest='code_page')
     
     # Dump secrets
     secrets_group = parser.add_argument_group("Secrets dumping (admin rights required)")
-    secrets_group.add_argument("--sam", action='store_true', help='dump SAM hashes from target systems')
-    secrets_group.add_argument("--lsa", action='store_true', help='dump LSA secrets from target systems')
+    secrets_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs='?', const="regdump", help='dump SAM hashes from target systems')
+    secrets_group.add_argument("--lsa", choices={"regdump", "secdump"}, nargs='?', const="regdump", help='dump LSA secrets from target systems')
     
     # Enum
     enum_group = parser.add_argument_group("Enumerate the target")
     enum_group.add_argument("--users", action='store_true', help='dump users from target systems')
     enum_group.add_argument("--groups", action='store_true', help='dump groups from target systems')
-    enum_group.add_argument("--admins", action='store_true', help='dump admins from target systems')
+    enum_group.add_argument("--admins", action='store_true', help='dump admins from target systems (Bloodhound)')
     enum_group.add_argument("--apps", action='store_true', help='dump applications list from target systems')
     enum_group.add_argument("--processes", action='store_true', help='dump processes list from target systems')
     enum_group.add_argument("--passpol", action='store_true', help='dump password policy from target systems')
@@ -130,15 +134,15 @@ def main():
     else:
         if args.domain:
             creds['domain'] = args.domain
-        if args.username:
+        if args.username != None:
             creds['username'] = args.username
-        if args.password:
+        if args.password != None:
             creds['password'] = args.password
-        if args.hash:
+        if args.hash != None:
             creds['hash'] = args.hash
     if args.kerberos != None:
         if len(args.kerberos) != 0:
-            os.environ['KRB5CCNAME'] = args.kerberos
+            os.environ['KRB5CCNAME'] = normalize_path(args.kerberos)
         if not 'KRB5CCNAME' in os.environ:
             Output.error("Cannot use -k without KRB5CCNAME environment variable set")
             sys.exit()
@@ -154,17 +158,21 @@ def main():
             actions['list']['share'] = args.list
     if args.shares:
         actions['list_shares'] = {}
-    if args.search:
-        actions['search'] = {}
+    if args.get_file:
+        actions['get_file'] = {'share': args.get_file[0], 'path': args.get_file[1]}
+    if args.search != None:
+        actions['search'] = {'keyword': args.search}
     if args.command:
         actions['command'] = {'command': args.command, 'method': args.exec_method, 'code_page': args.code_page}
+    if args.powershell:
+        actions['powershell'] = {'powershell': args.powershell, 'method': args.exec_method, 'code_page': args.code_page}
     if args.payload:
         cmd = PayloadManager.generate_payload(args.payload[0], args.payload[1:])
         actions['command'] = {'command': cmd, 'method': args.exec_method, 'code_page': args.code_page}
     if args.lsa:
-        actions['lsa'] = {}
+        actions['lsa'] = {'lsa': args.lsa}
     if args.sam:
-        actions['sam'] = {}
+        actions['sam'] = {'sam': args.sam}
     if args.users:
         actions['users'] = {}
     if args.groups:

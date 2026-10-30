@@ -8,6 +8,8 @@ from threading import Thread
 from utils.config import Config
 import tqdm
 from tqdm import tqdm
+import configparser
+from jinja2 import Template
 
 # Sometimes tqdm hangs during write
 from utils.dispatch import pg_lock
@@ -31,6 +33,8 @@ RESET = "\033[0m"
 log_time_format = "%Y%m%d"
 
 class Output:
+    config = configparser.ConfigParser(interpolation=None)
+    config.read(os.path.join(os.path.dirname(sys.argv[0]), '../format.cfg'))
 
     @classmethod
     def setup(self):
@@ -98,13 +102,16 @@ class Output:
             script_name = os.path.basename(sys.argv[0]).split('.')[0]
             now = datetime.now()
 
-            log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), Config.config.get('Logging', 'folder'), "log_%s_%s.log" % (script_name, now.strftime(log_time_format)))
+            log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "..", Config.config.get('Logging', 'folder'), "log_%s_%s.log" % (script_name, now.strftime(log_time_format)))
 
             # remove all colors
             message['color'] = ''
             message['reset'] = ''
 
-            message = output_format.format(**message)
+            template = Template(output_format)
+            message = template.render(**message)
+
+            #message = output_format.format(**message)
 
             logfile = open(log_path, 'a')
             logfile.write(message + '\n')
@@ -113,7 +120,7 @@ class Output:
     @classmethod
     def color(self, message, message_type):
         try:
-            color = Config.config.get('Color', message_type)
+            color = self.config.get('Color', message_type)
         except KeyError:
             color = 'normal'
 
@@ -126,6 +133,10 @@ class Output:
 
         if len(color_pattern) == 0:
             color_pattern = color_dict['white']
+
+        # Add all colors
+        for color_name, value in color_dict.items():
+            message[color_name] = value
 
         message['color'] = color_pattern
         message['reset'] = RESET
@@ -148,16 +159,16 @@ class Output:
 
                 if not 'time' in message:
                     now = datetime.now()
-                    message['time'] = now.strftime(Config.config.get('Format', 'time'))
+                    message['time'] = now.strftime(self.config.get('Format', 'time'))
 
                 # Select the correct formatting
                 try:
-                    output_format = Config.config.get('Format', message['message_type'])
+                    output_format = self.config.get('Format', message['message_type'])
                 except KeyError:
                     if 'target' in message:
-                        output_format = Config.config.get('Format', 'target')
+                        output_format = self.config.get('Format', 'target')
                     else:
-                        output_format = Config.config.get('Format', 'default')
+                        output_format = self.config.get('Format', 'default')
      
                 if 'type' in message:
                     message_type = message['type']
@@ -170,7 +181,9 @@ class Output:
                 self.color(message, message_type)
 
                 # Remove control characters which breaks terminal
-                message = output_format.format(**message)
+                template = Template(output_format)
+                message = template.render(**message)
+                #message = output_format.format(**message)
                 message = ''.join([c if ord(c) not in [0x9d, 0x9e, 0x9f] else '\\x%x' % ord(c) for c in message])
 
                 tqdm.write(message)

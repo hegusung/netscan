@@ -1,5 +1,6 @@
 import traceback
 import socket
+import time
 from .ftp import FTPScan
 from .ftp_bruteforce import *
 
@@ -8,15 +9,16 @@ from utils.dispatch import dispatch
 from utils.utils import sizeof_fmt, gen_random_string
 from utils.db import DB
 
-def ftpscan_worker(target, actions, creds, timeout):
+def ftpscan_worker(target, actions, creds, timeout, passive):
     try:
-        ftpscan = FTPScan(target['hostname'], target['port'], timeout)
+        ftpscan = FTPScan(target['hostname'], target['port'], timeout, passive)
 
-        ftp_code, version = ftpscan.grab_banner()
+        #ftp_code, version = ftpscan.grab_banner()
+        ftp_code, version = ftpscan.connect()
         if ftp_code:
             Output.write({'target': ftpscan.url(), 'message': '%d   %s' % (ftp_code, version)})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'ftp',
@@ -31,7 +33,7 @@ def ftpscan_worker(target, actions, creds, timeout):
                 if 'username' in creds and 'password' in creds:
                     Output.success({'target': ftpscan.url(), 'message': 'Successful connection with credentials %s:%s' % (creds['username'], creds['password'])})
                     cred_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'ftp',
                         'url': ftpscan.url(),
@@ -44,7 +46,7 @@ def ftpscan_worker(target, actions, creds, timeout):
                 else:
                     Output.vuln({'target': ftpscan.url(), 'message': 'Successful anonymous connection'})
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'ftp',
                         'url': ftpscan.url(),
@@ -52,11 +54,6 @@ def ftpscan_worker(target, actions, creds, timeout):
                         'description': 'Anonymous account can connect to ftp service: %s' % ftpscan.url(),
                     }
                     DB.insert_vulnerability(vuln_info)
-            else:
-                if 'username' in creds and 'password' in creds:
-                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with credentials %s:%s' % (creds['username'], creds['password'])})
-                else:
-                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with anonymous credentials'})
 
                 if 'list' in actions:
                     try:
@@ -76,7 +73,7 @@ def ftpscan_worker(target, actions, creds, timeout):
 
                             # Add to database
                             content_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'url': ftpscan.url(),
                                 'service': 'ftp',
@@ -94,13 +91,22 @@ def ftpscan_worker(target, actions, creds, timeout):
                     except socket.timeout as e:
                         Output.error({'target': ftpscan.url(), 'message': 'Timeout while listing folder, do you have a firewall enabled ?'})
 
+            else:
+                if 'username' in creds and 'password' in creds:
+                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with credentials %s:%s' % (creds['username'], creds['password'])})
+                else:
+                    Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with anonymous credentials'})
+
 
         if 'bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
+            if actions['bruteforce'].get('username_file') is not None:
                 # Try random creds
                 ftpscan = FTPScan(target['hostname'], target['port'], timeout)
                 rnd_user = gen_random_string()
                 rnd_pass = gen_random_string()
+                # small delay to prevent errors
+                time.sleep(1)
+                ftpscan.connect()
                 success = ftpscan.auth(rnd_user, rnd_pass)
 
                 if success == True:
@@ -121,7 +127,8 @@ def ftpscan_worker(target, actions, creds, timeout):
                     args = (timeout,)
                     dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
-
+    except TimeoutError:
+        pass
     except ConnectionRefusedError:
         pass
     except Exception as e:

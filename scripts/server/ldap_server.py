@@ -26,9 +26,9 @@ class DetectVulnLDAPServer(LDAPServer):
 
             VulnCallback.check(vuln_id)
 
-        return
+        #LDAPServer.handle_LDAPSearchRequest(self, request, controls, reply)
 
-        LDAPServer.handle_LDAPSearchRequest(self, request, controls, reply)
+        return
 
 class Tree:
     def __init__(self):

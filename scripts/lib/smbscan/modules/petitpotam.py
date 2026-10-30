@@ -61,7 +61,7 @@ def check(ip, port, listener_ip, domain, username, password, ntlm_hash, do_kerbe
             Output.vuln({'target': 'smb://%s:%d' % (ip, port), 'message': '[PetitPotam] Vulnerable to CVE-2021-36942 (PetitPotam)'})
 
             vuln_info = {
-                'hostname': ip,
+                'host': ip,
                 'port': port,
                 'service': 'smb',
                 'url': 'smb://%s:%d' % (ip, port),

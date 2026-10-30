@@ -29,7 +29,7 @@ class Module:
                 continue
 
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -96,7 +96,7 @@ class Module:
                     Output.success({'target': http.url(login_url), 'message': '[%s] Authentication success to Axis2 with login %s and password %s' % (self.name, username, password)})
 
                     cred_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(login_url),
@@ -108,7 +108,7 @@ class Module:
                     DB.insert_credential(cred_info)
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(login_url),

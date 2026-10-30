@@ -112,7 +112,7 @@ class Module:
                 vuln_txt += " "*26 + "%s\n" % value
 
         vuln_info = {
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'service': 'http',
             'url': http.url(target['path']),

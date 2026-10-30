@@ -4,9 +4,11 @@ import argparse
 from utils.utils import normalize_path
 from server.payload_manager import PayloadManager
 from server.ressources import get_ressource_md5, list_ressources
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate payload')
+    parser = argparse.ArgumentParser(description='Generate payload', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument('-l', help='List available payloads', action='store_true', dest='list')
     parser.add_argument('-p', help='Use payload', type=str, nargs='+', dest='payload')
     parser.add_argument('-o', help='Output file', type=str, nargs='?', dest='output')

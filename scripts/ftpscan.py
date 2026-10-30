@@ -8,16 +8,18 @@ from utils.output import Output
 from lib.ftpscan.ftpscan import ftpscan_worker
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 
 
 def main():
-    parser = argparse.ArgumentParser(description='FTPScan')
+    parser = argparse.ArgumentParser(description='FTPScan, performs an anonymous authentication if no credentials provided', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='21', dest='port')
     parser.add_argument('--port-file', metavar='Port-file', nargs='?', type=port_file, help='Specify a port file', default=None, dest='port_file')
     parser.add_argument('-u', metavar='username', type=str, nargs='?', help='Username', default=None, dest='username')
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
+    parser.add_argument("--passive", action='store_true', help='Set FTP to passive mode')
     parser.add_argument('--list', action='store_true', help='List contents if auth success', dest='list')
     parser.add_argument('--recurse', metavar='number of times', nargs='?', type=int, help='Number of recursions during directory listing', default=3, dest='recurse')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
@@ -58,10 +60,12 @@ def main():
     if args.port_file:
         static_inputs['port'] += normalize_path(args.port_file)
 
+    passive = args.passive
+
     creds = {}
-    if args.username:
+    if args.username != None:
         creds['username'] = args.username
-    if args.password:
+    if args.password != None:
         creds['password'] = args.password
 
     actions = {}
@@ -71,14 +75,14 @@ def main():
         actions['bruteforce'] ={'username_file': normalize_path(args.username_file), 'password_file': normalize_path(args.password_file), 'workers': args.bruteforce_workers}
 
 
-    ftpscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
+    ftpscan(targets, static_inputs, passive, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
     DB.stop_worker()
     Output.stop()
 
 
-def ftpscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-    args = (actions, creds, timeout)
+def ftpscan(input_targets, static_inputs, passive, workers, actions, creds, timeout, delay, resume):
+    args = (actions, creds, timeout, passive)
     dispatch_targets(input_targets, static_inputs, ftpscan_worker, args, workers=workers, delay=delay, resume=resume)
 
 

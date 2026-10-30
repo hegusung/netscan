@@ -44,7 +44,7 @@ class Module:
             else:
                 # bruteforce login form
                 http_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'http',
@@ -125,7 +125,7 @@ class Module:
                         Output.success({'target': http.url(target['path']), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                         cred_info = {
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'port': target['port'],
                             'service': 'http',
                             'url': http.url(target['path']),
@@ -138,7 +138,7 @@ class Module:
             print(res)
             # bruteforce login form
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -173,7 +173,7 @@ class Module:
                             Output.success({'target': http.url(target['path']), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(target['path']),

@@ -29,6 +29,9 @@ def dir_bruteforce_generator(target, dir_file, extension_list):
         if len(dir_item) == 0:
             continue
 
+        if "://" in dir_item:
+            continue
+
         for extension in extension_list:
             if len(extension) != 0:
                 path = os.path.join(target['path'], "%s.%s" % (dir_item, extension))

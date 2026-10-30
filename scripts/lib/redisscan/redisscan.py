@@ -28,7 +28,7 @@ def redisscan_worker(target, actions, creds, timeout):
             version_printed = True
             Output.write({'target': redis.url(), 'message': version})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'redis',
@@ -37,7 +37,7 @@ def redisscan_worker(target, actions, creds, timeout):
 
             Output.vuln({'target': redis.url(), 'message': 'Authentication success with anonymous credentials'})
             vuln_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'service': 'redis',
                 'url': redis.url(),
@@ -57,7 +57,7 @@ def redisscan_worker(target, actions, creds, timeout):
                     Output.write({'target': redis.url(), 'message': version})
                 Output.success({'target': redis.url(), 'message': 'Authentication success with password %s' % (creds['password'],)})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'redis',
                     'url': redis.url(),
@@ -77,7 +77,7 @@ def redisscan_worker(target, actions, creds, timeout):
             if version_tuple < (2, 8, 21) or version_tuple[0] == 3 and version_tuple < (3, 0, 2):
                 Output.vuln({'target': redis.url(), 'message': "RCE on Redis (CVE-2015-4335)"})
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'redis',
                     'url': redis.url(),
@@ -89,7 +89,7 @@ def redisscan_worker(target, actions, creds, timeout):
             if version_tuple <= (5, 0, 5):
                 Output.vuln({'target': redis.url(), 'message': "Authenticated RCE on Redis, use Redis-Rogue-Server to exploit"})
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'redis',
                     'url': redis.url(),
@@ -102,7 +102,7 @@ def redisscan_worker(target, actions, creds, timeout):
         if not auth:
             Output.write({'target': redis.url(), 'message': 'Unknown'})
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'redis',

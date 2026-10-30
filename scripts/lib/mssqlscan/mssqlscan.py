@@ -22,11 +22,13 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
             # Gather info
             mssql_info = mssqlscan.get_server_info()
+            if mssql_info == None:
+                return
             mssql_info['target'] = mssqlscan.url()
             mssql_info['message_type'] = 'mssql'
             Output.write(mssql_info)
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'mssql',
@@ -69,7 +71,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
                         # local account
                         if password:
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'mssql',
                                 'url': mssqlscan.url(),
@@ -81,7 +83,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
                         else:
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'mssql',
                                 'url': mssqlscan.url(),
@@ -120,7 +122,10 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
                 if success:
                     if 'list_dbs' in actions:
-                        databases = mssqlscan.list_databases()
+                        if 'link' in actions['list_dbs']:
+                            databases = mssqlscan.list_databases(link = actions['list_dbs']['link'])
+                        else:
+                            databases = mssqlscan.list_databases()
                         output = "Databases:\n"
                         for db in databases:
                             output += " "*60+"- %s:\n" % db['name']
@@ -128,7 +133,7 @@ def mssqlscan_worker(target, actions, creds, timeout):
                                 output += " "*60+"\t- %s\n" % table
 
                                 db_info = {
-                                    'hostname': target['hostname'],
+                                    'host': target['hostname'],
                                     'port': target['port'],
                                     'url': mssqlscan.url(),
                                     'service': 'mssql',
@@ -140,25 +145,37 @@ def mssqlscan_worker(target, actions, creds, timeout):
 
                         Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'list_links' in actions:
-                        links = mssqlscan.list_links()
+                        if 'link' in actions['list_links']:
+                            links = mssqlscan.list_links(link = actions['list_links']['link'])
+                        else:
+                            links = mssqlscan.list_links()
                         output = "Links:\n"
                         for link in links:
                             output += " "*60+"- %s\n" % link
                         Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'list_admins' in actions:
-                        admins = mssqlscan.list_admins()
+                        if 'link' in actions['list_admins']:
+                            admins = mssqlscan.list_admins(link = actions['list_admins']['link'])
+                        else:
+                            admins = mssqlscan.list_admins()
                         output = "Admins:\n"
                         for admin in admins:
                             output += " "*60+"- %s\n" % admin
                         Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'list_hashes' in actions:
-                        hashes = mssqlscan.list_hashes()
+                        if 'link' in actions['list_hashes']:
+                            hashes = mssqlscan.list_hashes(link = actions['list_hashes']['link'])
+                        else:
+                            hashes = mssqlscan.list_hashes()
                         output = "Hashes:\n"
                         for account in hashes:
-                            output += " "*60+"- %s   %s\n" % (account['name'].ljust(30), account['password_hash'].decode())
+                            password_hash = account['password_hash']
+                            if type(password_hash) == bytes:
+                                password_hash = password_hash.encode()
+                            output += " "*60+"- %s   %s\n" % (account['name'].ljust(30), password_hash)
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'mssql',
                                 'url': mssqlscan.url(),
@@ -172,7 +189,14 @@ def mssqlscan_worker(target, actions, creds, timeout):
                         Output.highlight({'target': mssqlscan.url(), 'message': output})
                     if 'sql' in actions:
                         output = "Query result:\n"
-                        result = mssqlscan.execute_sql(actions['sql']['query'])
+
+                        query = actions['sql']['query']
+
+                        if 'link' in actions['sql']:
+                            result = mssqlscan.execute_sql(query, link=actions['sql']['link'])
+                        else:
+                            result = mssqlscan.execute_sql(query)
+
                         for item in result:
                             output += "- %s\n" % (item,)
 
@@ -182,10 +206,21 @@ def mssqlscan_worker(target, actions, creds, timeout):
                         result = mssqlscan.execute_cmd(actions['cmd']['command'])
                         output += result
                         Output.highlight({'target': mssqlscan.url(), 'message': output})
+                    if 'admin_check' in actions:
+                        if 'link' in actions['admin_check']:
+                            is_admin = mssqlscan.check_if_admin(link = actions['admin_check']['link'])
+                        else:
+                            is_admin = mssqlscan.check_if_admin()
+                        output = "Admins:\n"
+                        if is_admin:
+                            Output.highlight({'target': mssqlscan.url(), 'message': '[+] You are an admin !'})
+                        else:
+                            Output.highlight({'target': mssqlscan.url(), 'message': '[-] You are not an admin'})
+
 
 
             if 'bruteforce' in actions:
-                if 'username_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('username_file') is not None:
                     Output.highlight({'target': mssqlscan.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:

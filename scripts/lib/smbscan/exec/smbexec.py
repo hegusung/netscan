@@ -1,5 +1,6 @@
 import logging
 import os
+import traceback
 from gevent import sleep
 from impacket.dcerpc.v5 import transport, scmr
 from impacket.smbconnection import *

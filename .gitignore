@@ -25,6 +25,7 @@ server_data/ressources/*
 *.acl
 *.ccache
 *.pfx
+*.exe
 !scripts/lib/sshscan/linpeas.sh
 .vscode/
 .venv/**

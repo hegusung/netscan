@@ -23,6 +23,9 @@ urllib3.disable_warnings()
 
 auth_pattern = re.compile(r'''\s*(.*)\s+realm=['"]?([^'"]+)['"]?''', re.IGNORECASE)
 
+import collections
+collections.Callable = collections.abc.Callable
+
 class HTTP:
 
     def __init__(self, method, hostname, port, useragent, proxy, connect_timeout, headers=None, auth=None, cookies={}, read_timeout=60):
@@ -61,6 +64,12 @@ class HTTP:
     def get(self, path, params=None, data=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
 
         response_data = self.request('GET', path, params=params, data=data, ssl_version=ssl_version, auth=auth, cookies=cookies, headers=headers)
+
+        return response_data
+
+    def propfind(self, path, params=None, data=None, ssl_version=ssl.PROTOCOL_TLS_CLIENT, auth=None, cookies={}, headers={}):
+
+        response_data = self.request('PROPFIND', path, params=params, data=data, ssl_version=ssl_version, auth=auth, cookies=cookies, headers=headers)
 
         return response_data
 
@@ -136,15 +145,15 @@ class HTTP:
                 pass
             elif len(auth) == 2:
                 # Get auth type
-                res = self.request(method, path, params, ssl_version, data, (), cookies, recurse, headers)
+                res = self.request(method, path, params, ssl_version, data, (), cookies, recurse-1, headers)
                 if not res:
                     return res
                 if not 'auth_type' in res:
                     return res
 
-                if res['auth_type'].lower() == 'basic':
+                if 'basic' in res['auth_type'].lower():
                     r_auth = HTTPBasicAuth(auth[0], auth[1])
-                elif res['auth_type'].lower() == 'digest':
+                elif 'digest' in res['auth_type'].lower():
                     r_auth = HTTPDigestAuth(auth[0], auth[1])
                 else:
                     raise Exception('Unknown auth method: %s' % res['auth_type'])
@@ -317,6 +326,9 @@ class HTTP:
         return out
 
     def parse_title(self, html):
+        if html.startswith('<?xml'):
+            return 'N/A'
+
         soup = BeautifulSoup(html, 'html.parser')
         title = soup.find('title')
 
@@ -327,6 +339,9 @@ class HTTP:
             return 'N/A'
 
     def parse_forms(self, html):
+        if html.startswith('<?xml'):
+            return []
+
         soup = BeautifulSoup(html, 'html.parser')
 
         forms = []
@@ -367,6 +382,9 @@ class HTTP:
         return forms
 
     def parse_meta_refresh(self, html):
+        if html.startswith('<?xml'):
+            return None
+
         soup = BeautifulSoup(html, 'html.parser')
 
         result=soup.find("meta",attrs={"http-equiv":"Refresh"})

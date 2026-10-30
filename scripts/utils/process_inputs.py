@@ -9,7 +9,8 @@ from utils.utils import normalize_path
 method_port = {
     "http": 80,
     "https": 443,
-    "mssql": 3306,
+    "mysql": 3306,
+    "mssql": 1433,
     "smb": 445,
 }
 

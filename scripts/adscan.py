@@ -9,12 +9,13 @@ from utils.output import Output
 from lib.adscan.adscan import adscan_worker, ad_modules
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 
 
 def main():
-    parser = argparse.ArgumentParser(description='ADScan')
+    parser = argparse.ArgumentParser(description='ADScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     target_group = parser.add_argument_group("Targets")
-    target_group.add_argument('targets', type=str, nargs='?')
+    target_group.add_argument('targets', type=str, nargs='?', help="Active Directory to target (IP or Hostname)")
     target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
     
     # Authentication
@@ -26,7 +27,8 @@ def main():
     auth_group.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     auth_group.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NT or NTLM hash', default=None, dest='hash')
     auth_group.add_argument('-k', metavar='ticket', type=str, nargs='?', help='Kerberos authentication (uses KRB5CCNAME environment variable if not parameter is defined)', default=None, const='', dest='kerberos')
-    auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos', default=None, dest='dc_ip')
+    auth_group.add_argument('--dc-ip', metavar='DC_IP', type=str, nargs='?', help='Define the DC IP for kerberos only', default=None, dest='dc_ip')
+    auth_group.add_argument('--aes-key', metavar='AESKey', type=str, nargs='?', help='AES key used for kerberos authentication, to use with --gettgt', default=None, dest='aes_key')
     
     # Enum
     user_group = parser.add_argument_group("Domain enumeration")
@@ -37,13 +39,14 @@ def main():
     user_group.add_argument("--groups", action='store_true', help='dump groups from the Active Directory (Bloodhound)')
     user_group.add_argument("--hosts", action='store_true', help='dump hosts from the Active Directory, list if it has trusted for delegation enabled (Bloodhound)')
     user_group.add_argument("--dns", action='store_true', help='dump DNS entries from the Active Directory')
-    user_group.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
     user_group.add_argument("--passpol", action='store_true', help='dump password policy from the Active Directory')
     user_group.add_argument("--trusts", action='store_true', help='dump trusts from the Active Directory')
     user_group.add_argument("--gpos", action='store_true', help='dump GPOs from the Active Directory (Bloodhound)', dest='gpos')
+    user_group.add_argument('--search', metavar='keyword', nargs='?', help='Search for secrets, set a keyword for keyword search or use the regex file (no args) in files mentionned in GPOs', default=None, const='', dest='search')
     user_group.add_argument("--list-groups", metavar='username', type=str, nargs='?', help='List groups of a specific user / group', default=None, const='', dest='list_groups')
     user_group.add_argument("--list-users", metavar='groupname', type=str, nargs='?', help='List users of a specific group', default=None, dest='list_users')
     user_group.add_argument("--constrained-delegation", action='store_true', help='List constrained delegations', dest='constrained_delegation')
+    user_group.add_argument("--rbcd", action='store_true', help='List Ressource-Based Constrained Delegations (RBCD)', dest='rbcd')
 
     # AD modifications
     modif_group = parser.add_argument_group("Domain modification")
@@ -61,29 +64,25 @@ def main():
 
     # Attack
     attk_group = parser.add_argument_group("Attacks")
-    attk_group.add_argument("--kerberoasting", action='store_true', help='Execute a kerberoasting attack on the accounts with a SPN')
+    attk_group.add_argument("--kerberoasting", metavar='SPN', type=str, nargs='?', help='Execute a kerberoasting attack on the accounts with a SPN', default=None, const='all', dest='kerberoasting')
+    attk_group.add_argument("--asreproasting", metavar='user', type=str, nargs='?', help='Execute a ASREP-roasting attack on the accounts with "Dot not require pre-auth" flag enabled', default=None, const='all', dest='asreproasting')
+    attk_group.add_argument("--gpp", action='store_true', help='Search for passwords in GPP')
 
+    # ACLs / ACEs
     acls_group = parser.add_argument_group("Enumerate ACLs/ACEs")
-    acls_group.add_argument("--vuln-gpos", action='store_true', help='Extract vulnerable GPOS from Active Directory', dest='vuln_gpos')
-    acls_group.add_argument("--acls", metavar='username', type=str, nargs='?', help='Extract interesting ACEs/ACLs of a user from the Active Directory', default=None, const='', dest='acls')
-    acls_group.add_argument("--all-acls", metavar='username', type=str, nargs='?', help='Extract all ACEs/ACLs of a user from the Active Directory', default=None, const='', dest='acls_all')
-    acls_group.add_argument("--object-acl", metavar='object', type=str, nargs='?', help='List the interesting ACLs of a specific object (LDAP DN, name or sid)', default=None, dest='object_acl')
-    acls_group.add_argument("--all-object-acl", metavar='object', type=str, nargs='?', help='List all the ACLs of a specific object (LDAP DN, name or sid)', default=None, dest='object_acl_all')
+    acls_group.add_argument("--acl", metavar='object', type=str, nargs='?', help='List the interesting ACLs of a specific object (LDAP DN, name or sid)', default=None, dest='acl')
 
+    # Kerberos
     kerb_group = parser.add_argument_group("Request kerberos tickets")
     kerb_group.add_argument("--gettgt", action='store_true', help='Get a TGT ticket for the current user')
     kerb_group.add_argument("--gettgs", metavar=("SPN", "[impersonate]"), type=str, nargs='+', help='Get a TGS ticket for the specified SPN', dest='gettgs')
 
+    # ADCS
     adcs_group = parser.add_argument_group("ADCS")
     adcs_group.add_argument("--adcs", action='store_true', help='Discover the domain root Certificate Authority')
-    adcs_group.add_argument("--ca-certs", action='store_true', help='List CA certificates from Active Directory', dest='ca_certs')
+    adcs_group.add_argument("--cas", action='store_true', help='List Certification Authorities from the Active Directory (AIACAs, ROOTCAs, EnterpriseCAs, NTAuthStores) (bloodhound)', dest='cas')
     adcs_group.add_argument("--certipy", action='store_true', help='Execute certipy', dest='certipy')
-    adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory', dest='cert_templates')
-    adcs_group.add_argument("--esc1", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC1)', default=None, const='', dest='esc1')
-    adcs_group.add_argument("--esc2", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC2)', default=None, const='', dest='esc2')
-    adcs_group.add_argument("--esc3", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC3)', default=None, const='', dest='esc3')
-    adcs_group.add_argument("--esc4", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC4)', default=None, const='', dest='esc4')
-    adcs_group.add_argument("--esc11", metavar='username', type=str, nargs='?', help='List misconfigured certificate templates (ESC11)', default=None, const='', dest='esc11')
+    adcs_group.add_argument("--cert-templates", action='store_true', help='List certificate templates from Active Directory (bloodhound)', dest='cert_templates')
 
     # Dump
     admin_group = parser.add_argument_group("Domain admin actions")
@@ -146,18 +145,20 @@ def main():
         creds['username'] = 'guest'
         creds['password'] = ''
     else:
-        if args.username:
+        if args.username != None:
             creds['username'] = args.username
-        if args.password:
+        if args.password != None:
             creds['password'] = args.password
-        if args.hash:
+        if args.hash != None:
             creds['hash'] = args.hash
+        if args.aes_key != None:
+            creds['aes_key'] = args.aes_key
     if args.domain:
         creds['domain'] = args.domain
 
     if args.kerberos != None:
         if len(args.kerberos) != 0:
-            os.environ['KRB5CCNAME'] = args.kerberos
+            os.environ['KRB5CCNAME'] = normalize_path(args.kerberos)
         if not 'KRB5CCNAME' in os.environ:
             Output.error("Cannot use -k without KRB5CCNAME environment variable set")
             sys.exit()
@@ -195,45 +196,31 @@ def main():
     if args.gpp:
         actions['gpps'] ={}
     if args.kerberoasting:
-        actions['kerberoasting'] ={}
+        actions['kerberoasting'] = {'spns': args.kerberoasting.split(',')}
+    if args.asreproasting:
+        actions['asreproasting'] = {'users': args.asreproasting.split(',')}
     if args.passpol:
         actions['passpol'] = {}
     if args.trusts:
         actions['trusts'] = {}
     if args.gpos:
-        actions['gpos'] = {}
+        actions['gpos'] = {'search': args.search}
 
     if args.adcs:
         actions['casrv'] = {}
-    if args.ca_certs:
-        actions['ca_certs'] = {}
+    if args.cas:
+        actions['CAs'] = {}
     if args.certipy:
         actions['certipy'] = {}
     if args.cert_templates:
         actions['cert_templates'] = {}
-    if args.esc1 != None:
-        actions['esc1'] = {'user': args.esc1}
-    if args.esc2 != None:
-        actions['esc2'] = {'user': args.esc2}
-    if args.esc3 != None:
-        actions['esc3'] = {'user': args.esc3}
-    if args.esc4 != None:
-        actions['esc4'] = {'user': args.esc4}
-    if args.esc11 != None:
-        actions['esc11'] = {'user': args.esc11}
 
-    if args.vuln_gpos:
-        actions['vuln_gpos'] = {}
-    if args.acls != None:
-        actions['acls'] = {'user': args.acls}
-    if args.acls_all != None:
-        actions['acls'] = {'user': args.acls_all, 'all': True}
-    if args.object_acl != None:
-        actions['object_acl'] = {'object': args.object_acl}
-    if args.object_acl_all != None:
-        actions['object_acl'] = {'object': args.object_acl_all, 'all': True}
+    if args.acl != None:
+        actions['acl'] = {'object': args.acl}
     if args.constrained_delegation:
         actions['constrained_delegation'] = {}
+    if args.rbcd:
+        actions['rbcd'] = {}
     if args.gettgt:
         actions['gettgt'] = {}
     if args.gettgs:

@@ -51,7 +51,7 @@ class Module:
                     Output.vuln({'target': 'dns://%s' % (ns_ip,), 'message': '[%s] Active Directory DNS parameter ZONE_UPDATE_INSECURE is enabled, use KRBJack to exploit' % self.name})
 
                     vuln_info = {
-                        'hostname': ns_ip,
+                        'host': ns_ip,
                         'port': 53,
                         'service': 'dns',
                         'url': 'dns://%s' % (ns_ip,),

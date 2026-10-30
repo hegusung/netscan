@@ -36,7 +36,7 @@ class Module:
 
                 # Add to database
                 content_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'url': '%s://%s:%d' % (target['method'], target['hostname'], target['port']),
                     'service': 'http',
@@ -58,7 +58,7 @@ class Module:
 
                 # Add to database
                 content_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'url': '%s://%s:%d' % (target['method'], target['hostname'], target['port']),
                     'service': 'http',

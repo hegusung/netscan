@@ -22,7 +22,7 @@ def telnetscan_worker(target, actions, creds, timeout):
         banner = telnet.connect()
         Output.write({'target': telnet.url(), 'message': 'Telnet: %s' % banner})
         DB.insert_port({
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'protocol': 'tcp',
             'service': 'telnet',
@@ -37,7 +37,7 @@ def telnetscan_worker(target, actions, creds, timeout):
             if success:
                 Output.success({'target': telnet.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'telnet',
                     'url': telnet.url(),
@@ -55,7 +55,7 @@ def telnetscan_worker(target, actions, creds, timeout):
                 Output.minor({'target': telnet.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
 
         if 'bruteforce' in actions:
-            if 'username_file' in actions['bruteforce'] != None:
+            if actions['bruteforce'].get('username_file') is not None:
                 Output.highlight({'target': telnet.url(), 'message': 'Starting bruteforce:'})
 
                 username_file = actions['bruteforce']['username_file']

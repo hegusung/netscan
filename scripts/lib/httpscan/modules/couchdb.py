@@ -32,7 +32,7 @@ class Module:
                     Output.vuln({'target': http.url("/_all_dbs"), 'message': '[%s] CouchDB accessible without authentication' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url("/_all_dbs"),

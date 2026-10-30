@@ -39,7 +39,7 @@ def check(hostname, port, user, password, timeout):
 
             # Push in ES
             vuln_info = {
-                'hostname': hostname,
+                'host': hostname,
                 'port': port,
                 'service': 'ssh',
                 'url': 'ssh://%s:%d' % (hostname, port),

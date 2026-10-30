@@ -29,7 +29,7 @@ class Module:
             Output.write({'target': http.url(target['path']), 'message': '[%s] Website using Drupal discovered' % self.name})
 
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -63,7 +63,7 @@ class Module:
                     Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(target['path']),
@@ -135,7 +135,7 @@ class Module:
                         Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to RCE (CVE-2019-6340)' % self.name})
 
                         vuln_info = {
-                            'hostname': target['hostname'],
+                            'host': target['hostname'],
                             'port': target['port'],
                             'service': 'http',
                             'url': http.url(target['path']),
@@ -174,7 +174,7 @@ class Module:
                     Output.vuln({'target': http.url(target['path']), 'message': '[%s] Vulnerable to Drupalgeddon2 RCE (CVE-2018-7600)' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(target['path']),

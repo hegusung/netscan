@@ -16,11 +16,41 @@ class Module:
 
         Output.minor({'target': http.url(target['path']), 'message': '[%s] Running module...' % self.name})
 
-        for uri in ["dump", "trace", "logfile", "shutdown", "mappings", "env", "actuator", "heapdump"]:
+        for uri in ["dump", "trace", "logfile", "shutdown", "mappings", "env", "actuator", "heapdump", "gateway/routes", "metrics", "threaddump", "scheduledtasks"]:
+            # Without /actuator
             response = http.get(os.path.join(target['path'], uri))
 
-            if response != None and response['code'] == 200 and response['content-type'] == 'application/json':
-                data = json.loads(response['html'])
+            if response != None and response['code'] == 200 and ('json' in response['content-type'] or response['content-type'] == 'application/octet-stream'):
+                #data = json.loads(response['html'])
 
                 Output.highlight({'target': http.url(os.path.join(target['path'], uri)), 'message': '[%s] Actuator endpoint' % self.name})
+
+                vuln_info = {
+                    'host': target['hostname'],
+                    'port': target['port'],
+                    'service': 'http',
+                    'url': http.url(os.path.join(target['path'], uri)),
+                    'name': 'Actuator endpoint available',
+                    'description': 'Actuator endpoint is accessible at %s' % http.url(os.path.join(target['path'], uri)),
+                }
+                DB.insert_vulnerability(vuln_info)
+
+            # With /actuator
+            response = http.get(os.path.join(target['path'], 'actuator', uri))
+
+            if response != None and response['code'] == 200 and ('json' in response['content-type'] or response['content-type'] == 'application/octet-stream'):
+                #data = json.loads(response['html'])
+
+                Output.highlight({'target': http.url(os.path.join(target['path'], 'actuator', uri)), 'message': '[%s] Actuator endpoint' % self.name})
+
+                vuln_info = {
+                    'host': target['hostname'],
+                    'port': target['port'],
+                    'service': 'http',
+                    'url': http.url(os.path.join(target['path'], uri)),
+                    'name': 'Actuator endpoint available',
+                    'description': 'Actuator endpoint is accessible at %s' % http.url(os.path.join(target['path'], uri)),
+                }
+                DB.insert_vulnerability(vuln_info)
+
 

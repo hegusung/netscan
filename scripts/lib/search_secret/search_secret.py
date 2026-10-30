@@ -39,10 +39,15 @@ def decode_bytes(data, file_type):
 
 class SearchSecret:
     
-    def __init__(self):
+    def __init__(self, keyword=None):
+        self.keyword = keyword
+
         self.config_file = os.path.join(os.path.dirname(__file__), "..", "..", "..", "secret_search.conf")
         self.config  = configparser.ConfigParser()
         self.config.read(self.config_file)
+
+        self.previous_lines = int(self.config['General']['previous_lines'])
+        self.after_lines = int(self.config['General']['after_lines'])
 
     def to_check(self, filename, file_size):
         
@@ -56,7 +61,7 @@ class SearchSecret:
 
         return True
 
-    def search_secret(self, filename, filepath, data):
+    def search_secret(self, filename, filepath, data, file_info):
         if any([filename.endswith(".%s" % ext) for ext in textract_extensions]):
             # Not supported yet
             return
@@ -87,37 +92,80 @@ class SearchSecret:
         else:
             data_str = decode_bytes(data, file_type)
 
-        for line in data_str.split('\n'):
-            line = line.strip()
+        lines = data_str.split('\n')
+        for line_index in range(len(lines)):
+            line = lines[line_index].strip()
 
-            for secret_pattern_name in self.config['General']['secret_patterns'].split(','):
-                pattern = self.config[secret_pattern_name]['regex']
+            if self.keyword == None or self.keyword == '':
+                for secret_pattern_name in self.config['General']['secret_patterns'].split(','):
+                    pattern = self.config[secret_pattern_name]['regex']
 
-                # TODO
+                    if re.compile(pattern, re.IGNORECASE).search(line):
+                        false_positive_string = self.config[secret_pattern_name]['false_positive_string']
+                        if len(false_positive_string) > 0:
+                            fp_strings = false_positive_string.split(',')
+                        else:
+                            fp_strings = []
+                        
+                        if any([fp in line for fp in fp_strings]):
+                            # False positive, ignore
+                            continue
+
+                        reliability = self.config[secret_pattern_name]['reliability']
+
+                        block = self.get_previous_after(lines, line_index)
+
+                        secret = {
+                            'filepath': filepath,
+                            'secret_name': secret_pattern_name,
+                            'line': block,
+                            'reliability': reliability,
+                            'service': service,
+                        }
+
+                        if 'creation_time' in file_info:
+                            secret['created_date'] = file_info['creation_time']
+                        if 'last_access' in file_info:
+                            secret['last_access'] = file_info['last_access']
+                        if 'last_modification' in file_info:
+                            secret['last_modification'] = file_info['last_modification']
+
+                        Output.vuln({'target': secret['filepath'], 'message': '%s SECRET: %s' % (("[%s]" % secret['secret_name']).ljust(20), line)})
+                        DB.insert_secret(secret)
+            else:
+                pattern = self.keyword
+
                 if re.compile(pattern, re.IGNORECASE).search(line):
-                    false_positive_string = self.config[secret_pattern_name]['false_positive_string']
-                    if len(false_positive_string) > 0:
-                        fp_strings = false_positive_string.split(',')
-                    else:
-                        fp_strings = []
-                    
-                    if any([fp in line for fp in fp_strings]):
-                        # False positive, ignore
-                        continue
+                    reliability = 'N/A'
 
-                    reliability = self.config[secret_pattern_name]['reliability']
+                    block = self.get_previous_after(lines, line_index)
 
                     secret = {
                         'filepath': filepath,
-                        'secret_name': secret_pattern_name,
-                        'line': line,
+                        'secret_name': "keyword:%s" % self.keyword,
+                        'line': block,
                         'reliability': reliability,
                         'service': service,
                     }
 
-                    Output.vuln({'target': secret['filepath'], 'message': '%s SECRET: %s' % (("[%s]" % secret['secret_name']).ljust(20), secret['line'])})
+                    if 'creation_time' in file_info:
+                        secret['created_date'] = file_info['creation_time']
+                    if 'last_access' in file_info:
+                        secret['last_access'] = file_info['last_access']
+                    if 'last_modification' in file_info:
+                        secret['last_modification'] = file_info['last_modification']
+
+                    Output.vuln({'target': secret['filepath'], 'message': '%s SECRET: %s' % (("[keyword:%s]" % self.keyword).ljust(20), line)})
                     DB.insert_secret(secret)
 
 
 
+    def get_previous_after(self, lines, line_index):
+        start = line_index - self.previous_lines
+        if start < 0:
+            start = 0
+        end = line_index + self.after_lines
+        if end >= len(lines):
+            end = len(lines) - 1
 
+        return "\n".join(lines[start:end + 1])

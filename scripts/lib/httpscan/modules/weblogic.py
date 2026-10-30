@@ -35,7 +35,7 @@ class Module:
 
             if res and res['code'] in [200] and 'weblogic' in res['title'].lower():
                 http_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'http',
@@ -67,7 +67,7 @@ class Module:
                     Output.vuln({'target': http.url(url), 'message': '[%s] Weblogic probably vulnerable to RCE (CVE-2017-10271)' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(exploit_url),
@@ -102,7 +102,7 @@ if (cmd != null) {
                     Output.vuln({'target': http.url(url), 'message': '[%s] Weblogic vulnerable to RCE (CVE-2020-14882,CVE-2020-14883)' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(url),
@@ -180,7 +180,7 @@ if (cmd != null) {
                             Output.success({'target': http.url(url), 'message': '[%s] Authentication success to Weblogic with login %s and password %s' % (self.name, username, password)})
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(url),
@@ -192,7 +192,7 @@ if (cmd != null) {
                             DB.insert_credential(cred_info)
 
                             vuln_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'http',
                                 'url': http.url(url),

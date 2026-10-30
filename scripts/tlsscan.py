@@ -9,9 +9,11 @@ from lib.tlsscan.tlsscan import tlsscan_worker
 
 from utils.db import DB
 from utils.config import Config
+from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+
 
 def main():
-    parser = argparse.ArgumentParser(description='TLSScan')
+    parser = argparse.ArgumentParser(description='TLSScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     target_group = parser.add_argument_group("Targets")
     target_group.add_argument('targets', type=str, nargs='?')
     target_group.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')

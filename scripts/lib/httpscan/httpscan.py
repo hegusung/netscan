@@ -2,6 +2,7 @@ from time import sleep
 import os.path
 import OpenSSL
 import requests
+import json
 
 from .http import HTTP
 
@@ -35,7 +36,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
             output['target'] = httpscan.url(target['path'], params=target['params'] if 'params' in target else None)
             Output.write(output)
             db_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -63,7 +64,7 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
             # Insert http info
             # TODO: insert redirection url also if there is one
             http_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'http',
@@ -93,9 +94,32 @@ def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_au
             if 'modules' in actions:
                 http_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], useragent, proxy, timeout, safe))
 
+            if 'gowitness' in actions:
+                gowitness_host = actions['gowitness']['host']
+                gowitness_port = actions['gowitness']['port']
+                gowitness_timeout = actions['gowitness']['timeout']
+                gowitness_delay = actions['gowitness']['delay']
+                gowitness_post = {
+                  "options": {
+                    "delay": gowitness_delay,
+                    "format": "png",
+                    "timeout": gowitness_timeout,
+                    "user_agent": useragent,
+                    "window_x": 0,
+                    "window_y": 0
+                  },
+                  "urls": [httpscan.url(target['path'])]
+                }
+                res = requests.post(f"http://{gowitness_host}:{gowitness_port}/api/submit", data=json.dumps(gowitness_post))
+                if res.status_code == 200:
+                    Output.highlight({"target": httpscan.url(target['path']), "message": "Gowitness task sent"})
+                else:
+                    Output.minor({"target": httpscan.url(target['path']), "message": "Failed to set a gowitness scan"})
+
+
             if dir_bruteforce:
                 if not safe:
-                    Output.highlight({"target": httpscan.url(target['path']), "message": "Directory bruteforce aborted because this server will generate a lot of false positives"})
+                    Output.highlight({"target": httpscan.url(target['path']), "message": "Trying smart Directory bruteforce because otherwise this server will generate a lot of false positives"})
 
                     random_uri = os.path.join(target['path'], gen_random_string())
                     inexistant_url = []

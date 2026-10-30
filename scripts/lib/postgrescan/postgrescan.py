@@ -32,7 +32,7 @@ def postgrescan_worker(target, actions, creds, timeout):
             postgresql_info['message_type'] = 'postgresql'
             Output.write(postgresql_info)
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': target['port'],
                 'protocol': 'tcp',
                 'service': 'postgresql',
@@ -42,7 +42,7 @@ def postgrescan_worker(target, actions, creds, timeout):
             if success:
                 Output.success({'target': postgresql.url(), 'message': 'Successful authentication with credentials %s and password %s' % (username, password)})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'postgresql',
                     'url': postgresql.url(),
@@ -60,7 +60,7 @@ def postgrescan_worker(target, actions, creds, timeout):
                         for table in db['tables']:
                             output += " "*60+"\t- %s\n" % table
                             db_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'url': postgresql.url(),
                                 'service': 'postgresql',
@@ -97,11 +97,14 @@ def postgrescan_worker(target, actions, creds, timeout):
                 postgresql_info['message_type'] = 'postgresql'
                 Output.write(postgresql_info)
                 DB.insert_port({
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'postgresql',
                 })
+                for err in str(e).split("\n"):
+                    if len(err.strip()) != 0:
+                        Output.minor({'target': postgresql.url(), 'message': str(err)})
             elif "fe_sendauth:" in str(e):
                 postgresql_server = True
                 postgresql_info = {'version': 'Unknown'}
@@ -109,18 +112,21 @@ def postgrescan_worker(target, actions, creds, timeout):
                 postgresql_info['message_type'] = 'postgresql'
                 Output.write(postgresql_info)
                 DB.insert_port({
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'postgresql',
                 })
+                for err in str(e).split("\n"):
+                    if len(err.strip()) != 0:
+                        Output.minor({'target': postgresql.url(), 'message': str(err)})
 
             else:
                 raise e
 
         if postgresql_server == True:
             if 'bruteforce' in actions:
-                if 'username_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('username_file') is not None:
                     Output.highlight({'target': postgresql.url(), 'message': 'Starting bruteforce:'})
 
                     username_file = actions['bruteforce']['username_file']

@@ -1,4 +1,5 @@
 import os.path
+import base64
 import impacket
 from time import sleep
 import socket
@@ -13,6 +14,7 @@ from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
+from utils.utils import open as open_docker
 from lib.search_secret.search_secret import SearchSecret
 
 """
@@ -55,7 +57,7 @@ def smbscan_worker(target, actions, creds, timeout):
             smb_info['message_type'] = 'smb'
             Output.write(smb_info)
             DB.insert_port({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': 445,
                 'protocol': 'tcp',
                 'service': 'smb',
@@ -70,7 +72,7 @@ def smbscan_worker(target, actions, creds, timeout):
                 }
             })
             DB.insert_domain_host({
-                'hostname_ip': target['hostname'],
+                'host': target['hostname'],
                 'os': smb_info['server_os'],
                 'domain': smb_info['domain'],
                 'hostname': smb_info['hostname'],
@@ -78,10 +80,10 @@ def smbscan_worker(target, actions, creds, timeout):
 
             ip = target['hostname']
             if smb_info['signing'] == False:
-                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMB protocol is not signed, vulnerable to relay attacks'})
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMB protocol is not signed, vulnerable to relay attacks' % smb_info['hostname']})
 
                 vuln_info = {
-                    'hostname': ip,
+                    'host': ip,
                     'port': 445,
                     'service': 'smb',
                     'url': 'smb://%s' % (ip,),
@@ -91,10 +93,10 @@ def smbscan_worker(target, actions, creds, timeout):
                 DB.insert_vulnerability(vuln_info)
 
             if smb_info['smbv1'] == True:
-                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': 'SMBv1 protocol is deprecated'})
+                Output.highlight({'target': 'smb://%s:445' % (ip,), 'message': '[%s] SMBv1 protocol is deprecated' % smb_info['hostname']})
 
                 vuln_info = {
-                    'hostname': ip,
+                    'host': ip,
                     'port': 445,
                     'service': 'smb',
                     'url': 'smb://%s' % (ip,),
@@ -111,15 +113,18 @@ def smbscan_worker(target, actions, creds, timeout):
             success = False
             is_admin = False
             # Authenticate
+            creds = creds.copy()
             if 'kerberos' in creds:
                 try:
                     ticket = os.environ['KRB5CCNAME']
 
                     from impacket.krb5.ccache import CCache
+
                     ccache = CCache.loadFile(ticket)
                     domain = ccache.principal.realm['data'].decode('utf-8')
                     principal = 'cifs/%s@%s' % (smb_info['hostname'].upper(), domain.upper())
                     ticket_creds = ccache.getCredential(principal)
+                    user = ''
                     if ticket_creds is not None:
                         user = ticket_creds['client'].prettyPrint().split(b'@')[0].decode('utf-8')
                     elif len(ccache.principal.components) > 0:
@@ -132,22 +137,22 @@ def smbscan_worker(target, actions, creds, timeout):
 
                     success, is_admin = smbscan.kerberos_auth(dc_ip=dc_ip)
 
-                    Output.success({'target': smbscan.url(), 'message': 'Successful authentication from kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+                    Output.success({'target': smbscan.url(), 'message': '[%s] Successful authentication from kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
                     if is_admin:
-                        Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+                        Output.major({'target': smbscan.url(), 'message': '[%s] Administrative privileges with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
-                        if 'domain' in creds and not creds['domain'] in [None, 'WORKGROUP']:
-                                # domain account 
-                                cred_info = {
-                                    'domain': domain,
-                                    'username': user,
-                                    'admin_of': target['hostname'],
-                                }
-                                DB.insert_domain_user(cred_info)
+                        # domain account 
+                        cred_info = {
+                            'domain': smb_info['domain'],
+                            'hostname': smb_info['hostname'],
+                            'os': smb_info['server_os'],
+                            'admin': "%s\\%s" % (creds['domain'], creds['username']),
+                        }
+                        DB.insert_domain_host(cred_info)
 
                 except AuthFailure as e:
-                    Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with kerberos ticket %s (%s\\%s)' % (ticket, domain, user)})
+                    Output.minor({'target': smbscan.url(), 'message': '[%s] Authentication failure with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
             elif 'username' in creds:
                 if not 'domain' in creds:
@@ -157,21 +162,24 @@ def smbscan_worker(target, actions, creds, timeout):
                     creds['domain'] = creds['username'].split('\\')[0]
                     creds['username'] = creds['username'].split('\\')[1]
 
+                creds['hostname'] = smb_info['hostname']
+
                 if 'password' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
 
-                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'smb',
                                 'url': smbscan.url(),
                                 'type': 'password',
                                 'username': creds['username'],
                                 'password': creds['password'],
+                                'comment': "Host: %s.%s" % (smb_info['hostname'], smb_info['domain'])
                             }
                             DB.insert_credential(cred_info)
 
@@ -187,15 +195,15 @@ def smbscan_worker(target, actions, creds, timeout):
 
                             pass
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and password {password}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and password {password}: {error}'.format(**creds, error=e)})
                 elif 'hash' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
-                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'smb',
                                 'url': smbscan.url(),
@@ -203,6 +211,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                 'username': creds['username'],
                                 'format': 'ntlm',
                                 'hash': creds['hash'],
+                                'comment': "Host: %s.%s" % (smb_info['hostname'], smb_info['domain'])
                             }
                             DB.insert_credential(cred_info)
 
@@ -218,39 +227,45 @@ def smbscan_worker(target, actions, creds, timeout):
                             DB.insert_domain_credential(cred_info)
 
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and hash {hash}: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and hash {hash}: {error}'.format(**creds, error=e)})
                 else:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password='')
-                        Output.success({'target': smbscan.url(), 'message': 'Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
+                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': 'Authentication failure with credentials {domain}\\{username} and no password: %s'.format(**creds) % str(e)})
+                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and no password: {error}'.format(**creds, error=e)})
 
                 if is_admin:
-                    Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
+                    Output.major({'target': smbscan.url(), 'message': '[{hostname}] Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
 
-                    if 'domain' in creds and not creds['domain'] in [None, 'WORKGROUP']:
-                            # domain account 
-                            cred_info = {
-                                'domain': creds['domain'],
-                                'username': creds['username'],
-                                'admin_of': target['hostname'],
-                            }
-                            DB.insert_domain_user(cred_info)
+                    # domain account 
+                    cred_info = {
+                        'domain': smb_info['domain'],
+                        'hostname': smb_info['hostname'],
+                        'os': smb_info['server_os'],
+                        'admin': "%s\\%s" % (creds['domain'], creds['username']),
+                    }
+                    DB.insert_domain_host(cred_info)
+
 
 
             if success:
                 # Authenticated, now perform actions
-                share_list = []
+                share_list = None
                 if 'list_shares' in actions:
-                    shares = "Shares:\n"
+                    #shares = "Shares:\n"
                     try:
+
+                        share_list = []
                         for share_info in smbscan.list_shares():
-                            shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
-                            share_list.append(share_info['name'])
+                            share_list.append(share_info)
+                            #shares += " "*60+"- %s %s %s\n" % (share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
+                            share_str = "[%s] Share: %s %s %s" % (smb_info['hostname'], share_info['name'].ljust(15), ", ".join(share_info['access']).ljust(20), share_info['remark'])
+                            Output.highlight({'target': smbscan.url(), 'message': share_str})
+                            #share_list.append(share_info['name'])
 
                             db_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': 445,
                                 'url': smbscan.url("/%s" % share_info['name']),
                                 'share': share_info['name'],
@@ -262,7 +277,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             }
                             DB.insert_content(db_info)
 
-                        Output.highlight({'target': smbscan.url(), 'message': shares})
+                        #Output.highlight({'target': smbscan.url(), 'message': shares})
 
 
                     except impacket.nmb.NetBIOSError:
@@ -273,19 +288,35 @@ def smbscan_worker(target, actions, creds, timeout):
                             Output.error({'target': smbscan.url(), 'message': 'List shares: Access denied'})
                         else:
                             raise e
+
                 if 'list' in actions:
                     try:
                         if 'path' in target:
                             share_name = target['path'].split('/')[1]
-                            share_list = [share_name]
+                            share_list = [{
+                                "name": share_name,
+                                "access": ["READ"],
+                            }]
                         elif 'share' in actions['list']:
-                            share_list = [actions['list']['share']]
+                            share_list = [{
+                                "name": actions['list']['share'],
+                                "access": ["READ"],
+                            }]
                         else:
-                            if len(share_list) == 0:
-                                for share_info in smbscan.list_shares():
-                                    share_list.append(share_info['name'])
+                            if share_list == None:
+                                share_list = smbscan.list_shares()
+                                #for share_info in smbscan.list_shares():
+                                #    share_list.append(share_info['name'])
 
-                        for share in share_list:
+                        for share_info in share_list:
+                            share = share_info['name']
+
+                            if share in ["IPC$"]:
+                                continue
+
+                            if not 'READ' in share_info['access']:
+                                continue
+
                             contents = "Content of share %s:\n" % share
                             for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
                                 if 'size' in content:
@@ -294,7 +325,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                     contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
 
                                 db_info = {
-                                    'hostname': target['hostname'],
+                                    'host': target['hostname'],
                                     'port': 445,
                                     'url': smbscan.url("/%s" % share),
                                     'share': share,
@@ -302,6 +333,12 @@ def smbscan_worker(target, actions, creds, timeout):
                                     'path': content['name'].replace('\\', '/'),
                                     'account': "%s\\%s" % (creds['domain'], creds['username']),
                                 }
+                                if 'creation_time' in content:
+                                    db_info['created_date'] = content['creation_time']
+                                if 'last_access' in content:
+                                    db_info['last_access'] = content['last_access']
+                                if 'last_modification' in content:
+                                    db_info['last_modification'] = content['last_modification']
                                 if 'size' in content:
                                     db_info['size'] = content['size']
                                 DB.insert_content(db_info)
@@ -309,7 +346,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                 if 'search' in actions:
                                     if db_info['type'] == 'file':
 
-                                        ss = SearchSecret()
+                                        ss = SearchSecret(keyword=actions['search']['keyword'])
                                         filename = content['name'].replace('\\','/').split('/')[-1]
                                         to_search = ss.to_check(filename, db_info['size'])
                                         if to_search:
@@ -317,7 +354,7 @@ def smbscan_worker(target, actions, creds, timeout):
                                             try:
                                                 data = smbscan.get_file_data(share, content['name'])
                                                 
-                                                ss.search_secret(filename, smbscan.url("/%s" % share) + content['name'].replace('\\', '/'), data)
+                                                ss.search_secret(filename, smbscan.url("/%s" % share) + content['name'].replace('\\', '/'), data, content)
                                             except impacket.smbconnection.SessionError as e:
                                                 pass
 
@@ -327,71 +364,45 @@ def smbscan_worker(target, actions, creds, timeout):
                             Output.error({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
                         else:
                             raise e
-                """
-                if 'search' in actions:
+                if 'get_file' in actions:
                     try:
-                        if 'path' in target:
-                            share_name = target['path'].split('/')[1]
-                            share_list = [share_name]
-                        elif 'share' in actions['list']:
-                            share_list = [actions['list']['share']]
-                        else:
-                            if len(share_list) == 0:
-                                for share_info in smbscan.list_shares():
-                                    share_list.append(share_info['name'])
+                        data = smbscan.get_file_data(actions['get_file']['share'], actions['get_file']['path'])
 
-                        for share in share_list:
-                            contents = "Files containing pattern %s in share %s:\n" % (actions['search'], share)
-                            for content in smbscan.list_content(path="\\", share=share, recurse=actions['list']['recurse']):
-                                # Size: content['size']
-                                # Ext:
-                                if '.' in content['name']:
-                                    ext = content['name'].split('.')[-1]
-                                else:
-                                    ext = None
-
-                                if 'size' in content:
-                                    contents += " "*60+"- %s     %s\n" % (content['name'].ljust(30), sizeof_fmt(content['size']))
-                                else:
-                                    contents += " "*60+"- %s\n" % (content['name'].ljust(30),)
-
-                                    
-                                print(
-                                db_info = {
-                                    'hostname': target['hostname'],
-                                    'port': 445,
-                                    'url': smbscan.url("/%s" % share),
-                                    'share': share,
-                                    'service': 'smb',
-                                    'path': content['name'].replace('\\', '/'),
-                                    'account': "%s\\%s" % (creds['domain'], creds['username']),
-                                }
-                                if 'size' in content:
-                                    db_info['size'] = content['size']
-                                DB.insert_content(db_info)
-                            Output.highlight({'target': smbscan.url(), 'message': contents})
+                        
+                        file_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'server_data', 'files', 'smb_%s_%s_%s' % (target['hostname'], actions['get_file']['share'], actions['get_file']['path'].replace('/', '_'))) 
+                        f = open(file_path, 'wb')
+                        f.write(data)
+                        f.close()
+                        Output.highlight({'target': smbscan.url(), 'message': 'File uploaded at: netscan%s' % (file_path.split('../../..')[-1],)})
                     except impacket.smbconnection.SessionError as e:
-                        if 'STATUS_ACCESS_DENIED' in str(e):
-                            Output.error({'target': smbscan.url(), 'message': 'List share contents: Access denied'})
-                        else:
-                            raise e
-                """
+                        Output.error({'target': smbscan.url(), 'message': 'Failed to get file: %s' % (str(e),)})
+
+
+                if 'powershell' in actions:
+                    b64_ps = base64.b64encode(actions['powershell']['powershell'].encode("UTF-16LE")).decode()
+                    ps_command = "powershell.exe -noni -nop -w 1 -enc %s" % b64_ps
+
+                    output, method = smbscan.exec(ps_command, exec_method=actions['powershell']['method'], get_output=True, code_page=actions['powershell']['code_page'])
+                    if output:
+                        Output.highlight({'target': smbscan.url(), 'message': 'Executed powershell command \'%s\' via \'%s\':\n%s' % (actions['powershell']['powershell'], method, output)})
+                    else:
+                        Output.error({'target': smbscan.url(), 'message': 'Failed to execute powershell command %s' % (actions['powershell']['powershell'],)})
 
                 if 'command' in actions:
-                    output = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True, code_page=actions['command']['code_page'])
+                    output, method = smbscan.exec(actions['command']['command'], exec_method=actions['command']['method'], get_output=True, code_page=actions['command']['code_page'])
                     if output:
-                        Output.highlight({'target': smbscan.url(), 'message': 'Executed command \'%s\':\n%s' % (actions['command']['command'], output)})
+                        Output.highlight({'target': smbscan.url(), 'message': 'Executed command \'%s\' via \'%s\':\n%s' % (actions['command']['command'], method, output)})
                     else:
                         Output.error({'target': smbscan.url(), 'message': 'Failed to execute command %s' % (actions['command']['command'],)})
                 if 'sam' in actions:
                     output = "SAM hashes:\n"
                     try:
-                        entries = smbscan.dump_sam()
+                        entries = smbscan.dump_sam(actions['sam']['sam'])
                         for entry in entries:
                             output += " "*60+"- %s %s\n" % (entry['username'].ljust(30), entry['hash'])
 
                             cred_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': target['port'],
                                 'service': 'smb',
                                 'url': smbscan.url(),
@@ -411,9 +422,37 @@ def smbscan_worker(target, actions, creds, timeout):
                 if 'lsa' in actions:
                     output = "LSA secrets:\n"
                     try:
-                        entries = smbscan.dump_lsa()
+                        lsa_parsers = [
+                            ("LSA:DCC2", re.compile("^(?P<domain>[\\w.-]+)\\/(?P<username>[\\w.-]+):\\$DCC2\\$(?P<rounds>\\d+)#(?P<username2>[\\w.-]+)#(?P<hash>[a-fA-F0-9]{32}):\\s+\\((?P<date>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\)$")),
+                            ("LSA:des-cbc-md5" , re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<etype>des-cbc-md5):(?P<key>[a-fA-F0-9]{16})$")),
+                            ("LSA:aes128-cts-hmac-sha1-96", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<etype>aes128-cts-hmac-sha1-96):(?P<key>[a-fA-F0-9]{32})$")),
+                            ("LSA:aes256-cts-hmac-sha1-96", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<etype>aes256-cts-hmac-sha1-96):(?P<key>[a-fA-F0-9]{64})$")),
+                            ("LSA:plain_password_hex", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<type>plain_password_hex):(?P<hex>[a-fA-F0-9]\\S+)$")),
+                            ("LSA:NTLM", re.compile("^(?P<host>[\\w.\\@$\\\\-]+):(?P<lm>[a-fA-F0-9]{32}):(?P<nt>[a-fA-F0-9]{32}):::$")),
+                            ("LSA:password", re.compile("^(?P<domain>[\\w.$-]+)\\\\(?P<username>[\\w.$-]+):(?P<password>\\S+)$")),
+                            ("LSA:password", re.compile("^(?P<username>[\\w.$-]+)@(?P<domain>[\\w.$-]+):(?P<password>\\S+)$")),
+                        ]
+
+                        entries = smbscan.dump_lsa(actions['lsa']['lsa'])
                         for entry in entries:
                             output += " "*60+"- %s\n" % (entry['secret'],)
+
+                            for parser in lsa_parsers:
+                                parser_name = parser[0]
+                                parser_re = parser[1]
+                                secret = entry['secret'].strip()
+                                if parser_re.match(secret):
+                                    secret_doc = {
+                                        'filepath': smbscan.url(),
+                                        'secret_name': parser_name,
+                                        'line': secret,
+                                        'reliability': "high",
+                                        'service': "SMB",
+                                    }
+                                    DB.insert_secret(secret_doc)
+
+                                    break
+
                         Output.highlight({'target': smbscan.url(), 'message': output})
                     except impacket.dcerpc.v5.rpcrt.DCERPCException as e:
                         if 'access_denied' in str(e):
@@ -446,7 +485,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             raise e
                 if 'admins' in actions:
                     host_info = {
-                        'hostname_ip': target['hostname'],
+                        'host': target['hostname'],
                         'os': smb_info['server_os'],
                         'domain': smb_info['domain'],
                         'hostname': smb_info['hostname'],
@@ -473,7 +512,7 @@ def smbscan_worker(target, actions, creds, timeout):
                         DB.insert_domain_host(host_info)
 
                 if 'apps' in actions:
-                    output = smbscan.exec("wmic product get name,version,installdate", exec_method=None, get_output=True)
+                    output, _ = smbscan.exec("wmic product get name,version,installdate", exec_method=None, get_output=True)
                     if output:
                         msg = "Applications:\n"
 
@@ -499,7 +538,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             msg += "- %s %s (%s)\n" % (name.ljust(30), version.ljust(15), installdate)
 
                             db_info = {
-                                'hostname': target['hostname'],
+                                'host': target['hostname'],
                                 'port': 445,
                                 'url': smbscan.url(),
                                 'name': name,
@@ -544,7 +583,7 @@ def smbscan_worker(target, actions, creds, timeout):
                             raise e
                 if 'sessions' in actions:
                     host_info = {
-                        'hostname_ip': target['hostname'],
+                        'host': target['hostname'],
                         'os': smb_info['server_os'],
                         'domain': smb_info['domain'],
                         'hostname': smb_info['hostname'],
@@ -634,7 +673,7 @@ def smbscan_worker(target, actions, creds, timeout):
             if 'modules' in actions:
                 smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
             if 'bruteforce' in actions:
-                if 'username_file' in actions['bruteforce'] != None:
+                if actions['bruteforce'].get('username_file') is not None:
                     Output.highlight({'target': smbscan.url(), 'message': 'Starting bruteforce:'})
 
                     if 'domain' in creds:

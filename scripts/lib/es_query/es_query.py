@@ -8,6 +8,12 @@ from utils.db import DB
 from utils.db import Elasticsearch
 from utils.output import Output
 from lib.es_query.bloodhound import *
+from lib.es_query.bloodhound_utils import *
+
+from lib.adscan.ou import OU
+
+from lib.adscan.accesscontrol import sid_name_dict
+from lib.adscan.gpo_parser import applocker_rules_to_string
 
 #from utils.utils import open
 
@@ -60,7 +66,7 @@ service_nmap_translate = {
 def pprint(output_list):
     init()
 
-    COLUMN_1_LENGTH = 15
+    COLUMN_1_LENGTH = 20
     COLUMN_2_LENGTH = 60
     COLUMN_3_LENGTH = 30
 
@@ -100,15 +106,21 @@ def export_ports(session, service, output_dir):
 
     export_ip_ports(session, service, output_dir)
     export_undiscovered_services(session, output_dir)
+
     export_domains(session, output_dir)
     export_domain_controllers(session, output_dir)
     export_domain_hosts(session, output_dir)
+    export_domain_enabled_users(session, output_dir)
+
     export_http_urls(session, output_dir)
 
     pprint(output)
 
 
 def export_hashes(session, service, output_dir):
+    global output
+    output = []
+
     if not session:
         print('A session must be defined')
         return
@@ -124,6 +136,7 @@ def export_hashes(session, service, output_dir):
     export_local_hashes(session, output_dir)
     export_domain_hashes(session, output_dir)
 
+    pprint(output)
 
 def export_ip_ports(session, service, output_dir):
     global output
@@ -169,8 +182,8 @@ def export_ip_ports(session, service, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "ip"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "ip"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -191,8 +204,8 @@ def export_ip_ports(session, service, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -238,7 +251,7 @@ def export_ip_ports(session, service, output_dir):
 
     ip_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(ip_filename))
     count = 0
     for _ in open(ip_filename):
         count += 1
@@ -247,7 +260,7 @@ def export_ip_ports(session, service, output_dir):
 
     ip_port_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(ip_port_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(ip_port_filename))
     count = 0
     for _ in open(ip_port_filename):
         count += 1
@@ -259,7 +272,7 @@ def export_ip_ports(session, service, output_dir):
         output.append((service, f['filename'], f['count'],  "ports written"))
 
         # Make files unique
-        os.system('sort %s | uniq > %s_tmp; mv %s_tmp %s' % (f['filename'], f['filename'], f['filename'], f['filename']))
+        os.system('sort \'%s\' | uniq > \'%s_tmp\'; mv \'%s_tmp\' \'%s\'' % (f['filename'], f['filename'], f['filename'], f['filename']))
 
 
 def export_domains(session, output_dir):
@@ -269,9 +282,9 @@ def export_domains(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "service":   "smb"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "service.keyword":   "smb"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -296,7 +309,7 @@ def export_domains(session, output_dir):
 
     file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(filename))
     count = 0
     for _ in open(filename):
         count += 1
@@ -311,10 +324,10 @@ def export_domain_controllers(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "service":   "smb"        }},
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "service.keyword":   "smb"        }},
             { "match": { "service_info.is_dc" : True }},
-            { "match": { "session": session }}
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -338,7 +351,7 @@ def export_domain_controllers(session, output_dir):
 
     file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(filename))
     count = 0
     for _ in open(filename):
         count += 1
@@ -353,8 +366,8 @@ def export_undiscovered_services(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "port"        }},
-            { "match": { "session": session }},
+            { "match": { "doc_type.keyword":   "port"        }},
+            { "match": { "session.keyword": session }},
           ],
           "must_not": [
               { "exists": { "field": "nmap_service" }},
@@ -386,7 +399,7 @@ def export_undiscovered_services(session, output_dir):
 
     file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(filename))
     count = 0
     for _ in open(filename):
         count += 1
@@ -402,8 +415,8 @@ def export_http_urls(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "http"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "http"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -427,7 +440,7 @@ def export_http_urls(session, output_dir):
 
     url_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(url_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(url_filename))
     count = 0
     for _ in open(url_filename):
         count += 1
@@ -436,6 +449,7 @@ def export_http_urls(session, output_dir):
 
 
 def export_domain_hashes(session, output_dir):
+    global output
 
     enabled_users = []
 
@@ -443,8 +457,8 @@ def export_domain_hashes(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_user"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "domain_user"        }},
+            { "match": { "session.keyword": session }}
           ],
           "must_not": [
             { "match": { "tags":   "Account disabled"  }},
@@ -462,14 +476,16 @@ def export_domain_hashes(session, output_dir):
         username = "%s\\%s" % (source['domain'], source['username'])
 
         enabled_users.append(username)
+
+    # NTLM
         
     query = {
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_hash"        }},
-            { "match": { "format": "ntlm" }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "ntlm" }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -498,22 +514,107 @@ def export_domain_hashes(session, output_dir):
 
     hashfile_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(hashfile_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
     count = 0
     for _ in open(hashfile_filename):
         count += 1
 
     output.append(("Domain hashes", hashfile_filename, count,  "hashes written"))
 
+    # ASREPROASTING
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "krb5asrep" }},
+            { "match": { "session.keyword": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    hashfile_filename = os.path.join(output_dir, '%s_domain_username_krb5asrep_hash_enabled.txt' % session)
+    hashfile_file = open(hashfile_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    processed = []
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        if username in enabled_users:
+            if not username in processed:
+                hashfile_file.write('%s\n' % (source['hash'],))
+                processed.append(username)
+
+    hashfile_file.close()
+    # Make files unique
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
+    count = 0
+    for _ in open(hashfile_filename):
+        count += 1
+
+    output.append(("krb5asrep", hashfile_filename, count,  "hashes written"))
+
+    # KERBEROASTING
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_hash"        }},
+            { "match": { "format.keyword": "krb5tgs" }},
+            { "match": { "session.keyword": session }}
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    hashfile_filename = os.path.join(output_dir, '%s_domain_username_krb5tgs_hash_enabled.txt' % session)
+    hashfile_file = open(hashfile_filename, 'a')
+
+    # Create output files in dir if non existant
+
+    res = Elasticsearch.search(query)
+    processed = []
+    for item in res:
+        source = item['_source']
+
+        username = "%s\\%s" % (source['domain'], source['username'])
+
+        if username in enabled_users:
+            if not username in processed:
+                hashfile_file.write('%s\n' % (source['hash'],))
+                processed.append(username)
+
+    hashfile_file.close()
+    # Make files unique
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
+    count = 0
+    for _ in open(hashfile_filename):
+        count += 1
+
+    output.append(("krb5tgs", hashfile_filename, count,  "hashes written"))
+
 
 def export_local_hashes(session, output_dir):
+    global output
        
     query = {
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "cred_hash"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "cred_hash"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -555,7 +656,7 @@ def export_local_hashes(session, output_dir):
         hashfile_file.close()
 
         # Make files unique
-        os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(hashfile_filename))
+        os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(hashfile_filename))
         count = 0
         for _ in open(hashfile_filename):
             count += 1
@@ -568,23 +669,526 @@ def export_bloodhound(session, output_dir):
 
     #output.append((format, hashfile_filename, count,  "hashes written"))
 
-    domains, domain_fqdn_to_name, output = export_bloodhound_domains(session, output_dir, output)
+    links_dict, links_effect = get_gpos_links(session)
 
-    output = export_bloodhound_containers(session, output_dir, output)
+    user_info, user_sid, group_sid = get_user_group_data(session)
 
-    output = export_bloodhound_ous(session, output_dir, output)
+    containedby_dict = generate_containedby(session)
 
-    user_info, user_sid, output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, output)
+    domains, domain_fqdn_to_name, domain_name_to_sid, output = export_bloodhound_domains(session, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, output)
 
-    output = export_bloodhound_gpos(session, output_dir, output)
+    output = export_bloodhound_containers(session, domain_name_to_sid, output_dir, containedby_dict, output)
 
-    group_sid = get_group_sid(session)
+    output = export_bloodhound_ous(session, domain_name_to_sid, links_dict, links_effect, output_dir, user_info, user_sid, group_sid, containedby_dict, output)
 
-    domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, output)
+    output = export_bloodhound_users(session, output_dir, domains, domain_fqdn_to_name, containedby_dict, output)
 
-    output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, output)
+    output = export_bloodhound_gpos(session, domain_name_to_sid, output_dir, output)
+
+    domain_controlers, output = export_bloodhound_computers(session, output_dir, user_info, user_sid, group_sid, containedby_dict, output)
+
+    output = export_bloodhound_groups(session, output_dir, domains, domain_controlers, containedby_dict, output)
+
+    # ADCS
+
+    output = export_bloodhound_ntauthstores(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_rootcas(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_aiacas(session, output_dir, domains, containedby_dict, output)
+    output, templates = export_bloodhound_certificate_templates(session, output_dir, domains, containedby_dict, output)
+    output = export_bloodhound_enrollment_services(session, output_dir, domains, templates, containedby_dict, output)
+
 
     pprint(output)
+
+def enrich_gpos(session):
+
+    # Process computer objects
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    computer_dict = {}
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d computers" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        computer_dict[source['sid']] = source['dns']
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "bool": {
+                "should": [
+                  { "match": { "doc_type.keyword": "domain_ou" } },
+                  { "match": { "doc_type.keyword": "domain" } }
+                ]
+              }
+            },
+            { "match": { "session.keyword": session } }
+          ],
+          "filter": []
+        }
+      }
+    }
+
+    affected_computer_dict = {}
+    TEST = 0
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d OUs & domains" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if 'sid' in source:
+            sid = source['sid']
+        else:
+            sid = source['domain_sid']
+
+        affected_computers = []
+        affected_computers_sids = list(set([item['ObjectIdentifier'] for item in get_affected_computers(session, source['dn'], sid)]))
+
+        for computer_sid in affected_computers_sids:
+            if computer_sid in computer_dict:
+                affected_computers.append(computer_dict[computer_sid])
+            else:
+                affected_computers.append(computer_sid)
+
+        links = []
+        if 'links' in source:
+            links = source['links']
+        elif 'gplink' in source:
+            for l in str(source['gplink']).split(']'):
+                if len(l) == 0:
+                    continue
+                # Remove initial [
+                l = l[1:]
+                # Take after ://
+                l = l.split('://')[-1]
+                # Take before ;
+                status = l.split(';')[1]
+                link = l.split(';')[0]
+
+                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
+                if status in ['1', '3']:
+                    continue
+
+                links.append(link.lower())
+
+        for link in links:
+            if not link in affected_computer_dict:
+                affected_computer_dict[link] = []
+
+            affected_computer_dict[link] += affected_computers
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_gpochange"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d GPO changes" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        update = False
+        if source['dn'].lower() in affected_computer_dict:
+
+            affected_computers = list(set(affected_computer_dict[source['dn'].lower()]))
+
+            update = True
+            source['affected_computers'] = affected_computers
+
+        # Update description for add_members GPOChanges
+        if source['type'] == 'add_members':
+            localgroup_sid = source['group']
+            if localgroup_sid in OU.privileged_sid_dict:
+                localgroup_name = OU.privileged_sid_dict[localgroup_sid]
+            else:
+                localgroup_name = localgroup_sid
+           
+            object_sid_list = source['members']
+            object_name_list = []
+            for object_sid in object_sid_list:
+                obj = get_object_from_sid(session, object_sid)
+                if obj:
+                    if 'username' in obj:
+                        name = obj['username']
+                    elif 'groupname' in obj:
+                        name = obj['groupname']
+                    elif 'hostname' in obj:
+                        name = obj['hostname']
+                    else:
+                        name = obj['sid'] # Fallback... 
+
+                    object_name_list.append("%s@%s" % (name, obj['domain']))
+                else:
+                    object_name_list.append(object_sid)
+
+            update = True
+            source['action_display'] = "Adds %s as members of group %s" % (", ".join(object_name_list), localgroup_name)
+        elif source['type'] == 'applocker':
+            applocker_rules = source['applocker']
+
+            for section, info in applocker_rules.items():
+                for rule in info['rules']:
+                    sid = rule['sid']
+
+                    if sid in sid_name_dict:
+                        rule['sid'] = sid_name_dict[sid]
+                    elif sid in OU.privileged_sid_dict:
+                        rule['sid'] = OU.privileged_sid_dict[sid]
+                    else:
+                        obj = get_object_from_sid(session, sid)
+                        if obj:
+                            if 'username' in obj:
+                                name = obj['username']
+                            elif 'groupname' in obj:
+                                name = obj['groupname']
+                            elif 'hostname' in obj:
+                                name = obj['hostname']
+                            else:
+                                name = obj['sid'] # Fallback... 
+
+                            rule['sid'] = name
+
+            update = True
+            source['action_display'] = applocker_rules_to_string(applocker_rules)
+
+        if update == True:
+            Output.highlight("Updating GPO %s" % source['gpo_name'])
+            DB.send(source)
+
+        pg.update(1)
+        c += 1
+
+    pg.close()
+
+   
+
+
+def get_gpos_admins(session):
+    links_dict, links_effect = get_gpos_links(session)
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_user"   }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    user_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        user_dict[source['sid']] = "%s@%s" % (source['username'], source['domain'])
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_group"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    group_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        group_dict[source['sid']] = "%s@%s" % (source['groupname'], source['domain'])
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    computer_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if not 'sid' in source:
+            continue
+
+        computer_dict[source['sid']] = source['dns']
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "bool": {
+                "should": [
+                  { "match": { "doc_type.keyword": "domain_ou" } },
+                  { "match": { "doc_type.keyword": "domain" } }
+                ]
+              }
+            },
+            { "match": { "session.keyword": session } }
+          ],
+          "filter": []
+        }
+      }
+    }
+
+    count = Elasticsearch.count(query)
+    Output.write("Processing %d OUs & domains" % count)
+
+    pg = tqdm(total=count, mininterval=1, leave=False, dynamic_ncols=True)
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+        print("====== %s ======" % source['name'])
+
+        if 'sid' in source:
+            sid = source['sid']
+        else:
+            sid = source['domain_sid']
+
+        affected_computers = list(set([item['ObjectIdentifier'] for item in get_affected_computers(session, source['dn'], sid)]))
+        print("Affected computers:")
+        for computer in affected_computers:
+            if computer in computer_dict:
+                print("  > %s" % computer_dict[computer])
+            else:
+                print("  > %s" % computer)
+
+
+        print("Links:")
+        links = []
+        if 'links' in source:
+            links = source['links']
+        elif 'gplink' in source:
+            links = {}
+            for l in str(source['gplink']).split(']'):
+                if len(l) == 0:
+                    continue
+                # Remove initial [
+                l = l[1:]
+                # Take after ://
+                l = l.split('://')[-1]
+                # Take before ;
+                status = l.split(';')[1]
+                link = l.split(';')[0]
+
+                # 1 and 3 represent Disabled, Not Enforced and Disabled, Enforced respectively.
+                if status in ['1', '3']:
+                    continue
+
+                links[link.lower()] = {'IsEnforced': False if status == '0' else True}
+
+            # Get GUID for links
+            for link_dn in links:
+                if link_dn in links_dict:
+                    links[link_dn]['GUID'] = links_dict[link_dn]
+                else:
+                    links[link_dn]['GUID'] = "Unknown"
+
+            links = list(links.values())
+
+        for link in links:
+            print("  > %s" % link)
+
+        print("GPO changes:")
+
+        # Recreate gpo_changes
+        gpo_changes = {}
+        for sid in OU.privileged_sid_dict:
+            gpo_changes[sid] = {}
+            for t in ['Memberof', 'Members', 'Localgroup']:
+                gpo_changes[sid][t] = []
+
+        for link in links:
+            if link['GUID'] in links_effect:
+
+                for effect in links_effect[link['GUID']]['Memberof']:
+                    member = effect['member']
+
+                    if not member.startswith('S-'):
+                        if '\\' in member:
+                            username = member.split('\\')[-1]
+                        else:
+                            username = member
+
+                        # TODO: domain check
+                        member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                    if member != None:
+                        gpo_changes[effect['group']]['Memberof'].append({
+                            'ObjectIdentifier': effect['member'], 
+                        }) 
+
+                for effect in links_effect[link['GUID']]['Members']:
+                    for member in effect['members']:
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            gpo_changes[effect['group']]['Members'].append({
+                                'ObjectIdentifier': member, 
+                            }) 
+
+                for effect in links_effect[link['GUID']]['Localgroup']:
+                    if effect['action'] == 'deleteAllUsers':
+                        for item in gpo_changes[effect['group']]['Localgroup'][:]:
+                            if item['ObjectType'] == 'User':
+                                gpo_changes[effect['group']]['Localgroup'].remove(item)
+
+                    elif effect['action'] == 'deleteAllGroups':
+                        for item in gpo_changes[effect['group']]['Localgroup'][:]:
+                            if item['ObjectType'] == 'Group':
+                                gpo_changes[effect['group']]['Localgroup'].remove(item)
+
+                    elif effect['action'] == 'add':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            gpo_changes[effect['group']]['Localgroup'].append({
+                                'ObjectIdentifier': member, 
+                            })
+
+                    elif effect['action'] == 'delete':
+                        member = effect['member']
+
+                        if not member.startswith('S-'):
+                            if '\\' in member:
+                                username = member.split('\\')[-1]
+                            else:
+                                username = member
+
+                            # TODO: domain check
+                            member = next((item['sid'] for item in user_info if item["name"].upper() == username.upper()), None)
+
+                        if member != None:
+                            for item in gpo_changes[effect['group']]['Localgroup']:
+                                if item['ObjectIdentifier'] == member:
+                                    del gpo_changes[effect['group']]['Localgroup'][item]
+            
+        gpo_changes = GPO.merge_gpo_effect(gpo_changes)
+
+        for name, items in gpo_changes.items():
+            print("  [%s]" % name)
+            for item in items:
+                item = item['ObjectIdentifier']
+
+                if item in user_dict:
+                    item = "User: %s" % user_dict[item]
+
+                if item in group_dict:
+                    item = "Group: %s" % group_dict[item]
+
+                print("    > %s" % item)
+
+
+
+
+
+
+
+        print("==================")
+
+
+
 
 
 def export_domain_hosts(session, output_dir):
@@ -593,8 +1197,8 @@ def export_domain_hosts(session, output_dir):
       "query": {
         "bool": {
           "must": [
-            { "match": { "doc_type":   "domain_host"        }},
-            { "match": { "session": session }}
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -618,12 +1222,55 @@ def export_domain_hosts(session, output_dir):
 
     domain_host_file.close()
     # Make files unique
-    os.system('sort {0} | uniq > {0}_tmp; mv {0}_tmp {0}'.format(domain_host_filename))
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(domain_host_filename))
     count = 0
     for _ in open(domain_host_filename):
         count += 1
       
     output.append(("domain_hosts", domain_host_filename, count,  "Domain hosts written"))
+
+def export_domain_enabled_users(session, output_dir):
+       
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_user"        }},
+            { "match": { "session.keyword": session }}
+          ],
+          "must_not": [
+            { "match": { "tags":   "Account disabled"  }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    # Create output files in dir if non existant
+
+    domain_user_filename = os.path.join(output_dir, '%s_domain_users.txt' % session)
+    domain_user_file = open(domain_user_filename, 'a')
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        if 'domain' in source and 'username' in source:
+            domain_user_file.write('%s\\%s\n' % (source['domain'], source['username']))
+        c += 1
+
+    domain_user_file.close()
+    # Make files unique
+    os.system('sort \'{0}\' | uniq > \'{0}_tmp\'; mv \'{0}_tmp\' \'{0}\''.format(domain_user_filename))
+    count = 0
+    for _ in open(domain_user_filename):
+        count += 1
+      
+    output.append(("domain_users", domain_user_filename, count,  "Domain users written"))
+
+
 
 def dump(session, output_file):
     if not session:
@@ -638,7 +1285,7 @@ def dump(session, output_file):
       "query": {
         "bool": {
           "must": [
-            { "match": { "session": session }}
+            { "match": { "session.keyword": session }}
           ],
           "filter": [
           ]
@@ -696,6 +1343,10 @@ def restore(session, input_file):
 
         document = json.loads(line)
 
+        # Allow old versions
+        if not 'host' in document and 'ip' in document:
+            document['host'] = document['ip']
+
         document['session'] = session
 
         DB.send(document)
@@ -706,3 +1357,108 @@ def restore(session, input_file):
     f.close()
 
     Output.write("%d documents inserted in elasticsearch" % (c,))
+
+def delete_session(session):
+
+    query = {
+      "query": {
+        "match": {
+            "session.keyword":   session
+        }
+      },
+    }
+
+    res = Elasticsearch.delete_by_query(query)
+
+    print("Deleted %d documents" % res['deleted'])
+
+def parse_spns(session, output_dir):
+    global output
+    output = []
+
+    spn_rules = {
+        "http": {
+            "name": "HTTP",
+            "default_port": None,
+        },
+        "nfs": {
+            "name": "NFS",
+            "default_port": None,
+        },
+        "cifs": {
+            "name": "CIFS",
+            "default_port": None,
+        },
+        "ftp": {
+            "name": "FTP",
+            "default_port": None,
+        },
+        "mssqlsvc": {
+            "name": "MSSQL",
+            "default_port": 1433,
+        },
+    }
+
+
+    query = {
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "doc_type.keyword":   "domain_host"        }},
+            { "match": { "session.keyword": session }},
+          ],
+          "filter": [
+          ]
+        }
+      },
+    }
+
+    spn_dict = {}
+
+    res = Elasticsearch.search(query)
+    c = 0
+    for item in res:
+        source = item['_source']
+
+        for spn in source['spns']:
+            spn_type = spn.split('/')[0].lower()
+            spn_target = spn.split('/', 1)[1]
+
+            if not spn_type in spn_dict:
+                spn_dict[spn_type] = []
+
+            spn_dict[spn_type].append(spn_target)
+
+    print("SPNs types:")
+    print(" - %s" % ", ".join(list(spn_dict.keys())))
+
+    for spn_type, spn_data in spn_rules.items():
+        spn_list = []
+        if spn_type in spn_dict:
+            for spn in spn_dict[spn_type]:
+                if "." in spn:
+                    if spn_data["default_port"] != None:
+                        if not ":" in spn:
+                            spn = "%s:%d" % (spn, spn_data["default_port"])
+                        else:
+                            try:
+                                port = int(spn.split(":")[1])
+                            except ValueError:
+                                continue
+
+                spn_list.append(spn)
+
+        spn_list = list(set(spn_list))
+
+        spn_filename = os.path.join(output_dir, '%s_spn_%s.txt' % (session, spn_data['name']))
+        spn_file = open(spn_filename, 'w')
+
+        for spn in spn_list: 
+            spn_file.write("%s\n" % spn)
+
+        spn_file.close()
+        
+        output.append((spn_data["name"], spn_filename, len(spn_list),  "services written"))
+
+    pprint(output)
+

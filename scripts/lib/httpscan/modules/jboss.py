@@ -37,6 +37,7 @@ jboss_urls = [
     "web-console/ServerInfo.jsp",
     "invoker/readonly",
     "invoker/JMXInvokerServlet",
+    "invoker/EJBInvokerServlet/",
 ]
 
 auth_5_6_urls = [
@@ -66,7 +67,7 @@ class Module:
 
             if 'jboss' in res['title'].lower():
                 http_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'protocol': 'tcp',
                     'service': 'http',
@@ -93,7 +94,7 @@ class Module:
                     Output.vuln({'target': http.url(full_url), 'message': '[%s] URL accessible without authentication' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(full_url),
@@ -105,7 +106,7 @@ class Module:
                     Output.vuln({'target': http.url(full_url), 'message': '[%s] Vulnerable to CVE-2017-12149' % self.name})
 
                     vuln_info = {
-                        'hostname': target['hostname'],
+                        'host': target['hostname'],
                         'port': target['port'],
                         'service': 'http',
                         'url': http.url(full_url),
@@ -128,7 +129,7 @@ class Module:
                                     Output.success({'target': http.url(full_url), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                                     cred_info = {
-                                        'hostname': target['hostname'],
+                                        'host': target['hostname'],
                                         'port': target['port'],
                                         'service': 'http',
                                         'url': http.url(full_url),
@@ -203,7 +204,7 @@ class Module:
                                 Output.success({'target': http.url(full_url), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                                 cred_info = {
-                                    'hostname': target['hostname'],
+                                    'host': target['hostname'],
                                     'port': target['port'],
                                     'service': 'http',
                                     'url': http.url(full_url),
@@ -215,7 +216,7 @@ class Module:
                                 DB.insert_credential(cred_info)
 
                                 vuln_info = {
-                                    'hostname': target['hostname'],
+                                    'host': target['hostname'],
                                     'port': target['port'],
                                     'service': 'http',
                                     'url': http.url(full_url),
@@ -250,7 +251,7 @@ class Module:
                                         Output.success({'target': http.url(full_url), 'message': '[%s] Authentication success with login %s and password %s' % (self.name, username, password)})
 
                                         cred_info = {
-                                            'hostname': target['hostname'],
+                                            'host': target['hostname'],
                                             'port': target['port'],
                                             'service': 'http',
                                             'url': http.url(full_url),
@@ -262,7 +263,7 @@ class Module:
                                         DB.insert_credential(cred_info)
 
                                         vuln_info = {
-                                            'hostname': target['hostname'],
+                                            'host': target['hostname'],
                                             'port': target['port'],
                                             'service': 'http',
                                             'url': http.url(full_url),

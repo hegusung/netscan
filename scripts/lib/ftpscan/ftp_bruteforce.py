@@ -17,11 +17,12 @@ def bruteforce_worker(target, timeout):
         retry = 0
 
         try:
+            ftpscan.connect()
             success = ftpscan.auth(username, password)
             if success:
                 Output.success({'target': ftpscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
                 cred_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'ftp',
                     'url': ftpscan.url(),
@@ -32,7 +33,7 @@ def bruteforce_worker(target, timeout):
                 DB.insert_credential(cred_info)
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': target['port'],
                     'service': 'ftp',
                     'url': ftpscan.url(),

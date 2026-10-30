@@ -170,7 +170,7 @@ class VNC(object):
                 elif response_code == 2:
                     return response_code, "failed, too many attempts"
                 else:
-                    raise VNCException('Unknown response: %d' % (code))
+                    raise VNCException('Unknown response: %d' % (response_code))
 
     def gen_key(self, key):
         newkey = []

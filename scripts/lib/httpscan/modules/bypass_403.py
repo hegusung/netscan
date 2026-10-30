@@ -93,7 +93,7 @@ def check_bypass(target, http, path, header={}):
         Output.vuln({'target': http.url(target['path']), 'message': message})
 
         vuln_info = {
-            'hostname': target['hostname'],
+            'host': target['hostname'],
             'port': target['port'],
             'service': 'http',
             'url': http.url(target['path']),

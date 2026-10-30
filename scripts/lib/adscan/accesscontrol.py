@@ -21,8 +21,8 @@ rights_dict = {
     'WriteOwner': 524288,
     'WriteProperty': 0x20,
     'ControlAccess': 0x100,
-    'CreateChild': 0x1,
-    'DeleteChild': 0x2,
+    'CreateChild': 0x1,   # MANAGE_CA
+    'DeleteChild': 0x2,   # MANAGE_CERTIFICATES
     'ReadProperty': 0x10,
     'Self': 0x8,
 }
@@ -40,6 +40,9 @@ extended_rights = {
     '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2': 'GetChanges',
     '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2': 'GetChangesAll',
     '89e95b76-444d-4c62-991a-0facbeda640c': 'GetChangesInFilteredSet',
+    # ADCS
+    "0e10c968-78fb-11d2-90d4-00c04f79dc55": 'Enroll',
+    "a05b8cc2-17bc-4802-a710-e7c15ab866a2": 'AutoEnroll',
 }
 
 def get_owner(aces):
@@ -98,6 +101,7 @@ def process_sid(domain_name, sid):
 
     return sid
 
+# Puts the security descriptor in the bloodhound format
 def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
     sd = SR_SECURITY_DESCRIPTOR()
     sd.fromString(sd_bytes)
@@ -110,9 +114,12 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
     res['aces'] = [{"PrincipalSID": sid, "RightName": "Owns", "IsInherited": False}]
 
     for ace_b in sd['Dacl'].aces:
+        #print("==================================")
         ace = parse_ace(ace_b)
 
         sid = process_sid(domain_name, ace['sid'])
+        #print("> %s" % sid)
+        #print(ace)
 
         if sid.endswith('S-1-5-18'):
             continue
@@ -136,6 +143,12 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
                         res['aces'].append({"PrincipalSID": sid, "RightName": "AllExtendedRights", "IsInherited": ace['inherited']})
                     elif object_type == 'computer' and not sid.endswith('S-1-5-32-544') and not sid.endswith('-512'):
                         res['aces'].append({"PrincipalSID": sid, "RightName": "AllExtendedRights", "IsInherited": ace['inherited']})
+                if 'CreateChild' in ace['rights']:
+                    if object_type == 'pKIEnrollmentService':
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "ManageCA", "IsInherited": ace['inherited']})
+                if 'DeleteChild' in ace['rights']:
+                    if object_type == 'pKIEnrollmentService':
+                        res['aces'].append({"PrincipalSID": sid, "RightName": "ManageCertificates", "IsInherited": ace['inherited']})
 
         elif ace['type'] == 'ACCESS_ALLOWED_OBJECT_ACE':
             if not ace['inherited'] and ace['inherit_only_ace']:
@@ -178,6 +191,12 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
                     res['aces'].append({"PrincipalSID": sid, "RightName": "AddKeyCredentialLink", "IsInherited": ace['inherited']})
                 if object_type in ['user'] and 'OBJECT_TYPE_PRESENT' in ace['flags'] and ace['guid'] == schema_guid_dict['service-principal-name']:  
                     res['aces'].append({"PrincipalSID": sid, "RightName": "WriteSPN", "IsInherited": ace['inherited']})
+
+                if object_type in ['pKICertificateTemplate'] and 'OBJECT_TYPE_PRESENT' in ace['flags'] and 'ms-pki-certificate-name-flag' in schema_guid_dict and ace['guid'] == schema_guid_dict['ms-pki-certificate-name-flag']:  
+                    res['aces'].append({"PrincipalSID": sid, "RightName": "WritePKINameFlag", "IsInherited": ace['inherited']})
+                if object_type in ['pKICertificateTemplate'] and 'OBJECT_TYPE_PRESENT' in ace['flags'] and 'ms-pki-enrollment-flag' in schema_guid_dict and ace['guid'] == schema_guid_dict['ms-pki-enrollment-flag']:  
+                    res['aces'].append({"PrincipalSID": sid, "RightName": "WritePKIEnrollmentFlag", "IsInherited": ace['inherited']})
+
             elif 'Self' in ace['rights']:
                 if object_type in ['group'] and ace['guid'] in extended_rights and extended_rights[ace['guid']] == "WriteMember":
                     res['aces'].append({"PrincipalSID": sid, "RightName": "AddSelf", "IsInherited": ace['inherited']})
@@ -199,6 +218,10 @@ def parse_sd(sd_bytes, domain_name, object_type, schema_guid_dict):
                     res['aces'].append({"PrincipalSID": sid, "RightName": "GetChangesInFilteredSet", "IsInherited": ace['inherited']})
                 if object_type in ['user'] and has_extended_right(ace, "UserForceChangePassword"):
                     res['aces'].append({"PrincipalSID": sid, "RightName": "ForceChangePassword", "IsInherited": ace['inherited']})
+                if object_type in ['pKIEnrollmentService', 'pKICertificateTemplate'] and has_extended_right(ace, "Enroll"):
+                    res['aces'].append({"PrincipalSID": sid, "RightName": "Enroll", "IsInherited": ace['inherited']})
+                if object_type in ['pKIEnrollmentService', 'pKICertificateTemplate'] and has_extended_right(ace, "AutoEnroll"):
+                    res['aces'].append({"PrincipalSID": sid, "RightName": "AutoEnroll", "IsInherited": ace['inherited']})
 
     return res
 
@@ -267,15 +290,15 @@ def parse_object_ace(mask, ace):
         guid = calculate_guid(ace['ObjectType'])
         #guid = bytes(ace['ObjectType'])
 
-        if guid in extended_rights:
-            out.append(extended_rights[guid])
+        #if guid in extended_rights:
+        #    out.append(extended_rights[guid])
     else:
-        guid = 'N/A'
+        guid = None
 
     if len(ace['InheritedObjectType']) == 16:
         i_guid = calculate_guid(ace['InheritedObjectType'])
     else:
-        i_guid = 'N/A'
+        i_guid = None
 
     return out, guid, i_guid, flags
 

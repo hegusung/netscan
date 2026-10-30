@@ -37,7 +37,7 @@ def dnsscan_worker(target, dn_server, do_tcp, actions, timeout):
                                 })
 
                                 DB.insert_port({
-                                    'hostname': ip,
+                                    'host': ip,
                                     'port': 445,
                                     'protocol': 'tcp',
                                     'service': 'smb',
@@ -191,12 +191,19 @@ class DNSScan:
                     continue
             except dns.exception.Timeout:
                 continue
+            except OSError as e:
+                if "113" in str(e):
+                    Output.minor({"target": str(ns_dns), "message": "No route to host"})
+                    continue
+                else:
+                    raise
+
             except dns.xfr.TransferError:
                 Output.minor({"target": str(ns_dns), "message": "AXFR transfer failure"})
                 continue
 
             vuln_info = {
-                'hostname': str(ns_ip),
+                'host': str(ns_ip),
                 'port': 53,
                 'service': 'dns',
                 'url': 'dns://%s:%d' % (str(ns_ip), 53),

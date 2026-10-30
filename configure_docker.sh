@@ -6,6 +6,7 @@
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
+BLUE="\e[34m"
 BLACK_BACKGROUND="\e[40m"
 BLUE_BACKGROUND="\e[44m"
 ENDCOLOR="\e[0m"
@@ -20,7 +21,7 @@ if [ $? -eq 0 ]
 then
     echo -e "${GREEN}[+] Containers are already built.. Skipping${ENDCOLOR}"
     echo -e "${GREEN}[+] Starting containers...${ENDCOLOR}"
-    docker-compose start
+    docker compose start
     echo -e "${GREEN}[+] Waiting 15 seconds for containers initialization...${ENDCOLOR}"
     sleep 15
 else
@@ -28,7 +29,8 @@ else
     sudo sysctl -w vm.max_map_count=262144 > /dev/null
     
     echo -e "${GREEN}[+] Building & Starting containers...${ENDCOLOR}"
-    docker-compose up --quiet-pull --build --remove-orphans -d > /dev/null
+    #docker-compose up --build --remove-orphans -d > /dev/null
+    docker compose up --build --remove-orphans -d 
     docker build . -f docker/Dockerfile -t netscan:latest > /dev/null
     
     echo -e "${GREEN}[+] Configuring Elasticsearch...${ENDCOLOR}"
@@ -52,8 +54,14 @@ then
     echo -e "${RED}    You should start investigating by looking at the \"netscan-setup\" container logs...${ENDCOLOR}"
     exit 1
 else
+    echo -e "${GREEN}================================================================${ENDCOLOR}"
+    echo -e "${GREEN}[+] Kibana interface: ${BLUE}http://127.0.0.1:5601/${ENDCOLOR}"
     echo -e "${GREEN}[+] Kibana credentials: ${ENDCOLOR}${RED}${BLACK_BACKGROUND} elastic:$ELASTIC_PASSWORD ${ENDCOLOR}"
-    echo -e "${GREEN}[+] Remember to change the neo4j password at http://localhost:7474/ (default: ${ENDCOLOR}${RED}${BLACK_BACKGROUND} neo4j:neo4j ${ENDCOLOR}${GREEN})${ENDCOLOR}"
+    echo -e "${GREEN}[+] Bloodhound interface: ${BLUE}http://127.0.0.1:8080/${ENDCOLOR}"
+    echo -e "${GREEN}[+] Bloodhound initial credentials: ${ENDCOLOR}${RED}${BLACK_BACKGROUND} admin:netscan${ENDCOLOR}"
+    echo -e "${GREEN}[+] Neo4J credentials: ${ENDCOLOR}${RED}${BLACK_BACKGROUND} $NEO4J_AUTH ${ENDCOLOR}"
+    echo -e "${GREEN}[+] Gowitness interface: ${BLUE}http://127.0.0.1:7171/${ENDCOLOR}"
+    echo -e "${GREEN}================================================================${ENDCOLOR}"
     
     echo -e "${GREEN}[+] Adding an alias in your personal settings...${ENDCOLOR}"
     

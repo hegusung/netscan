@@ -19,7 +19,7 @@ def pingscan_worker(target, timeout):
             Output.write({'target': '%s' % target['hostname'], 'message': "Up => %.4f ms (%s)" % (rtt, os)})
 
             DB.insert_ip({
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'rtt': rtt,
             })
     except Exception as e:

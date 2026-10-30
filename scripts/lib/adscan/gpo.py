@@ -3,10 +3,15 @@ import xml.etree.ElementTree as ET
 from impacket.ldap import ldap, ldapasn1
 from impacket.smbconnection import SessionError
 from impacket.smb3structs import FILE_READ_DATA, FILE_WRITE_DATA
+from datetime import datetime
 
 from lib.adscan.accesscontrol import parse_accesscontrol, parse_sd, process_sid
 
+from lib.adscan.gpo_parser import GPOParser
+
 class GPO:
+    attributes = ['name', 'displayName', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPCFileSysPath', 'description', 'whenCreated']
+    schema_guid_attributes = ['Group-Policy-Container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name']
 
     name_to_sid = {
         'administrators': 'S-1-5-32-544',
@@ -16,49 +21,20 @@ class GPO:
     }
 
     @classmethod
-    def list(self, ldap_obj, callback):
+    def list_gpos(self, ldap, smb, search=None):
+        schema_guid_dict = ldap._get_schema_guid_dict(self.schema_guid_attributes)
+        sbase = "%s" % ldap.defaultdomainnamingcontext
+        search_filter = '(objectCategory=groupPolicyContainer)'
 
-        schema_guid_dict = ldap_obj._get_schema_guid_dict(['Group-Policy-Container', 'ms-mcs-admpwd', 'ms-DS-Key-Credential-Link', 'Service-Principal-Name'])
+        for attr in ldap.query_generator(sbase, search_filter, self.attributes, query_sd=True):
+            gpo = GPO(ldap, smb, attr, schema_guid_dict, search=search)
 
-        def process(item):
-            if isinstance(item, ldapasn1.SearchResultEntry) is not True:
-                return
+            yield gpo
 
-            attr = ldap_obj.to_dict_impacket(item)
-
-            domain = ".".join([item.split("=", 1)[-1] for item in str(attr['distinguishedName']).split(',') if item.split("=",1)[0].lower() == "dc"])
-            domain_dn = ",".join(["DC=%s" % p for p in domain.split('.')])
-            domain_sid = ldap_obj.resolve_dn_to_sid([domain_dn])[0]
-
-            dn = str(attr['distinguishedName'])
-
-            b = bytes(attr['objectGUID'])
-            guid = b[0:4][::-1].hex() + '-'
-            guid += b[4:6][::-1].hex() + '-'
-            guid += b[6:8][::-1].hex() + '-'
-            guid += b[8:10].hex() + '-'
-            guid += b[10:16].hex()
-
-            aces = parse_sd(bytes(attr['nTSecurityDescriptor']), domain.upper(), 'group-policy-container', schema_guid_dict)
-
-            callback({
-                'domain': domain,
-                'domain_sid': domain_sid,
-                'name': str(attr['displayName']),
-                'dn': dn,
-                'guid': guid,
-                'gpcpath': str(attr['gPCFileSysPath']),
-                'aces': aces,
-            })
-
-        sc = ldap.SimplePagedResultsControl(size=100)
-        sc2 = ldapasn1.SDFlagsControl(criticality=True, flags=0x7)
-        attributes = ['name', 'displayName', 'distinguishedName', 'objectGUID', 'nTSecurityDescriptor', 'gPCFileSysPath']
-        sbase = "%s" % ldap_obj.defaultdomainnamingcontext
-        ldap_obj.conn.search(searchBase=sbase, searchFilter='(objectCategory=groupPolicyContainer)', searchControls=[sc, sc2], perRecordCallback=process, attributes=attributes)
-
+    # Can be removed ?
     @classmethod
     def resolve_effect(self, smbscan, ldap_obj, gpo_dn, gpo_path, gpo_effect):
+        raise Exception("To be removed")
 
         gpo_domain = ".".join([item.split("=", 1)[-1] for item in str(gpo_dn).split(',') if item.split("=",1)[0].lower() == "dc"])
 
@@ -232,6 +208,194 @@ class GPO:
         return ldap_obj._resolve_sid_types(gpo_effect, 'gpo_effect')
 
     @classmethod
+    def resolve_gpo_effect(self, smbscan, ldap_obj, gpo_dn, gpo_path):
+        privileged_sid_dict = {
+            "S-1-5-32-544": "LocalAdmins", #"Administrators",
+            "S-1-5-32-555": "RemoteDesktopUsers", #"Remote Desktop Users",
+            "S-1-5-32-562": "DcomUsers", #"Distributed COM Users",
+            "S-1-5-32-580": "PSRemoteUsers", #"Remote Management Users",
+        }
+
+        gpo_effect = {}
+        for sid in privileged_sid_dict:
+            gpo_effect[sid] = {}
+            for t in ['Memberof', 'Members', 'Localgroup']:
+                gpo_effect[sid][t] = []
+
+        gpo_effect = {
+            "Memberof": [],
+            "Members": [],
+            "Localgroup": [],
+        }
+
+
+
+        gpo_domain = ".".join([item.split("=", 1)[-1] for item in str(gpo_dn).split(',') if item.split("=",1)[0].lower() == "dc"])
+
+        share_pattern = re.compile("\\\\\\\\([^\\\\]+)\\\\([^\\\\]+)(\\\\.*)")
+        m = share_pattern.match(gpo_path)
+        if m:
+            tid = smbscan.conn.connectTree(m.group(2))
+
+            try:
+                file_path = m.group(3) + "\\" + '\\'.join(["MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf"])
+                #print(file_path)
+                fid = smbscan.conn.openFile(tid, file_path, desiredAccess=FILE_READ_DATA)
+                file_data = smbscan.conn.readFile(tid, fid)
+                smbscan.conn.closeFile(tid, fid)
+            except SessionError:
+                file_data = None
+
+            if file_data != None:
+                try:
+                    file_data = file_data.decode('utf-8')
+                except UnicodeDecodeError as e:
+                    file_data = file_data.decode('utf-16')
+
+                #print("================\n%s\n================" % file_data)
+
+                group_membership = False
+                for line in file_data.split('\n'):
+                    line = line.strip()
+
+                    if len(line) == 0:
+                        continue
+
+                    if line.startswith('['):
+                        if line.startswith('[Group Membership]'):
+                            group_membership = True
+                        else:
+                            group_membership = False
+                        continue
+
+                    if group_membership:
+                        left = line.split("=")[0].strip()
+                        right = line.split("=")[-1].strip()
+                        if len(right) != 0:
+                            right = right.split(',')
+                        else:
+                            right = []
+
+                        action_type = left.split("__")[-1]
+                        left = left.split("__")[0]
+                        
+                        # Case 1 : Members => members in a group (privileged)
+                        from lib.adscan.ou import OU
+                        if action_type == "Members":
+                            if left.startswith('*'):
+                                left = left[1:]
+
+                            if left in OU.privileged_sid_dict:
+                                members = []
+                                for sid in right:
+                                    if sid.startswith('*'):
+                                        sid = sid[1:]
+
+                                    members.append(sid)
+
+                                gpo_effect["Members"].append({
+                                    'group': left,
+                                    'members': members,
+                                })
+
+                        # Case 2 : MemberOf => member of multiple groups (privileged)
+                        elif action_type == "Memberof":
+                            if left.startswith('*'):
+                                left = left[1:]
+
+                            for sid in right:
+                                if sid.startswith('*'):
+                                    sid = sid[1:]
+
+                                if sid in OU.privileged_sid_dict:
+                                    gpo_effect["Memberof"].append({
+                                        'group': sid,
+                                        'member': left,
+                                    })
+
+            try:
+                file_path = m.group(3) + "\\" + '\\'.join(["MACHINE", "Preferences", "Groups", "Groups.xml"])
+                fid = smbscan.conn.openFile(tid, file_path, desiredAccess=FILE_READ_DATA)
+                file_data = smbscan.conn.readFile(tid, fid)
+                smbscan.conn.closeFile(tid, fid)
+            except SessionError:
+                file_data = None
+
+            if file_data != None:
+                file_data = file_data.decode()
+                #print("================\n%s\n================" % file_data)
+
+                root = ET.fromstring(file_data)
+
+                if root.tag == "Groups":
+                    for group in root:
+                        if group.tag != "Group":
+                            continue
+
+                        for prop in group:
+                            if prop.tag != "Properties":
+                                continue
+
+                            action = prop.attrib['action']
+                            if action != "U":
+                                continue
+
+                            groupSid = prop.attrib['groupSid'] if 'groupSid' in prop.attrib else None
+                            groupName = prop.attrib['groupName'] if 'groupName' in prop.attrib else None
+
+                            if not groupSid:
+                                if groupName:
+                                    if groupName.lower() in self.name_to_sid:
+                                        groupSid = self.name_to_sid[groupName.lower()]
+
+                            from lib.adscan.ou import OU
+                            if groupSid in OU.privileged_sid_dict:
+                                if prop.attrib['deleteAllUsers'] == "1":
+                                    gpo_effect["Localgroup"].append({
+                                        'action': "deleteAllUsers",
+                                        'group': groupSid,
+                                    })
+
+                                if prop.attrib['deleteAllGroups'] == "1":
+                                    gpo_effect["Localgroup"].append({
+                                        'action': "deleteAllGroups",
+                                        'group': groupSid,
+                                    })
+
+                                for members in prop:
+                                    if members.tag != "Members":
+                                        continue
+
+                                    for member in members:
+                                        action = member.attrib['action']
+
+                                        memberSid = member.attrib['sid'] if 'sid' in member.attrib else None
+                                        memberName = member.attrib['name'] if 'name' in member.attrib else None
+
+                                        if not memberSid:
+                                            memberSid = memberName
+                                            #memberSid = ldap_obj._resolve_name_to_sid(gpo_domain, memberName)
+
+                                        if memberSid:
+                                            if action.lower() == "add":
+                                                gpo_effect["Localgroup"].append({
+                                                    'action': 'add',
+                                                    'group': groupSid,
+                                                    'member': memberSid,
+                                                })
+
+                                            elif action.lower() == "delete":
+                                                gpo_effect["Localgroup"].append({
+                                                    'action': 'delete',
+                                                    'group': groupSid,
+                                                    'member': memberSid,
+                                                })
+
+        return gpo_effect
+
+
+
+    @classmethod
     def merge_gpo_effect(self, gpo_effect):
 
         from lib.adscan.ou import OU
@@ -248,4 +412,51 @@ class GPO:
             out[localgroup_key] = entries
 
         return out
+
+    # ==================
+    # === GPO object ===
+    # ==================
+
+    def __init__(self, ldap, smb, attr, schema_guid_dict, search=None):
+        self.domain = ldap.dn_to_domain(str(attr['distinguishedName']))
+        self.domain_dn = ",".join(["DC=%s" % p for p in self.domain.split('.')])
+        self.gpcpath = str(attr['gPCFileSysPath'])
+        self.name = str(attr['displayName'])
+        self.description = str(attr['description']) if 'description' in attr else ''
+
+        try:
+            self.created_date = datetime.strptime(str(attr['whenCreated']), '%Y%m%d%H%M%S.0Z') 
+        except KeyError:
+            self.created_date = None
+
+        self.dn = str(attr['distinguishedName'])
+
+        self.guid = ldap.parse_guid(bytes(attr['objectGUID']))
+
+        self.aces = parse_sd(bytes(attr['nTSecurityDescriptor']), self.domain.upper(), 'group-policy-container', schema_guid_dict)
+
+        #self.gpo_effect = GPO.resolve_gpo_effect(smb, ldap, self.dn, self.gpcpath)
+
+        gpo_parser = GPOParser(smb, ldap, self.dn, self.gpcpath)
+
+        gpo_parser.parse_gpo_files(search=search)
+
+        self.gpo_effect = gpo_parser.gpo_effect
+        self.gpo_changes = gpo_parser.gpo_changes
+
+
+    def to_json(self):
+        return {
+            'domain': self.domain,
+            'name': self.name,
+            'dn': self.dn,
+            'guid': self.guid,
+            'gpcpath': self.gpcpath,
+            'aces': self.aces,
+            'gpo_effect': self.gpo_effect,
+            'gpo_changes': self.gpo_changes,
+            'description': self.description,
+            'created_date': self.created_date,
+        }
+
 

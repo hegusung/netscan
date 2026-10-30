@@ -49,15 +49,15 @@ class Module:
             Output.minor("[%s] Module requires a valid user and password/hash authentication" % self.name)
             return
 
-        ldapIsProtected = run_ldap(username, password, target['hostname'])
-
         Output.minor({'target': 'ldap://%s' % (target['hostname'],), 'message': "[%s] Running module..." % self.name})
+
+        ldapIsProtected = run_ldap(username, password, target['hostname'])
 
         if ldapIsProtected == False:
             Output.vuln({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': '[%s] LDAP signing requirements not enforced' % self.name})
 
             vuln_info = {
-                'hostname': target['hostname'],
+                'host': target['hostname'],
                 'port': 389,
                 'service': 'ldap',
                 'url': 'ldap://%s:%d' % (target['hostname'], 389),
@@ -65,6 +65,8 @@ class Module:
                 'description': 'LDAP Service ldap://%s:%d does not have the signing requirements enforced' % (target['hostname'], 389),
             }
             DB.insert_vulnerability(vuln_info)
+        else:
+            Output.success({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': '[%s] LDAP signing requirements is enforced' % self.name})
 
         if DoesLdapsCompleteHandshake(target['hostname']) == True:
 
@@ -75,7 +77,7 @@ class Module:
                 Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "when supported"' % self.name})
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': 636,
                     'service': 'ldaps',
                     'url': 'ldaps://%s:%d' % (target['hostname'], 636),
@@ -88,7 +90,7 @@ class Module:
                 Output.vuln({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "never"' % self.name})
 
                 vuln_info = {
-                    'hostname': target['hostname'],
+                    'host': target['hostname'],
                     'port': 636,
                     'service': 'ldaps',
                     'url': 'ldaps://%s:%d' % (target['hostname'], 636),
@@ -99,7 +101,7 @@ class Module:
 
             elif ldapsChannelBindingAlwaysCheck == True:
                 # Not vulnerable
-                pass
+                Output.success({'target': 'ldaps://%s:%d' % (target['hostname'], 636), 'message': '[%s] LDAPS channel binding set to "always"' % self.name})
             else:
                 Output.error({'target': 'ldap://%s:%d' % (target['hostname'], 389), 'message': "[" + self.name + "] ERROR: For troubleshooting:\nldapsChannelBindingAlwaysCheck - " +str(ldapsChannelBindingAlwaysCheck)+"\nldapsChannelBindingWhenSupportedCheck: "+str(ldapsChannelBindingWhenSupportedCheck) })
 
@@ -130,6 +132,11 @@ def run_ldap(inputUser, inputPassword, dcTarget):
 #no error at all. Any other "successful" edge cases
 #not yet accounted for.
 def DoesLdapsCompleteHandshake(dcIp):
+  context = ssl.create_default_context()
+  context.check_hostname = False
+  context.verify_mode = ssl.CERT_NONE
+
+  """
   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   s.settimeout(5)
   ssl_sock = ssl.wrap_socket(s,
@@ -137,7 +144,11 @@ def DoesLdapsCompleteHandshake(dcIp):
                             suppress_ragged_eofs=False,
                             do_handshake_on_connect=False)
   ssl_sock.connect((dcIp, 636))
+  """
   try:
+    sock = socket.create_connection((dcIp, 636))
+    ssl_sock = context.wrap_socket(sock, server_hostname=None)
+
     ssl_sock.do_handshake()
     ssl_sock.close()
     return True
@@ -150,7 +161,10 @@ def DoesLdapsCompleteHandshake(dcIp):
         return False
     else:
         Output.error({'target': 'ldaps://%s:%d' % (dcIp, 636), 'message': "[LDAP_Security] Unexpected error during LDAPS handshake: " + str(e)})
-    ssl_sock.close()
+    try:
+        ssl_sock.close()
+    except:
+        pass
 
 #Conduct a bind to LDAPS and determine if channel
 #binding is enforced based on the contents of potential
