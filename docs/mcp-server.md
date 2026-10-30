@@ -116,9 +116,10 @@ Unknown module names are rejected by the MCP schema before NetScan starts, and
 
 All user-facing NetScan commands are available, including commands that delete
 stored data, generate payloads, start listeners, or expose network services.
-Scan execution is disabled until the operator explicitly enables it. The allowlist
-is module-level: individual scanners may also offer brute-force, exploit, or
-remote-command options. Enable execution only for a trusted MCP host and set
+Starting the root launcher enables scan execution; set
+`NETSCAN_MCP_ENABLE_RUN=false` for help-only operation. The allowlist is
+module-level: individual scanners may also offer brute-force, exploit, or
+remote-command options. Run the server only for a trusted MCP host and set
 `NETSCAN_MCP_ALLOWED_MODULES` when a deployment should use a smaller subset.
 
 The server runs a bounded pool of background commands (four by default). Each
@@ -129,28 +130,30 @@ configured retention limit; restarting the server clears all retained jobs.
 
 ## Local stdio server
 
-Install the project as described in the main README and create `config.cfg`. The
-MCP SDK is included in `requirements.txt`. Configure an MCP host to launch:
+Create `config.cfg`, then configure an MCP host to launch the executable at the
+repository root:
 
 ```json
 {
   "mcpServers": {
     "netscan": {
-      "command": "/absolute/path/to/netscan/.venv/bin/python",
-      "args": ["/absolute/path/to/netscan/scripts/netscan_mcp_server.py"],
-      "env": {
-        "NETSCAN_MCP_ENABLE_RUN": "true"
-      }
+      "command": "/absolute/path/to/netscan/netscan_mcp_server.py"
     }
   }
 }
 ```
 
+On its first host run, this launcher finds Python 3.12, creates `.venv`, and
+installs `requirements.txt`. Later runs automatically reuse and re-execute under
+that environment. Bootstrap diagnostics are written to stderr and therefore do
+not corrupt the MCP stdio protocol. Set `DISABLE_VENV=1` to use the current
+interpreter, which is also the automatic behavior inside a container.
+
 Do not launch the stdio server through `./netscan`: launcher status messages are
 ordinary stdout and can corrupt an MCP stdio connection.
 
 To route supported TCP connections through proxychains, make proxychains the host
-command and put Python first in its arguments:
+command and put the root launcher in its arguments:
 
 ```json
 {
@@ -159,11 +162,9 @@ command and put Python first in its arguments:
       "command": "proxychains4",
       "args": [
         "-q",
-        "/absolute/path/to/netscan/.venv/bin/python",
-        "/absolute/path/to/netscan/scripts/netscan_mcp_server.py"
+        "/absolute/path/to/netscan/netscan_mcp_server.py"
       ],
       "env": {
-        "NETSCAN_MCP_ENABLE_RUN": "true",
         "NETSCAN_MCP_ALLOWED_MODULES": "httpscan,sshscan,smbscan,portscan"
       }
     }
@@ -180,7 +181,7 @@ scanner options should be preferred where a module provides them.
 For a localhost MCP endpoint at `http://127.0.0.1:8765/mcp`:
 
 ```bash
-NETSCAN_MCP_ENABLE_RUN=true .venv/bin/python scripts/netscan_mcp_server.py \
+./netscan_mcp_server.py \
   --transport streamable-http --host 127.0.0.1 --port 8765
 ```
 
@@ -195,10 +196,9 @@ After building the normal NetScan image, an MCP host can launch it over stdio:
 
 ```bash
 docker run --rm -i --network host \
-  --env NETSCAN_MCP_ENABLE_RUN=true \
   --volume "$PWD/config.cfg:/app/config.cfg:ro" \
-  --entrypoint python \
-  netscan:latest /app/scripts/netscan_mcp_server.py
+  --entrypoint /app/netscan_mcp_server.py \
+  netscan:latest
 ```
 
 Use the same command and arguments in the MCP host configuration. `--entrypoint`
@@ -207,7 +207,9 @@ stdio channel.
 
 ## Policy settings
 
-- `NETSCAN_MCP_ENABLE_RUN`: must be `true` to execute scans.
+- `NETSCAN_MCP_ENABLE_RUN`: the root launcher defaults this to `true`. Set it to
+  `false` to force read-only/help operation. Launching the internal
+  `scripts/netscan_mcp_server.py` directly remains disabled unless it is `true`.
 - `NETSCAN_MCP_ALLOWED_MODULES`: comma-separated subset of scanner modules.
 - `NETSCAN_MCP_MAX_TIMEOUT`: maximum tool timeout in seconds; default `3600`.
 - `NETSCAN_MCP_MAX_OUTPUT`: maximum captured output bytes; default `200000`.
