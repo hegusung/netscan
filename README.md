@@ -7,13 +7,14 @@
 
 # NetScan
 
-> Netscan is a network scanner made for large-scope pentesting. 
-> It lets you scan and do your recon phase on more that 20+ protocols very quickly. All results are store in an elasticsearch database and browsable with the Kibana power.
+> NetScan is a network scanner made for authorized, large-scope pentesting.
+> It performs reconnaissance across more than 20 protocols. Results can be stored
+> in Elasticsearch and analyzed with the provided Kibana dashboards.
 > Scan, Filter, Exploit !
 
 ## Features
 
-- [x] Everything is stored in Elasticsearch. Data is visible via Kibana
+- [x] Findings can be stored in Elasticsearch and explored in Kibana
 - [x] Active Directory
   - [x] Enumeration
   - [x] Active Directory attacks
@@ -118,6 +119,9 @@
 - [x] HTTP scanner
   - [x] HTTP service header and page title enumeration
   - [x] HTTP authentication
+  - [x] Directory and file discovery
+  - [x] Screenshots with GoWitness
+  - [x] Proxy, custom methods, request data, headers and cookies
   - [x] HTTP modules
     - [x] Axis2
     - [x] Tomcat
@@ -126,6 +130,113 @@
     - [x] Jenkins
     - [x] PhpMyAdmin
     - [x] And more !  
+
+## Complete command coverage
+
+The command-line help is the authoritative reference for arguments and defaults:
+
+```bash
+./netscan -h
+./netscan <command> --help
+./netscan <command> --list-modules
+```
+
+The last command is available on scanners that support modules. The currently
+available top-level commands are:
+
+| Command | Coverage |
+| --- | --- |
+| `adscan` | Active Directory, LDAP, Kerberos, AD CS and BloodHound collection |
+| `dnsscan` | DNS records, reverse DNS, subdomains, AXFR and DC discovery |
+| `es_query` | Query and export NetScan results from Elasticsearch |
+| `ftpscan` | FTP authentication, listing and credential campaigns |
+| `generate_payload` | Generate payloads used by supported execution workflows |
+| `httpscan` | HTTP(S) discovery, content discovery, screenshots and modules |
+| `jdwpscan` | Java Debug Wire Protocol discovery and command execution |
+| `mcpscan` | Discover and inspect MCP endpoints and their exposed tools |
+| `mongoscan` | MongoDB authentication, databases and credential campaigns |
+| `mssqlscan` | Microsoft SQL Server enumeration, queries and execution |
+| `mysqlscan` | MySQL authentication, databases and queries |
+| `netscan_mcp_server` | Start the strongly typed NetScan MCP server |
+| `pingscan` | Large-scope host discovery |
+| `portscan` | TCP scanning, Nmap service detection and NSE scripts |
+| `postgrescan` | PostgreSQL enumeration, queries and execution |
+| `rdpscan` | RDP authentication and vulnerability modules |
+| `redisscan` | Redis authentication, enumeration and RCE checks |
+| `rpcscan` | RPC and NFS enumeration, mounts and NFS file operations |
+| `rsh_listener` | Start the configured interactive reverse-shell listener |
+| `rsyncscan` | Rsync service and module enumeration |
+| `rtspscan` | RTSP stream discovery and screenshots |
+| `server` | Start configurable HTTP, LDAP and SMB callback servers |
+| `smbscan` | SMB enumeration, secrets, execution and vulnerability modules |
+| `snmpscan` | SNMPv2/v3 discovery, community campaigns and enumeration |
+| `shell` | Open an interactive shell inside NetScan's managed environment |
+| `sshscan` | SSH authentication, execution and local-enumeration modules |
+| `telnetscan` | Telnet authentication and command execution |
+| `tlsscan` | TLS versions, certificates and cipher-suite checks |
+| `vncscan` | VNC authentication, screenshots and remote input |
+| `whoisscan` | WHOIS lookup and registration data collection |
+| `winrmscan` | WinRM password/NTLM authentication and execution |
+
+### Scope-wide credential campaigns
+
+Credential campaigns are supported consistently across FTP, MongoDB, MSSQL,
+MySQL, PostgreSQL, RDP, Redis, SMB, SNMP, SSH, Telnet, VNC and WinRM. Depending
+on the protocol, campaigns accept usernames, passwords, NTLM hashes or SNMP
+communities and can use simple `username=password` attempts or `username:password`
+files. Campaign controls include dedicated workers, delay, jitter, round delay,
+maximum attempts per account and optional continuation after a success.
+
+Validation results are stored without clear-text secrets. Through MCP, a later
+job can reuse an opaque credential ID from Elasticsearch without disclosing the
+underlying secret to the agent.
+
+### Nested scanner modules
+
+The runtime module list is available with `--list-modules`. It currently covers:
+
+- Active Directory: NoPac, ZeroLogon, LDAP security and insecure DNS updates.
+- HTTP: filesystem/content discovery, headers, secrets, repositories, WebDAV,
+  authentication, 403 bypasses and checks for common products such as Tomcat,
+  Jenkins, JBoss, WebLogic, GlassFish, Drupal, CouchDB, Elasticsearch and vSphere.
+- RDP: BlueKeep detection.
+- SMB: MS17-010, SambaCry, DropTheMic, SMBGhost, PetitPotam, DFSCoerce,
+  PrintNightmare and Print Spooler checks.
+- SSH: LinPEAS, kernel/package/interface enumeration, sudo checks, PwnKit,
+  Dirty Pipe and SquashFS-related checks.
+
+Some modules authenticate, modify remote state, upload payloads or execute
+commands. Review each command's help and use them only on systems for which you
+have explicit authorization.
+
+### Detailed Windows and Active Directory coverage
+
+SMB supports password, NTLM, Kerberos, null-session and guest authentication;
+share listing and file search/download; SAM and LSA secret collection; user,
+group, administrator, application, process, password-policy, logged-on-user and
+session enumeration; RID cycling; and WMI, SMB or MMC command execution,
+including PowerShell and generated payload workflows.
+
+Active Directory coverage includes domains, OUs, containers, users, groups,
+hosts, DNS, trusts, GPOs, password policies, delegation and RBCD; Kerberoasting
+and AS-REP roasting; GPP credentials; ACLs; TGT/TGS operations; AD CS and
+certificate templates; LAPS, gMSA and sMSA secrets; NTDS collection; user
+credential campaigns; BloodHound export; and explicitly selected directory
+modifications.
+
+### Elasticsearch, Kibana and MCP
+
+Unless database output is disabled with `--nodb`, findings are indexed by
+session in Elasticsearch. The supplied Kibana saved objects provide views for
+ports, services, HTTP content, vulnerabilities, Active Directory, SMB, SNMP,
+DNS, credentials, secrets, Nmap scripts and tool logs. `es_query` can search or
+export the same data from the CLI.
+
+The MCP server exposes strongly typed tools generated from NetScan's native
+`argparse` definitions. It supports local stdio and Streamable HTTP, background
+jobs, cancellation, bounded logs, normalized findings, exports and
+Elasticsearch session/index handoff. See [MCP server](#3-mcp-server) and the
+[MCP server guide](docs/mcp-server.md).
 
 
 

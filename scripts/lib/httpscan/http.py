@@ -178,13 +178,14 @@ class HTTP:
                 session.mount('https://', SSLAdapter(ssl_version))
                 req = requests.Request(method, url, params=params, data=data, headers=headers, auth=r_auth, cookies=cookies)
                 prepped = session.prepare_request(req)
-                res = session.send(prepped,
+                with session.send(
+                    prepped,
                     stream=True,
                     verify=False,
                     proxies=proxies,
                     timeout=(self.connect_timeout, self.read_timeout),
-                )
-                response_data = self.parse_response(session, res)
+                ) as res:
+                    response_data = self.parse_response(session, res)
 
                 # meta Refresh in HTML, follow it
                 if 'refresh' in response_data:

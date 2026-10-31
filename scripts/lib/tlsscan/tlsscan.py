@@ -10,12 +10,36 @@ import dataclasses
 
 from sslyze import *
 import sslyze
-from sslyze.mozilla_tls_profile.mozilla_config_checker import (
-     MozillaTlsConfigurationChecker,
-     ServerNotCompliantWithMozillaTlsConfiguration,
-     ServerScanResultIncomplete,
-)
-from sslyze.mozilla_tls_profile.mozilla_config_checker import MozillaTlsConfigurationEnum
+try:
+    # SSLyze < 6.3
+    from sslyze.mozilla_tls_profile.mozilla_config_checker import (
+         MozillaTlsConfigurationChecker,
+         ServerNotCompliantWithMozillaTlsConfiguration,
+         ServerScanResultIncomplete,
+    )
+    from sslyze.mozilla_tls_profile.mozilla_config_checker import MozillaTlsConfigurationEnum
+
+    def check_server_against_mozilla_config(server_scan_result, profile_name):
+        mozilla_config = getattr(MozillaTlsConfigurationEnum, profile_name.upper())
+        MozillaTlsConfigurationChecker.get_default().check_server(
+            against_config=mozilla_config,
+            server_scan_result=server_scan_result,
+        )
+except ModuleNotFoundError:
+    # SSLyze >= 6.3 renamed and simplified the Mozilla profile API.
+    from sslyze.mozilla_tls_profile.tls_config_checker import (
+        MozillaTlsConfiguration,
+        ServerNotCompliantWithTlsConfiguration as ServerNotCompliantWithMozillaTlsConfiguration,
+        ServerScanResultIncomplete,
+        TlsConfigurationEnum,
+        check_server_against_tls_configuration,
+    )
+
+    def check_server_against_mozilla_config(server_scan_result, profile_name):
+        mozilla_config = MozillaTlsConfiguration.get(
+            getattr(TlsConfigurationEnum, "MOZILLA_%s" % profile_name.upper())
+        )
+        check_server_against_tls_configuration(server_scan_result, mozilla_config)
 from sslyze.plugins.session_renegotiation_plugin import SessionRenegotiationScanResult
 from sslyze.scanner.models import SessionRenegotiationScanAttempt
 
@@ -56,18 +80,11 @@ def tlsscan_worker(target, tls_config, timeout):
         else:
             certificate_domain = "<No domain>"
 
-        mozilla_checker = MozillaTlsConfigurationChecker.get_default()
         try:
-            if tls_config == 'old':
-                mozilla_config = MozillaTlsConfigurationEnum.OLD
-            elif tls_config == 'intermediate':
-                mozilla_config = MozillaTlsConfigurationEnum.INTERMEDIATE
-            elif tls_config == 'modern':
-                mozilla_config = MozillaTlsConfigurationEnum.MODERN
-            else:
+            if tls_config not in ('old', 'intermediate', 'modern'):
                 raise NotImplementedError()
-            
-            mozilla_checker.check_server(against_config=mozilla_config, server_scan_result=res)
+
+            check_server_against_mozilla_config(res, tls_config)
 
             Output.success({'target': 'ssl://%s:%d' % (target['hostname'], target['port']), 'message': '%s\t\t\tTLS: Certificate compliant with Mozilla\'s %s configuration' % (certificate_domain, tls_config)}) 
         except ServerNotCompliantWithMozillaTlsConfiguration as e:

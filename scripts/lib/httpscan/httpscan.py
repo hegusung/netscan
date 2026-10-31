@@ -17,7 +17,18 @@ http_modules = ModuleManager('lib/httpscan/modules')
 
 def httpscan_worker(target, verb, data, actions, useragent, header_dict, http_auth, cookie_dict, proxy, dir_bruteforce, extensions, dir_bruteforce_workers, timeout, excluded_code=[], inexistant_url=[], ignore_cert=True):
     try:
-        httpscan = HTTP(target['method'], target['hostname'], target['port'], useragent, proxy, timeout, headers=header_dict, auth=http_auth, cookies=cookie_dict)
+        httpscan = HTTP(
+            target['method'],
+            target['hostname'],
+            target['port'],
+            useragent,
+            proxy,
+            timeout,
+            headers=header_dict,
+            auth=http_auth,
+            cookies=cookie_dict,
+            read_timeout=timeout,
+        )
 
         if verb == 'GET':
             output = httpscan.get(target['path'], params=target['params'] if 'params' in target else None)

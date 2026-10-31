@@ -26,7 +26,7 @@ def main():
     # Performance & Timing
     perf_group = parser.add_argument_group('Performance & Timing')
     perf_group.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
-    perf_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
+    perf_group.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect/read timeout', default=5, dest='timeout')
     perf_group.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
 
     # HTTP Request Configuration

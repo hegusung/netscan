@@ -3,35 +3,22 @@ import copy
 from urllib.parse import urlparse
 from utils.utils import detect_encoding
 
-def dir_file_count(dir_file):
-    count = 0
 
+def iter_directory_items(dir_file):
     encoding = detect_encoding(dir_file)
+    with open(dir_file, encoding=encoding) as wordlist:
+        for line in wordlist:
+            directory_item = line.split('#')[0].strip()
+            if not directory_item or "://" in directory_item:
+                continue
+            yield directory_item
 
-    f = open(dir_file, encoding=encoding)
-    for dir_item in f:
-        dir_item = dir_item.split('#')[0].strip()
-        if len(dir_item) == 0:
-            continue
 
-        count += 1
-
-    f.close()
-
-    return count
+def dir_file_count(dir_file):
+    return sum(1 for _ in iter_directory_items(dir_file))
 
 def dir_bruteforce_generator(target, dir_file, extension_list):
-    encoding = detect_encoding(dir_file)
-
-    f = open(dir_file, encoding=encoding)
-    for dir_item in f:
-        dir_item = dir_item.split('#')[0].strip()
-        if len(dir_item) == 0:
-            continue
-
-        if "://" in dir_item:
-            continue
-
+    for dir_item in iter_directory_items(dir_file):
         for extension in extension_list:
             if len(extension) != 0:
                 path = os.path.join(target['path'], "%s.%s" % (dir_item, extension))
@@ -95,6 +82,4 @@ def dir_bruteforce_generator(target, dir_file, extension_list):
                     t['params'][key] = value
 
             yield t
-
-    f.close()
 

@@ -105,7 +105,15 @@ def snmpscan_worker(target, actions, creds, timeout):
         auth = None
         if 'SNMPv2' in protocols:
             auth = ('SNMPv2', community)
-            Output.success({'target': snmp.url(), 'message': '(SNMPv2) Authentication success with community string: %s' % community})
+            Output.event(
+                'authentication',
+                'SNMP community accepted',
+                target=snmp.url(),
+                severity='success',
+                status='success',
+                data={'protocol': 'snmp', 'secret_type': 'community'},
+                sensitive=True,
+            )
 
             cred_info = {
                 'host': target['hostname'],
