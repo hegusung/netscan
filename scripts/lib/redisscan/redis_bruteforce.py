@@ -20,6 +20,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         state.mark_success(target, None, username)
         Output.event('authentication', 'Redis password accepted', target=scanner.url(), severity='success', status='success', data={'protocol': 'redis', 'secret_type': 'password'}, sensitive=True)
         DB.insert_credential({'host': target['hostname'], 'port': target['port'], 'service': 'redis', 'url': scanner.url(), 'type': 'password', 'username': username, 'password': password})
+    except Exception:
+        record_credential_validation(target, service='redis', username=username, secret=password, status='error', url=scanner.url())
     finally:
         try:
             scanner.disconnect()

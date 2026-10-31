@@ -21,6 +21,11 @@ def _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=False):
             wait_before_attempt(delay, jitter)
             smbscan = SMBScan(target['hostname'], target['port'], timeout)
             if not smbscan.connect():
+                record_credential_validation(
+                    target, service='smb', domain=domain, username=username,
+                    secret=secret, secret_kind='hash' if use_hash else 'password',
+                    status='error', url=smbscan.url(),
+                )
                 Output.write({'target': smbscan.url(), 'message': 'Unable to connect to SMB server'})
                 return
             if use_hash:
@@ -95,7 +100,18 @@ def _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=False):
                     status='failure', url=smbscan.url(),
                 )
             else:
+                record_credential_validation(
+                    target, service='smb', domain=domain, username=username,
+                    secret=secret, secret_kind='hash' if use_hash else 'password',
+                    status='failure', url=smbscan.url(),
+                )
                 Output.write({'target': smbscan.url(), 'message': 'Authentication failure for %s\\%s: %s' % (domain, username, str(exc))})
+        except Exception:
+            record_credential_validation(
+                target, service='smb', domain=domain, username=username,
+                secret=secret, secret_kind='hash' if use_hash else 'password',
+                status='error', url=smbscan.url() if smbscan is not None else 'smb://%s:%s' % (target['hostname'], target['port']),
+            )
         finally:
             if smbscan is not None:
                 try:

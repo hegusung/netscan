@@ -25,6 +25,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
     except psycopg2.OperationalError as exc:
         status = 'failure' if 'FATAL:' in str(exc) or 'fe_sendauth:' in str(exc) else 'error'
         record_credential_validation(target, service='postgresql', username=username, secret=password, status=status, url=scanner.url())
+    except Exception:
+        record_credential_validation(target, service='postgresql', username=username, secret=password, status='error', url=scanner.url())
     finally:
         try:
             scanner.disconnect()

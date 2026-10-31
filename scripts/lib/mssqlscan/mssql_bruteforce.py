@@ -32,6 +32,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
             Output.event('privilege', 'MSSQL sysadmin privileges for account %s' % username, target=scanner.url(), severity='high', status='admin', data={'protocol': 'mssql', 'domain': domain, 'username': username}, sensitive=True)
     except AuthFailure:
         record_credential_validation(target, service='mssql', domain=domain, username=username, secret=password, status='failure', url=scanner.url())
+    except Exception:
+        record_credential_validation(target, service='mssql', domain=domain, username=username, secret=password, status='error', url=scanner.url())
     finally:
         try:
             scanner.disconnect()

@@ -3,6 +3,8 @@ import traceback
 import logging
 
 import redis
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 
 from utils.utils import AuthFailure
 
@@ -26,7 +28,14 @@ class Redis:
         success = False
 
         try:
-            self.conn = redis.StrictRedis(host=self.hostname, port=self.port, password=password, socket_timeout=self.timeout, socket_connect_timeout=self.timeout)
+            self.conn = redis.StrictRedis(
+                host=self.hostname,
+                port=self.port,
+                password=password,
+                socket_timeout=self.timeout,
+                socket_connect_timeout=self.timeout,
+                retry=Retry(NoBackoff(), 0),
+            )
 
             version = self.conn.info()["redis_version"]
 

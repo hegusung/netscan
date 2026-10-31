@@ -176,58 +176,65 @@ class SNMP:
 
     async def _request_v2_async(self, community, oid):
         engine = SnmpEngine()
-        transport = await UdpTransportTarget.create(
-            (self.hostname, self.port),
-            timeout=self.timeout / 6.0,
-            retries=0,
-        )
-        ctx = ContextData()
+        try:
+            transport = await UdpTransportTarget.create(
+                (self.hostname, self.port),
+                timeout=self.timeout / 6.0,
+                retries=0,
+            )
+            ctx = ContextData()
 
-        results = []
-        # walk_cmd yields multiple responses (async generator)
-        async for (err_ind, err_stat, err_idx, var_binds) in walk_cmd(
-            engine,
-            CommunityData(community, mpModel=1),
-            transport,
-            ctx,
-            ObjectType(ObjectIdentity(oid)),
-            lexicographicMode=False,
-        ):
-            if err_ind:
-                s = str(err_ind)
-                if "No SNMP response received before timeout" in s:
-                    raise SNMPTimeout(err_ind)
-                raise SNMPError(f"{err_stat}: {err_ind}")
-            if err_stat:
-                raise SNMPError(f"{int(err_stat)}: {err_stat.prettyPrint()}")
+            results = []
+            # walk_cmd yields multiple responses (async generator)
+            walker = walk_cmd(
+                engine,
+                CommunityData(community, mpModel=1),
+                transport,
+                ctx,
+                ObjectType(ObjectIdentity(oid)),
+                lexicographicMode=False,
+            )
+            try:
+                async for (err_ind, err_stat, err_idx, var_binds) in walker:
+                    if err_ind:
+                        s = str(err_ind)
+                        if "No SNMP response received before timeout" in s:
+                            raise SNMPTimeout(err_ind)
+                        raise SNMPError(f"{err_stat}: {err_ind}")
+                    if err_stat:
+                        raise SNMPError(f"{int(err_stat)}: {err_stat.prettyPrint()}")
 
-            for vb in var_binds:
-                if isinstance(vb[1], pysnmp.proto.rfc1905.EndOfMibView):
-                    continue
-                results.append([
-                    vb[0].prettyPrint(),
-                    vb[1].__class__.__name__,
-                    vb[1].prettyPrint()
-                ])
-
-        engine.closeDispatcher()
-        return results
+                    for vb in var_binds:
+                        if isinstance(vb[1], pysnmp.proto.rfc1905.EndOfMibView):
+                            continue
+                        results.append([
+                            vb[0].prettyPrint(),
+                            vb[1].__class__.__name__,
+                            vb[1].prettyPrint()
+                        ])
+            finally:
+                await walker.aclose()
+            return results
+        finally:
+            engine.closeDispatcher()
 
     async def _request_v3_noauth_async(self):
         engine = SnmpEngine()
-        transport = await UdpTransportTarget.create(
-            (self.hostname, self.port),
-            timeout=self.timeout / 6.0,
-            retries=0,
-        )
-        err_ind, err_stat, err_idx, var_binds = await get_cmd(
-            engine,
-            UsmUserData('user-none-none'),
-            transport,
-            ContextData(),
-            ObjectType(ObjectIdentity('IF-MIB', 'ifInOctets', 1)),
-        )
-        engine.closeDispatcher()
+        try:
+            transport = await UdpTransportTarget.create(
+                (self.hostname, self.port),
+                timeout=self.timeout / 6.0,
+                retries=0,
+            )
+            err_ind, err_stat, err_idx, var_binds = await get_cmd(
+                engine,
+                UsmUserData('user-none-none'),
+                transport,
+                ContextData(),
+                ObjectType(ObjectIdentity('IF-MIB', 'ifInOctets', 1)),
+            )
+        finally:
+            engine.closeDispatcher()
         if err_ind:
             s = str(err_ind)
             if "No SNMP response received before timeout" in s:

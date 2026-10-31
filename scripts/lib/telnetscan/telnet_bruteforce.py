@@ -22,8 +22,9 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         Output.event('authentication', 'Authentication success for account %s' % username, target=scanner.url(), severity='success', status='success', data={'protocol': 'telnet', 'username': username, 'secret_type': 'password'}, sensitive=True)
         DB.insert_credential({'host': target['hostname'], 'port': target['port'], 'service': 'telnet', 'url': scanner.url(), 'type': 'password', 'username': username, 'password': password})
     except ConnectionRefusedError:
-        if scanner is not None:
-            record_credential_validation(target, service='telnet', username=username, secret=password, status='error', url=scanner.url())
+        record_credential_validation(target, service='telnet', username=username, secret=password, status='error', url=scanner.url() if scanner is not None else 'telnet://%s:%s' % (target['hostname'], target['port']))
+    except Exception:
+        record_credential_validation(target, service='telnet', username=username, secret=password, status='error', url=scanner.url() if scanner is not None else 'telnet://%s:%s' % (target['hostname'], target['port']))
     finally:
         if scanner is not None:
             try:

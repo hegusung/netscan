@@ -564,22 +564,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if args.transport == "streamable-http":
-        loopback_hosts = {"127.0.0.1", "localhost", "::1"}
-        if args.host not in loopback_hosts and not env_flag("NETSCAN_MCP_ALLOW_REMOTE_HTTP"):
-            raise SystemExit(
-                "Refusing a non-loopback HTTP bind. Set "
-                "NETSCAN_MCP_ALLOW_REMOTE_HTTP=true only behind appropriate authentication."
-            )
-        try:
+    try:
+        if args.transport == "streamable-http":
+            loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+            if args.host not in loopback_hosts and not env_flag("NETSCAN_MCP_ALLOW_REMOTE_HTTP"):
+                raise SystemExit(
+                    "Refusing a non-loopback HTTP bind. Set "
+                    "NETSCAN_MCP_ALLOW_REMOTE_HTTP=true only behind appropriate authentication."
+                )
             mcp.run(transport="streamable-http", host=args.host, port=args.port)
-        finally:
-            JOB_MANAGER.shutdown(wait=True)
-    else:
-        try:
+        else:
             mcp.run(transport="stdio")
-        finally:
-            JOB_MANAGER.shutdown(wait=True)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        JOB_MANAGER.shutdown(wait=True)
 
 
 if __name__ == "__main__":

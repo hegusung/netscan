@@ -19,6 +19,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         state.mark_success(target, None, username)
         Output.event('authentication', 'Authentication success for account %s' % username, target=scanner.url(), severity='success', status='success', data={'protocol': 'mongo', 'username': username, 'database': target['database'], 'secret_type': 'password'}, sensitive=True)
         DB.insert_credential({'host': target['hostname'], 'port': target['port'], 'service': 'mongo', 'url': scanner.url(), 'type': 'password', 'username': username, 'password': password})
+    except Exception:
+        record_credential_validation(target, service='mongo', username=username, secret=password, status='error', url=scanner.url())
     finally:
         try:
             scanner.disconnect()

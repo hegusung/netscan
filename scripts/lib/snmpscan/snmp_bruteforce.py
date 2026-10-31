@@ -24,5 +24,7 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         record_credential_validation(target, service='snmp', username=username, secret=community, secret_kind='community', status='failure', url=scanner.url())
     except (SNMPError, pysnmp.error.PySnmpError):
         record_credential_validation(target, service='snmp', username=username, secret=community, secret_kind='community', status='error', url=scanner.url())
+    except Exception:
+        record_credential_validation(target, service='snmp', username=username, secret=community, secret_kind='community', status='error', url=scanner.url())
     finally:
         state.complete_attempt(target)

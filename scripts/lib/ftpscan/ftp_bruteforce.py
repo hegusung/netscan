@@ -24,9 +24,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         Output.event('authentication', 'Authentication success for account %s' % username, target=scanner.url(), severity='success', status='success', data={'protocol': 'ftp', 'username': username, 'secret_type': 'password'}, sensitive=True)
         DB.insert_credential({'host': target['hostname'], 'port': target['port'], 'service': 'ftp', 'url': scanner.url(), 'type': 'password', 'username': username, 'password': password})
         DB.insert_vulnerability({'host': target['hostname'], 'port': target['port'], 'service': 'ftp', 'url': scanner.url(), 'name': 'Default or predictable credentials on FTP service', 'description': 'FTP accepts a password from the authorized credential campaign for account %s' % username})
-    except (TimeoutError, ConnectionResetError, EOFError):
-        if scanner is not None:
-            record_credential_validation(target, service='ftp', username=username, secret=password, status='error', url=scanner.url())
+    except Exception:
+        record_credential_validation(target, service='ftp', username=username, secret=password, status='error', url=scanner.url() if scanner is not None else 'ftp://%s:%s' % (target['hostname'], target['port']))
         time.sleep(1)
     finally:
         if scanner is not None:

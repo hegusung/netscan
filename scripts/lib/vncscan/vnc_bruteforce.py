@@ -25,6 +25,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         Output.event('authentication', 'VNC password accepted', target=scanner.url(), severity='success', status='success', data={'protocol': 'vnc', 'secret_type': 'password'}, sensitive=True)
         DB.insert_credential({'host': target['hostname'], 'port': target['port'], 'service': 'vnc', 'url': scanner.url(), 'type': 'password', 'username': username, 'password': password})
         sleep(0.5)
+    except Exception:
+        record_credential_validation(target, service='vnc', username=username, secret=password, status='error', url=scanner.url())
     finally:
         try:
             scanner.disconnect()

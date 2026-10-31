@@ -28,6 +28,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         else:
             credential.update({'host': target['hostname'], 'port': target['port'], 'service': 'rdp', 'url': scanner.url()})
             DB.insert_credential(credential)
+    except Exception:
+        record_credential_validation(target, service='rdp', domain=domain, username=username, secret=password, status='error', url=scanner.url())
     finally:
         try:
             scanner.disconnect()

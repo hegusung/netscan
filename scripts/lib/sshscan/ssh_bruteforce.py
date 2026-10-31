@@ -1,5 +1,4 @@
 import socket
-import traceback
 import paramiko
 from .ssh import SSH
 from utils.credential_campaign import (
@@ -56,13 +55,26 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
                 status='failure', url=ssh.url(),
             )
         except ValueError:
-            pass
+            record_credential_validation(
+                target, service='ssh', username=username, secret=password,
+                status='error', url=ssh.url(),
+            )
         except paramiko.SSHException:
+            record_credential_validation(
+                target, service='ssh', username=username, secret=password,
+                status='error', url=ssh.url(),
+            )
             Output.write({'target': ssh.url(), 'message': 'Server overloaded, try reducing amount of workers'})
         except socket.error:
-            pass
-        except Exception as exc:
-            print("%s: %s\n%s" % (type(exc), exc, traceback.format_exc()))
+            record_credential_validation(
+                target, service='ssh', username=username, secret=password,
+                status='error', url=ssh.url(),
+            )
+        except Exception:
+            record_credential_validation(
+                target, service='ssh', username=username, secret=password,
+                status='error', url=ssh.url(),
+            )
         finally:
             try:
                 ssh.disconnect()

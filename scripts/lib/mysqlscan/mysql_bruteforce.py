@@ -23,6 +23,8 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         DB.insert_vulnerability({'host': target['hostname'], 'port': target['port'], 'service': 'mysql', 'url': scanner.url(), 'name': 'Default or predictable credentials on MySQL service', 'description': 'MySQL accepts a password from the authorized credential campaign for account %s' % username})
     except AuthFailure:
         record_credential_validation(target, service='mysql', username=username, secret=password, status='failure', url=scanner.url())
+    except Exception:
+        record_credential_validation(target, service='mysql', username=username, secret=password, status='error', url=scanner.url())
     finally:
         try:
             scanner.disconnect()
