@@ -29,3 +29,4 @@ server_data/ressources/*
 !scripts/lib/sshscan/linpeas.sh
 .vscode/
 .venv/**
+.netscan-mcp/

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import sys
 from utils.utils import normalize_path
 from utils.process_inputs import str_ports, port_file
@@ -63,6 +64,11 @@ def main():
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+
+    if args.password is None:
+        args.password = os.environ.pop('NETSCAN_MCP_CREDENTIAL_PASSWORD', None)
+    else:
+        os.environ.pop('NETSCAN_MCP_CREDENTIAL_PASSWORD', None)
 
     if args.bruteforce or args.spray or args.simple_bruteforce:
         if args.username_file is None:

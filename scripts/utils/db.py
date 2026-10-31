@@ -245,6 +245,7 @@ class DB:
 
             # Add generic data : timestamp
             doc['@timestamp'] = int(datetime.now().timestamp()*1000)
+            Output.write_mcp_document_event(doc)
 
             # tag system
             if 'tags' in doc:

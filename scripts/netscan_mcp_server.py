@@ -29,10 +29,12 @@ from utils.mcp_runtime import (
     run_module,
 )
 from utils.mcp_elasticsearch import elasticsearch_context
+from utils.mcp_credentials import CredentialCatalog
 from utils.mcp_jobs import ScanJobManager
 
 
 JOB_MANAGER = ScanJobManager()
+CREDENTIAL_CATALOG = CredentialCatalog()
 
 
 mcp = MCPServer(
@@ -77,6 +79,10 @@ mcp = MCPServer(
         "netscan_scan_artifacts and read the returned resource URIs. Scan findings use a stable "
         "versioned event envelope with category, severity, status, target, timestamp, sensitive, "
         "and data fields; prefer those fields over parsing terminal output."
+        " Use netscan_credentials to discover opaque IDs for credentials already stored in the "
+        "selected Elasticsearch session, then netscan_run_with_credential to reuse one without "
+        "requesting or disclosing its password or hash. For an explicitly selected set, use "
+        "netscan_run_with_credentials and track each returned scan_id independently."
     ),
 )
 
@@ -98,6 +104,8 @@ async def netscan_status() -> dict[str, object]:
         "retained_jobs": JOB_MANAGER.retention,
         "maximum_artifact_bytes": JOB_MANAGER.artifact_file_limit,
         "maximum_artifact_total_bytes": JOB_MANAGER.artifact_total_limit,
+        "persistent_state_directory": str(JOB_MANAGER.state_dir),
+        "credential_reuse_modules": ["smbscan", "sshscan", "winrmscan"],
     }
 
 
@@ -109,6 +117,135 @@ async def netscan_context(check_elasticsearch: bool = True) -> dict[str, object]
     configured credentials only inside the server process.
     """
     return elasticsearch_context(check_connection=check_elasticsearch)
+
+
+@mcp.tool()
+async def netscan_credentials(
+    session: str | None = None,
+    domain: str | None = None,
+    service: str | None = None,
+    host: str | None = None,
+    kind: Literal["password", "hash"] | None = None,
+    limit: Annotated[int, Field(ge=1, le=1000)] = 100,
+) -> dict[str, object]:
+    """List opaque IDs and non-secret metadata for persisted NetScan credentials."""
+    try:
+        return CREDENTIAL_CATALOG.list(
+            session=session,
+            domain=domain,
+            service=service,
+            host=host,
+            kind=kind,
+            limit=limit,
+        )
+    except MCPRuntimeError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def _validate_credential_arguments(arguments: list[str]) -> None:
+    forbidden = {
+        "-u", "-d", "--pass", "--hash", "--key", "-U", "-P", "--ntlm-file"
+    }
+    if any(item.split("=", 1)[0] in forbidden for item in arguments):
+        raise MCPRuntimeError(
+            "Authentication arguments cannot be combined with credential_id"
+        )
+
+
+def _start_credential_job(
+    module: str,
+    targets: str,
+    credential: dict[str, Any],
+    credential_id: str,
+    arguments: list[str],
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    if module == "sshscan" and credential["kind"] != "password":
+        raise MCPRuntimeError("SSH credential reuse currently requires a password")
+    native_arguments = [targets, "-u", str(credential["username"])]
+    if module in {"smbscan", "winrmscan"} and credential.get("domain"):
+        native_arguments.extend(["-d", str(credential["domain"])])
+    native_arguments.extend(arguments)
+    secret_name = (
+        "NETSCAN_MCP_CREDENTIAL_PASSWORD"
+        if credential["kind"] == "password"
+        else "NETSCAN_MCP_CREDENTIAL_HASH"
+    )
+    credential_context = {
+        "credential_id": credential_id,
+        "session": credential.get("session"),
+        "kind": credential.get("kind"),
+        "username": credential.get("username"),
+        "provenance": credential.get("provenance"),
+        "secret_disclosed": False,
+    }
+    result = JOB_MANAGER.start(
+        module,
+        native_arguments,
+        timeout_seconds,
+        secret_environment={secret_name: str(credential["_secret"])},
+        context={"credential": credential_context},
+    )
+    result["credential"] = credential_context
+    return result
+
+
+@mcp.tool()
+async def netscan_run_with_credential(
+    module: Literal["smbscan", "sshscan", "winrmscan"],
+    targets: str,
+    credential_id: str,
+    arguments: list[str] | None = None,
+    session: str | None = None,
+    timeout_seconds: Annotated[int, Field(ge=1, le=maximum_timeout())] = 300,
+) -> dict[str, object]:
+    """Start a scan with a stored credential while keeping its secret server-side."""
+    arguments = list(arguments or [])
+    try:
+        _validate_credential_arguments(arguments)
+        credential = CREDENTIAL_CATALOG.resolve(credential_id, session=session)
+        return _start_credential_job(
+            module, targets, credential, credential_id, arguments, timeout_seconds
+        )
+    except MCPRuntimeError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def netscan_run_with_credentials(
+    module: Literal["smbscan", "sshscan", "winrmscan"],
+    targets: str,
+    credential_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
+    arguments: list[str] | None = None,
+    session: str | None = None,
+    timeout_seconds: Annotated[int, Field(ge=1, le=maximum_timeout())] = 300,
+) -> dict[str, object]:
+    """Start one bounded, traceable scan job per stored credential ID."""
+    arguments = list(arguments or [])
+    try:
+        _validate_credential_arguments(arguments)
+        resolved = [
+            (credential_id, CREDENTIAL_CATALOG.resolve(credential_id, session=session))
+            for credential_id in credential_ids
+        ]
+        if module == "sshscan" and any(
+            credential["kind"] != "password" for _, credential in resolved
+        ):
+            raise MCPRuntimeError("SSH credential reuse currently requires passwords")
+        jobs = [
+            _start_credential_job(
+                module,
+                targets,
+                credential,
+                credential_id,
+                arguments,
+                timeout_seconds,
+            )
+            for credential_id, credential in resolved
+        ]
+        return {"jobs": jobs, "count": len(jobs), "secrets_disclosed": False}
+    except MCPRuntimeError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 @mcp.tool()

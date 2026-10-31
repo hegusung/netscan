@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any, Mapping
 
 
@@ -17,6 +18,58 @@ TYPE_TO_SEVERITY = {
     "minor": "debug",
     "normal": "info",
 }
+
+SENSITIVE_MESSAGE_PATTERNS = (
+    re.compile(r"(?i)(\bcredentials\b\s+)\S+"),
+    re.compile(r"(?i)(\bpassword\b\s*(?:=|:|is|was)?\s*)\S+"),
+    re.compile(r"(?i)(\b(?:ntlm\s+)?hash\b\s*(?:=|:|is|was)?\s*)\S+"),
+    re.compile(r"(?i)(\baes[ -]?key\b\s*(?:=|:|is|was)?\s*)\S+"),
+    re.compile(r"(?i)(\b(?:api[ -]?key|token|community|secret)\b\s*(?:=|:|is|was)?\s*)\S+"),
+)
+
+DOCUMENT_CATEGORIES = {
+    "tool": "scan",
+    "ip": "asset",
+    "dns": "asset",
+    "port": "service",
+    "script": "finding",
+    "http": "service",
+    "content": "content",
+    "application": "application",
+    "database": "database",
+    "cred_password": "credential",
+    "cred_hash": "credential",
+    "vuln": "vulnerability",
+    "secret": "secret",
+    "snmp": "credential",
+    "domain_password": "credential",
+    "domain_hash": "credential",
+}
+
+SAFE_DOCUMENT_FIELDS = frozenset(
+    {
+        "doc_type",
+        "session",
+        "host",
+        "ip",
+        "port",
+        "protocol",
+        "service",
+        "url",
+        "domain",
+        "username",
+        "name",
+        "database",
+        "table",
+        "path",
+        "share",
+        "source",
+        "target",
+        "query_type",
+        "format",
+        "tags",
+    }
+)
 
 
 def _utc_now() -> str:
@@ -38,6 +91,13 @@ def _infer_category(event_type: str, message: str) -> str:
     if "artifact" in lowered or "written to" in lowered or "saving " in lowered:
         return "artifact"
     return "finding"
+
+
+def redact_sensitive_text(message: str) -> str:
+    redacted = message
+    for pattern in SENSITIVE_MESSAGE_PATTERNS:
+        redacted = pattern.sub(r"\1<redacted>", redacted)
+    return redacted
 
 
 def _infer_status(category: str, message: str) -> str | None:
@@ -76,7 +136,7 @@ def normalize_output_event(message: Mapping[str, Any]) -> dict[str, Any]:
     sensitive = bool(
         explicit.get("sensitive", raw.get("sensitive", False))
         or any(token in text.lower() for token in (" password ", " hash ", "aes key"))
-        or category in {"credential", "secret"}
+        or category in {"authentication", "credential", "secret"}
     )
 
     normalized = {
@@ -91,4 +151,48 @@ def normalize_output_event(message: Mapping[str, Any]) -> dict[str, Any]:
         "data": dict(data),
         "legacy_type": str(raw.get("legacy_type", event_type)),
     }
+    if sensitive:
+        normalized["message"] = redact_sensitive_text(text)
     return normalized
+
+
+def event_from_document(document: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Create a safe normalized event for a document sent to persistence."""
+    source = dict(document)
+    document_type = str(source.get("doc_type", ""))
+    if not document_type:
+        return None
+    if document_type.startswith("domain_") and document_type not in DOCUMENT_CATEGORIES:
+        category = "identity"
+    elif document_type.startswith("host_"):
+        category = "asset"
+    else:
+        category = DOCUMENT_CATEGORIES.get(document_type, "finding")
+    severity = "high" if category in {"vulnerability", "secret"} else "info"
+    if category == "credential":
+        severity = "success"
+    target = source.get("url") or source.get("host") or source.get("domain")
+    label = source.get("name") or source.get("service") or document_type
+    data = {
+        key: value
+        for key, value in source.items()
+        if key in SAFE_DOCUMENT_FIELDS and value is not None
+    }
+    legacy_type = {
+        "high": "major",
+        "success": "success",
+    }.get(severity, "normal")
+    return normalize_output_event(
+        {
+            "type": legacy_type,
+            "target": target,
+            "message": f"Persisted {document_type}: {label}",
+            "event": {
+                "category": category,
+                "severity": severity,
+                "status": "persisted",
+                "sensitive": category in {"credential", "secret"},
+                "data": data,
+            },
+        }
+    )

@@ -8,13 +8,9 @@ import logging
 import paramiko
 
 from .ssh import SSH
-from .ssh_bruteforce import *
-
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
-from utils.credential_campaign import CampaignState
 
 logging.getLogger("paramiko").setLevel(logging.CRITICAL)
 
@@ -44,10 +40,15 @@ def sshscan_worker(target, actions, creds, timeout):
             elif 'key_file' in creds:
                 success = ssh.auth_key(creds['username'], creds['key_file'])
             if success:
-                if 'password' in creds:
-                    Output.success({'target': ssh.url(), 'message': 'Successful authentication with username %s and password %s' % (creds['username'], creds['password'])})
-                elif 'key_file' in creds:
-                    Output.success({'target': ssh.url(), 'message': 'Successful authentication with username %s and key %s' % (creds['username'], creds['key_file'])})
+                secret_type = 'password' if 'password' in creds else 'ssh_key'
+                Output.event(
+                    'authentication',
+                    'Successful authentication for username %s' % creds['username'],
+                    target=ssh.url(), severity='success', status='success',
+                    data={'protocol': 'ssh', 'username': creds['username'],
+                          'secret_type': secret_type},
+                    sensitive=True,
+                )
                 cred_info = {
                     'host': target['hostname'],
                     'port': target['port'],
@@ -65,52 +66,25 @@ def sshscan_worker(target, actions, creds, timeout):
                     output += ssh.execute(actions['command']['command'])
                     Output.write({'target': target['hostname'], 'message': output})
             else:
-                if 'password' in creds:
-                    Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
-                elif 'key_file' in creds:
-                    Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and key %s' % (creds['username'], creds['key_file'])})
+                Output.event(
+                    'authentication',
+                    'Authentication failure for username %s' % creds['username'],
+                    target=ssh.url(), severity='debug', status='failure',
+                    data={'protocol': 'ssh', 'username': creds['username']},
+                    sensitive=True,
+                )
 
         if 'modules' in actions:
             ssh_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
 
-        if 'bruteforce' in actions:
-            if actions['bruteforce'].get('username_file') is not None:
-                Output.highlight({'target': ssh.url(), 'message': 'Starting bruteforce:'})
-
-                username_file = actions['bruteforce']['username_file']
-                password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                bruteforce_workers = actions['bruteforce']['workers']
-
-                options = {
-                    'strategy': actions['bruteforce']['strategy'],
-                    'simple_bruteforce': actions['bruteforce']['simple'],
-                    'max_attempts_per_account': actions['bruteforce']['max_attempts_per_account'],
-                }
-                gen = bruteforce_generator(target, username_file, password_file, **options)
-                gen_size = bruteforce_generator_count(
-                    target,
-                    username_file,
-                    password_file,
-                    strategy=options['strategy'],
-                    simple=options['simple_bruteforce'],
-                    max_attempts_per_account=options['max_attempts_per_account'],
-                )
-                state = CampaignState(
-                    continue_on_success=actions['bruteforce']['continue_on_success']
-                )
-                args = (
-                    timeout,
-                    actions['bruteforce']['bruteforce_delay'],
-                    actions['bruteforce']['jitter'],
-                    state,
-                )
-                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-
     except paramiko.AuthenticationException as e:
-        if 'password' in creds:
-            Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
-        elif 'key_file' in creds:
-            Output.minor({'target': ssh.url(), 'message': 'Authentication failure with username %s and key %s' % (creds['username'], creds['key_file'])})
+        Output.event(
+            'authentication',
+            'Authentication failure for username %s' % creds.get('username', ''),
+            target=ssh.url(), severity='debug', status='failure',
+            data={'protocol': 'ssh', 'username': creds.get('username')},
+            sensitive=True,
+        )
     except ValueError as e:
         Output.minor({'target': ssh.url(), 'message': "Authentication failure because of crypto failure: %s" % str(e)})
     except paramiko.SSHException as e:

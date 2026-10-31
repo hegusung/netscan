@@ -14,7 +14,7 @@ from jinja2 import Template
 
 # Sometimes tqdm hangs during write
 from utils.dispatch import pg_lock
-from utils.events import normalize_output_event
+from utils.events import event_from_document, normalize_output_event
 tqdm.set_lock(pg_lock)
 
 # Colors:
@@ -194,6 +194,13 @@ class Output:
         except (OSError, TypeError, ValueError):
             # Structured capture must never make a scanner fail.
             pass
+
+    @classmethod
+    def write_mcp_document_event(self, document):
+        """Mirror a persistence operation without exposing secret document fields."""
+        event = event_from_document(document)
+        if event is not None:
+            self.write_mcp_event(event)
 
     @classmethod
     def output_worker(self, output_queue):

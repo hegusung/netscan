@@ -215,8 +215,10 @@ Streamable HTTP, including a proxychains-based local setup. It publishes a
 strongly typed MCP tool for every NetScan command, generated from the native
 `argparse` declarations. Scans run as cancellable background jobs with normalized
 findings, bounded output resources, confined downloadable export artifacts, and
-an Elasticsearch session/index handoff. SMB, SSH, and WinRM also share
-scope-wide credential campaign controls. See the
+an Elasticsearch session/index handoff. Jobs and artifacts survive MCP server
+restarts. SMB, SSH, and WinRM share scope-wide credential campaign controls and
+can reuse opaque IDs for credentials persisted in Elasticsearch without
+returning their secrets to the agent. See the
 [MCP server guide](docs/mcp-server.md).
 
 ## 4. Troubleshooting

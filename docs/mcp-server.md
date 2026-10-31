@@ -46,6 +46,12 @@ General-purpose tools are also available:
 - `netscan_status`: inspect configuration, policy, and typed tool names.
 - `netscan_context`: get the session, index, Elasticsearch reachability, and a
   credential-safe Elastic MCP handoff.
+- `netscan_credentials`: list opaque IDs and non-secret metadata for credentials
+  already persisted in the selected NetScan session.
+- `netscan_run_with_credential`: reuse one stored credential with SMB, SSH, or
+  WinRM without returning its password or hash to the MCP client.
+- `netscan_run_with_credentials`: validate an opaque-ID set, then enqueue one
+  bounded and independently traceable SMB, SSH, or WinRM job per credential.
 - `netscan_module_help`: get the native help for a command.
 - `netscan_list_scans`: list queued, active, and completed jobs.
 - `netscan_scan_status`: poll one job and its output progress.
@@ -66,6 +72,15 @@ Structured findings returned by `netscan_scan_result` use event schema version
 `timestamp`, `sensitive`, `data`, and `legacy_type` fields. Agents should use
 these stable fields instead of parsing colored terminal output. The summary
 contains counts by both normalized category and legacy output type.
+Persistence operations also emit normalized events. This gives agents structured
+coverage of services, vulnerabilities, credentials, secrets, applications,
+databases, assets, and AD objects even when an older scanner still uses legacy
+terminal messages. Secret document fields are excluded, and sensitive legacy
+authentication messages are redacted in the MCP event stream.
+Pages returned by `netscan_scan_output` and the corresponding MCP resource apply
+the same defensive redaction to common password, hash, token, API-key, community,
+and secret patterns. The private on-disk state can still contain original scanner
+output and must therefore be protected as sensitive assessment data.
 
 Agents should prefer `netscan_<module>`. `run_netscan` remains useful as a
 compatibility escape hatch when a newly added or unusual CLI behavior cannot be
@@ -101,6 +116,29 @@ relationships. The session is the engagement boundary. Use the Elasticsearch
 MCP to query and correlate those records; credentials can then be supplied to an
 appropriate typed scanner tool when the operator explicitly requests credential
 reuse.
+
+### Stored credential reuse
+
+Call `netscan_credentials` with the exact session and optional domain, service,
+host, or password/hash filters. It returns stable opaque `credential_id` values,
+provenance, and targeting metadata, but never the password or hash. The ID is an
+HMAC of the Elasticsearch document identity using a private key in the MCP state
+directory; neither the Elasticsearch document ID nor its secret-bearing source
+is exposed.
+
+Use `netscan_run_with_credential` to apply one ID to an authorized SMB, SSH, or
+WinRM target scope. Additional non-authentication scanner arguments remain
+available. The server resolves the secret internally and injects it into the
+scanner subprocess environment rather than its command line. Authentication
+arguments cannot be mixed with `credential_id`, and SSH currently accepts only
+stored passwords. The resulting tool response and normalized events do not
+contain the secret.
+
+For a selected set, `netscan_run_with_credentials` resolves and validates every
+ID before enqueuing any work, then returns one `scan_id` per credential. Jobs use
+the normal bounded MCP pool and retain independent provenance, cancellation,
+results, and persistence. This is intentional: it avoids merging unrelated
+domain and host credentials into an ambiguous password matrix.
 
 The shared campaign engine schedules a spray one secret at a time over the full
 target scope. A new round does not start until all attempts in the previous round
@@ -200,9 +238,12 @@ remote-command options. Run the server only for a trusted MCP host and set
 
 The server runs a bounded pool of background commands (four by default). Each
 scanner can still use NetScan's own worker concurrency. MCP cancellation and wall
-clock timeout terminate the scanner's complete process group. Completed jobs are
-held in memory for the life of the MCP process and evicted according to the
-configured retention limit; restarting the server clears all retained jobs.
+clock timeout terminate the scanner's complete process group. Job metadata,
+bounded output, normalized findings, Elasticsearch handoffs, and artifacts are
+stored in the private MCP state directory and survive a server restart. A job
+that was queued or running when the process stopped is marked failed with an
+interruption reason; intrusive actions are never replayed automatically.
+Retention eviction removes both the in-memory record and its persisted files.
 
 ## Local stdio server
 
@@ -291,8 +332,9 @@ stdio channel.
 - `NETSCAN_MCP_MAX_OUTPUT`: maximum captured output bytes; default `200000`.
 - `NETSCAN_MCP_MAX_JOBS`: maximum concurrently running background commands;
   default `4`.
-- `NETSCAN_MCP_JOB_RETENTION`: maximum recent job records retained in memory;
-  default `100` (active jobs are never evicted).
+- `NETSCAN_MCP_JOB_RETENTION`: maximum recent job records retained;
+  default `100` (active jobs are never evicted). This also controls persisted
+  job retention.
 - `NETSCAN_MCP_MAX_FINDINGS`: maximum structured findings retained per job;
   default `200`. Summary counters still cover every captured event.
 - `NETSCAN_MCP_MAX_ARTIFACT_BYTES`: maximum size of one downloadable artifact;
@@ -300,6 +342,12 @@ stdio channel.
 - `NETSCAN_MCP_MAX_ARTIFACT_TOTAL_BYTES`: maximum total downloadable artifact
   size retained for one job; default `100000000` bytes. Files beyond either
   limit are not published.
+- `NETSCAN_MCP_STATE_DIR`: private persistent state directory. The default is
+  `.netscan-mcp` under the repository root. It contains job history, retained
+  output and artifacts, plus the private credential-ID key; protect it as
+  sensitive data and include it in backups only when appropriate.
+- `NETSCAN_MCP_MAX_CREDENTIALS`: maximum credential documents inspected in one
+  catalog query; default `5000`, capped at `10000`.
 - `NETSCAN_KIBANA_MCP_URL`: optional override for the Kibana Agent Builder MCP
   URL returned in analysis handoffs. `NETSCAN_ELASTIC_MCP_URL` remains accepted
   as a backwards-compatible alias.

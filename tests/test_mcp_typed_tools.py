@@ -3,6 +3,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,9 @@ class TypedMCPToolTests(unittest.TestCase):
         general_tools = {
             "netscan_status",
             "netscan_context",
+            "netscan_credentials",
+            "netscan_run_with_credential",
+            "netscan_run_with_credentials",
             "netscan_module_help",
             "netscan_list_scans",
             "netscan_scan_status",
@@ -102,6 +106,78 @@ class TypedMCPToolTests(unittest.TestCase):
                 "continue_on_success",
             ):
                 self.assertIn(argument, campaign)
+
+    def test_stored_credential_secret_is_only_in_subprocess_environment(self):
+        import netscan_mcp_server as server
+
+        credential = {
+            "credential_id": "cred_example",
+            "session": "engagement-42",
+            "kind": "password",
+            "username": "alice",
+            "domain": "example.local",
+            "_secret": "HighlySecret!",
+        }
+        with (
+            patch.object(server.CREDENTIAL_CATALOG, "resolve", return_value=credential),
+            patch.object(
+                server.JOB_MANAGER,
+                "start",
+                return_value={"scan_id": "scan-1", "state": "queued"},
+            ) as start,
+        ):
+            result = asyncio.run(
+                server.netscan_run_with_credential(
+                    "smbscan", "192.0.2.0/24", "cred_example"
+                )
+            )
+
+        positional, keyword = start.call_args
+        self.assertNotIn("HighlySecret!", repr(positional))
+        self.assertEqual(
+            keyword["secret_environment"]["NETSCAN_MCP_CREDENTIAL_PASSWORD"],
+            "HighlySecret!",
+        )
+        self.assertEqual(
+            keyword["context"]["credential"]["credential_id"], "cred_example"
+        )
+        self.assertNotIn("HighlySecret!", repr(result))
+
+    def test_stored_credential_batch_starts_one_traceable_job_per_id(self):
+        import netscan_mcp_server as server
+
+        def resolve(identifier, session=None):
+            return {
+                "credential_id": identifier,
+                "session": session or "engagement-42",
+                "kind": "password",
+                "username": identifier,
+                "_secret": f"secret-for-{identifier}",
+            }
+
+        with (
+            patch.object(server.CREDENTIAL_CATALOG, "resolve", side_effect=resolve),
+            patch.object(
+                server.JOB_MANAGER,
+                "start",
+                side_effect=[
+                    {"scan_id": "scan-1", "state": "queued"},
+                    {"scan_id": "scan-2", "state": "queued"},
+                ],
+            ) as start,
+        ):
+            result = asyncio.run(
+                server.netscan_run_with_credentials(
+                    "winrmscan",
+                    "192.0.2.0/24",
+                    ["cred_one", "cred_two"],
+                )
+            )
+
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(start.call_count, 2)
+        self.assertFalse(result["secrets_disclosed"])
+        self.assertNotIn("secret-for", repr(result))
 
 
 if __name__ == "__main__":

@@ -6,11 +6,7 @@ import struct
 import copy
 
 from .winrm import WinRMScan
-from .winrm_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_generator_count
-from utils.credential_campaign import CampaignState
-
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 
 def winrmscan_worker(target, actions, creds, timeout):
@@ -48,7 +44,6 @@ def winrmscan_worker(target, actions, creds, timeout):
                     'service': 'winrm',
                 })
                 if password:
-                    creds_str = "%s and password %s" % (user, password)
                     DB.insert_credential({
                         'host': target['hostname'],
                         'port': target['port'],
@@ -59,7 +54,6 @@ def winrmscan_worker(target, actions, creds, timeout):
                         'password': password,
                     })
                 else:
-                    creds_str = "%s and hash %s" % (user, hash)
                     DB.insert_credential({
                         'host': target['hostname'],
                         'port': target['port'],
@@ -70,58 +64,26 @@ def winrmscan_worker(target, actions, creds, timeout):
                         'format': 'ntlm',
                         'hash': hash,
                     })
-                Output.success({'target': winrmscan.url(), 'message': 'Successful authentication with credentials %s' % creds_str})
+                Output.event(
+                    'authentication', 'Successful authentication for account %s' % user,
+                    target=winrmscan.url(), severity='success', status='success',
+                    data={'protocol': 'winrm', 'username': user,
+                          'secret_type': 'password' if password else 'ntlm'},
+                    sensitive=True,
+                )
 
                 if 'command' in actions:
                     output = "Command '%s':\n" % actions['command']['command']
                     output += winrmscan.execute(actions['command']['command'], get_output=True)
                     Output.write({'target': winrmscan.url(), 'message': output})
             else:
-                if password:
-                    creds_str = "%s and password %s" % (user, password)
-                else:
-                    creds_str = "%s and hash %s" % (user, hash)
-                Output.minor({'target': winrmscan.url(), 'message': 'Authentication failure with credentials %s' % creds_str})
-
-        if 'bruteforce' in actions and actions['bruteforce'].get('username_file') is not None:
-            Output.highlight({'target': winrmscan.url(), 'message': 'Starting bruteforce:'})
-            username_file = actions['bruteforce']['username_file']
-            password_file = actions['bruteforce'].get('password_file')
-            generator = bruteforce_generator(
-                target,
-                username_file,
-                password_file,
-                simple_bruteforce=actions['bruteforce'].get('simple', False),
-                strategy=actions['bruteforce']['strategy'],
-                domain=domain,
-                max_attempts_per_account=actions['bruteforce']['max_attempts_per_account'],
-            )
-            generator_size = bruteforce_generator_count(
-                target,
-                username_file,
-                password_file,
-                default_domain=domain,
-                strategy=actions['bruteforce']['strategy'],
-                simple=actions['bruteforce'].get('simple', False),
-                max_attempts_per_account=actions['bruteforce']['max_attempts_per_account'],
-            )
-            state = CampaignState(
-                continue_on_success=actions['bruteforce']['continue_on_success']
-            )
-            dispatch(
-                generator,
-                generator_size,
-                bruteforce_worker,
-                (
-                    timeout,
-                    actions['bruteforce']['delay'],
-                    actions['bruteforce']['jitter'],
-                    state,
-                ),
-                workers=actions['bruteforce']['workers'],
-                process=False,
-                pg_name=target['hostname'],
-            )
+                Output.event(
+                    'authentication', 'Authentication failure for account %s' % user,
+                    target=winrmscan.url(), severity='debug', status='failure',
+                    data={'protocol': 'winrm', 'username': user,
+                          'secret_type': 'password' if password else 'ntlm'},
+                    sensitive=True,
+                )
 
     except Exception as e:
         target_url = winrmscan.url() if winrmscan is not None else target['hostname']

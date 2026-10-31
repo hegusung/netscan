@@ -108,6 +108,15 @@ def main():
 
     args = parser.parse_args()
 
+    if args.password is None:
+        args.password = os.environ.pop('NETSCAN_MCP_CREDENTIAL_PASSWORD', None)
+    else:
+        os.environ.pop('NETSCAN_MCP_CREDENTIAL_PASSWORD', None)
+    if args.hash is None:
+        args.hash = os.environ.pop('NETSCAN_MCP_CREDENTIAL_HASH', None)
+    else:
+        os.environ.pop('NETSCAN_MCP_CREDENTIAL_HASH', None)
+
     if args.bruteforce or args.spray:
         if args.ntlm_file is None and (args.username_file is None or args.password_file is None):
             parser.error('Use -U with -P, or provide --ntlm-file for a credential campaign')

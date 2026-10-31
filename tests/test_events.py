@@ -6,7 +6,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
-from utils.events import normalize_output_event  # noqa: E402
+from utils.events import event_from_document, normalize_output_event  # noqa: E402
 
 
 class NormalizedEventTests(unittest.TestCase):
@@ -36,6 +36,32 @@ class NormalizedEventTests(unittest.TestCase):
         self.assertEqual(normalized_again["category"], "authentication")
         self.assertEqual(normalized_again["status"], "success")
         self.assertEqual(normalized_again["data"]["protocol"], "ssh")
+
+    def test_sensitive_legacy_message_is_redacted(self):
+        event = normalize_output_event(
+            {
+                "type": "success",
+                "target": "ssh://192.0.2.1:22",
+                "message": "Successful authentication with credentials alice and password Secret!",
+            }
+        )
+        self.assertTrue(event["sensitive"])
+        self.assertNotIn("Secret!", event["message"])
+
+    def test_persistence_event_excludes_credential_material(self):
+        event = event_from_document(
+            {
+                "doc_type": "domain_password",
+                "session": "engagement-42",
+                "domain": "example.local",
+                "username": "alice",
+                "password": "HighlySecret!",
+            }
+        )
+        self.assertIsNotNone(event)
+        self.assertEqual(event["category"], "credential")
+        self.assertEqual(event["data"]["username"], "alice")
+        self.assertNotIn("HighlySecret!", repr(event))
 
 
 if __name__ == "__main__":

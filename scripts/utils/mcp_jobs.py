@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from utils.mcp_elasticsearch import elasticsearch_context
-from utils.events import normalize_output_event
+from utils.events import normalize_output_event, redact_sensitive_text
+from utils.mcp_state import atomic_json_write, state_directory
 from utils.mcp_runtime import (
     ANSI_ESCAPE,
     MCPRuntimeError,
@@ -78,6 +79,9 @@ class ScanJob:
     internal_error: str | None = None
     artifact_dir: Path | None = field(default=None, repr=False)
     artifacts: list[dict[str, Any]] = field(default_factory=list)
+    job_dir: Path | None = field(default=None, repr=False)
+    argument_count: int | None = None
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 ES_QUERY_DIRECTORY_EXPORTS = {
@@ -100,6 +104,7 @@ class ScanJobManager:
         findings_limit: int | None = None,
         artifact_file_limit: int | None = None,
         artifact_total_limit: int | None = None,
+        state_dir: Path | None = None,
     ) -> None:
         self.max_workers = max_workers or _positive_env_int(
             "NETSCAN_MCP_MAX_JOBS", 4
@@ -117,16 +122,32 @@ class ScanJobManager:
         self.artifact_total_limit = artifact_total_limit or _positive_env_int(
             "NETSCAN_MCP_MAX_ARTIFACT_TOTAL_BYTES", 100_000_000
         )
+        self.state_dir = state_dir or state_directory()
+        self.jobs_dir = self.state_dir / "jobs"
+        self.jobs_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._jobs: dict[str, ScanJob] = {}
         self._lock = threading.RLock()
+        self._load_persisted_jobs()
+        with self._lock:
+            self._purge_locked()
         self._executor = ThreadPoolExecutor(
             max_workers=self.max_workers, thread_name_prefix="netscan-mcp-job"
         )
 
     def start(
-        self, module: str, arguments: Sequence[str], timeout_seconds: int
+        self,
+        module: str,
+        arguments: Sequence[str],
+        timeout_seconds: int,
+        *,
+        secret_environment: dict[str, str] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         prepared = prepare_module(module, arguments, timeout_seconds)
+        if secret_environment:
+            environment = dict(prepared.environment)
+            environment.update(secret_environment)
+            prepared = replace(prepared, environment=environment)
         es_context = elasticsearch_context(check_connection=False)
         es_context["persistence_expected"] = bool(
             es_context["enabled"] and "--nodb" not in prepared.arguments
@@ -144,10 +165,15 @@ class ScanJobManager:
             arguments=prepared.arguments,
             timeout_seconds=prepared.timeout_seconds,
             elasticsearch=es_context,
+            argument_count=len(prepared.arguments),
+            context=dict(context or {}),
         )
+        job.job_dir = self.jobs_dir / job.scan_id
+        job.job_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
         with self._lock:
             self._purge_locked(reserve=1)
             self._jobs[job.scan_id] = job
+            self._persist_locked(job)
             job.future = self._executor.submit(self._execute, job, prepared)
             return self._status_locked(job)
 
@@ -217,6 +243,7 @@ class ScanJobManager:
             if job.state == "queued" and job.future is not None and job.future.cancel():
                 job.state = "cancelled"
                 job.completed_at = _utc_now()
+                self._persist_locked(job)
             process = job.process
         if process is not None:
             terminate_process_group(process)
@@ -232,6 +259,7 @@ class ScanJobManager:
             decoded = ANSI_ESCAPE.sub(
                 "", bytes(job.output).decode("utf-8", errors="replace")
             )
+            decoded = redact_sensitive_text(decoded)
             chunk = decoded[offset : offset + limit]
             return {
                 "scan_id": scan_id,
@@ -249,6 +277,7 @@ class ScanJobManager:
             decoded = ANSI_ESCAPE.sub(
                 "", bytes(job.output).decode("utf-8", errors="replace")
             )
+            decoded = redact_sensitive_text(decoded)
             if job.output_truncated:
                 decoded += "\n[output truncated by NetScan MCP server]"
             return decoded
@@ -263,7 +292,7 @@ class ScanJobManager:
         self._executor.shutdown(wait=wait, cancel_futures=True)
         with self._lock:
             for job in self._jobs.values():
-                self._delete_artifacts_locked(job)
+                self._persist_locked(job)
 
     def _get_locked(self, scan_id: str) -> ScanJob:
         try:
@@ -279,20 +308,25 @@ class ScanJobManager:
         excess = max(0, len(self._jobs) - self.retention + reserve)
         for job in completed[:excess]:
             self._jobs.pop(job.scan_id, None)
-            self._delete_artifacts_locked(job)
+            self._delete_job_locked(job)
 
-    def _delete_artifacts_locked(self, job: ScanJob) -> None:
-        if job.artifact_dir is not None:
-            shutil.rmtree(job.artifact_dir, ignore_errors=True)
-            job.artifact_dir = None
-            job.artifacts = []
+    def _delete_job_locked(self, job: ScanJob) -> None:
+        if job.job_dir is not None:
+            shutil.rmtree(job.job_dir, ignore_errors=True)
+        job.job_dir = None
+        job.artifact_dir = None
+        job.artifacts = []
 
     def _status_locked(self, job: ScanJob) -> dict[str, Any]:
         return {
             "scan_id": job.scan_id,
             "state": job.state,
             "module": job.module,
-            "argument_count": len(job.arguments),
+            "argument_count": (
+                job.argument_count
+                if job.argument_count is not None
+                else len(job.arguments)
+            ),
             "timeout_seconds": job.timeout_seconds,
             "created_at": job.created_at,
             "started_at": job.started_at,
@@ -312,8 +346,11 @@ class ScanJobManager:
                 "total_bytes": sum(item["size"] for item in job.artifacts),
                 "list_tool": "netscan_scan_artifacts",
             },
-            "persistence_expected": job.elasticsearch["persistence_expected"],
+            "persistence_expected": bool(
+                job.elasticsearch.get("persistence_expected", False)
+            ),
             "internal_error": job.internal_error,
+            "context": dict(job.context),
         }
 
     def _execute(self, job: ScanJob, prepared: Any) -> None:
@@ -325,6 +362,7 @@ class ScanJobManager:
                 with self._lock:
                     job.state = "cancelled"
                     job.completed_at = _utc_now()
+                    self._persist_locked(job)
                 return
 
             event_file = tempfile.NamedTemporaryFile(
@@ -340,9 +378,9 @@ class ScanJobManager:
             environment = dict(prepared.environment)
             environment["NETSCAN_MCP_EVENT_FILE"] = str(event_path)
             environment["NETSCAN_MCP_DB_RESULT_FILE"] = str(db_result_path)
-            job.artifact_dir = Path(
-                tempfile.mkdtemp(prefix=f"netscan-mcp-artifacts-{job.scan_id[:8]}-")
-            )
+            assert job.job_dir is not None
+            job.artifact_dir = job.job_dir / "artifacts"
+            job.artifact_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
             environment["NETSCAN_MCP_ARTIFACT_DIR"] = str(job.artifact_dir)
             prepared = self._confine_artifact_outputs(prepared, job.artifact_dir)
 
@@ -360,6 +398,7 @@ class ScanJobManager:
                 job.pid = process.pid
                 job.state = "running"
                 job.started_at = _utc_now()
+                self._persist_locked(job)
 
             reader = threading.Thread(
                 target=self._drain_output,
@@ -416,6 +455,7 @@ class ScanJobManager:
                 job.process = None
                 job.completed_at = job.completed_at or _utc_now()
                 job.duration_seconds = round(time.monotonic() - started, 3)
+                self._persist_locked(job)
                 self._purge_locked()
 
     def _confine_artifact_outputs(self, prepared: Any, artifact_dir: Path) -> Any:
@@ -479,10 +519,92 @@ class ScanJobManager:
                 job.total_output_bytes += len(chunk)
                 remaining = self.output_limit - len(job.output)
                 if remaining > 0:
-                    job.output.extend(chunk[:remaining])
+                    retained = chunk[:remaining]
+                    job.output.extend(retained)
+                    if job.job_dir is not None:
+                        with (job.job_dir / "output.log").open("ab") as output:
+                            output.write(retained)
                 if len(chunk) > remaining:
                     job.output_truncated = True
         process.stdout.close()
+
+    def _persist_locked(self, job: ScanJob) -> None:
+        if job.job_dir is None:
+            return
+        snapshot = {
+            "schema_version": 1,
+            "scan_id": job.scan_id,
+            "module": job.module,
+            "argument_count": (
+                job.argument_count
+                if job.argument_count is not None
+                else len(job.arguments)
+            ),
+            "timeout_seconds": job.timeout_seconds,
+            "elasticsearch": job.elasticsearch,
+            "created_at": job.created_at,
+            "state": job.state,
+            "started_at": job.started_at,
+            "completed_at": job.completed_at,
+            "duration_seconds": job.duration_seconds,
+            "exit_code": job.exit_code,
+            "cancel_requested": job.cancel_requested.is_set(),
+            "total_output_bytes": job.total_output_bytes,
+            "output_truncated": job.output_truncated,
+            "events": job.events,
+            "event_summary": job.event_summary,
+            "internal_error": job.internal_error,
+            "artifacts": job.artifacts,
+            "context": job.context,
+        }
+        atomic_json_write(job.job_dir / "job.json", snapshot)
+
+    def _load_persisted_jobs(self) -> None:
+        for metadata_path in sorted(self.jobs_dir.glob("*/job.json")):
+            try:
+                data = json.loads(metadata_path.read_text(encoding="utf-8"))
+                scan_id = str(data["scan_id"])
+                job_dir = metadata_path.parent
+                output_path = job_dir / "output.log"
+                output = output_path.read_bytes()[: self.output_limit] if output_path.exists() else b""
+                state = str(data.get("state", "failed"))
+                internal_error = data.get("internal_error")
+                completed_at = data.get("completed_at")
+                if state not in TERMINAL_STATES:
+                    state = "failed"
+                    completed_at = completed_at or _utc_now()
+                    internal_error = "MCP server restarted before the job completed"
+                artifact_dir = job_dir / "artifacts"
+                job = ScanJob(
+                    scan_id=scan_id,
+                    module=str(data.get("module", "unknown")),
+                    arguments=(),
+                    argument_count=int(data.get("argument_count", 0)),
+                    timeout_seconds=int(data.get("timeout_seconds", 1)),
+                    elasticsearch=dict(data.get("elasticsearch", {})),
+                    created_at=str(data.get("created_at", _utc_now())),
+                    state=state,
+                    started_at=data.get("started_at"),
+                    completed_at=completed_at,
+                    duration_seconds=data.get("duration_seconds"),
+                    exit_code=data.get("exit_code"),
+                    output=bytearray(output),
+                    total_output_bytes=int(data.get("total_output_bytes", len(output))),
+                    output_truncated=bool(data.get("output_truncated", False)),
+                    events=list(data.get("events", [])),
+                    event_summary=dict(data.get("event_summary", {})),
+                    internal_error=internal_error,
+                    artifact_dir=artifact_dir if artifact_dir.is_dir() else None,
+                    artifacts=list(data.get("artifacts", [])),
+                    job_dir=job_dir,
+                    context=dict(data.get("context", {})),
+                )
+                if data.get("cancel_requested"):
+                    job.cancel_requested.set()
+                self._jobs[scan_id] = job
+                self._persist_locked(job)
+            except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+                continue
 
     def _load_events(self, job: ScanJob, event_path: Path) -> None:
         counts: Counter[str] = Counter()

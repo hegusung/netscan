@@ -8,14 +8,10 @@ import struct
 import re
 
 from .smb import SMBScan, AuthFailure, sizeof_fmt
-from .smb_bruteforce import bruteforce_worker, bruteforce_ntlm_worker, bruteforce_generator, bruteforce_generator_count
-
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
 from utils.utils import open as open_docker
-from utils.credential_campaign import CampaignState
 from lib.search_secret.search_secret import SearchSecret
 
 """
@@ -156,6 +152,8 @@ def smbscan_worker(target, actions, creds, timeout):
                     Output.minor({'target': smbscan.url(), 'message': '[%s] Authentication failure with kerberos ticket %s (%s\\%s)' % (smb_info['hostname'], ticket, domain, user)})
 
             elif 'username' in creds:
+                success = False
+                is_admin = False
                 if not 'domain' in creds:
                     creds['domain'] = 'WORKGROUP'
 
@@ -169,7 +167,14 @@ def smbscan_worker(target, actions, creds, timeout):
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password=creds['password'])
 
-                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and password {password}'.format(**creds)})
+                        Output.event(
+                            'authentication',
+                            '[{hostname}] Successful authentication for {domain}\\{username}'.format(**creds),
+                            target=smbscan.url(), severity='success', status='success',
+                            data={'protocol': 'smb', 'domain': creds['domain'],
+                                  'username': creds['username'], 'secret_type': 'password'},
+                            sensitive=True,
+                        )
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -196,11 +201,25 @@ def smbscan_worker(target, actions, creds, timeout):
 
                             pass
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and password {password}: {error}'.format(**creds, error=e)})
+                        Output.event(
+                            'authentication',
+                            '[{hostname}] Authentication failure for {domain}\\{username}: {error}'.format(**creds, error=e),
+                            target=smbscan.url(), severity='debug', status='failure',
+                            data={'protocol': 'smb', 'domain': creds['domain'],
+                                  'username': creds['username'], 'secret_type': 'password'},
+                            sensitive=True,
+                        )
                 elif 'hash' in creds:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], hash=creds['hash'])
-                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and hash {hash}'.format(**creds)})
+                        Output.event(
+                            'authentication',
+                            '[{hostname}] Successful authentication for {domain}\\{username}'.format(**creds),
+                            target=smbscan.url(), severity='success', status='success',
+                            data={'protocol': 'smb', 'domain': creds['domain'],
+                                  'username': creds['username'], 'secret_type': 'ntlm'},
+                            sensitive=True,
+                        )
                         if not 'domain' in creds or creds['domain'] in [None, 'WORKGROUP']:
                             # local account
                             cred_info = {
@@ -228,16 +247,44 @@ def smbscan_worker(target, actions, creds, timeout):
                             DB.insert_domain_credential(cred_info)
 
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and hash {hash}: {error}'.format(**creds, error=e)})
+                        Output.event(
+                            'authentication',
+                            '[{hostname}] Authentication failure for {domain}\\{username}: {error}'.format(**creds, error=e),
+                            target=smbscan.url(), severity='debug', status='failure',
+                            data={'protocol': 'smb', 'domain': creds['domain'],
+                                  'username': creds['username'], 'secret_type': 'ntlm'},
+                            sensitive=True,
+                        )
                 else:
                     try:
                         success, is_admin = smbscan.auth(domain=creds['domain'], username=creds['username'], password='')
-                        Output.success({'target': smbscan.url(), 'message': '[{hostname}] Successful authentication with credentials {domain}\\{username} and no password'.format(**creds)})
+                        Output.event(
+                            'authentication',
+                            '[{hostname}] Successful authentication for {domain}\\{username} with an empty password'.format(**creds),
+                            target=smbscan.url(), severity='success', status='success',
+                            data={'protocol': 'smb', 'domain': creds['domain'],
+                                  'username': creds['username'], 'secret_type': 'empty'},
+                            sensitive=True,
+                        )
                     except AuthFailure as e:
-                        Output.minor({'target': smbscan.url(), 'message': '[{hostname}] Authentication failure with credentials {domain}\\{username} and no password: {error}'.format(**creds, error=e)})
+                        Output.event(
+                            'authentication',
+                            '[{hostname}] Authentication failure for {domain}\\{username}: {error}'.format(**creds, error=e),
+                            target=smbscan.url(), severity='debug', status='failure',
+                            data={'protocol': 'smb', 'domain': creds['domain'],
+                                  'username': creds['username'], 'secret_type': 'empty'},
+                            sensitive=True,
+                        )
 
                 if is_admin:
-                    Output.major({'target': smbscan.url(), 'message': '[{hostname}] Administrative privileges with credentials {domain}\\{username}'.format(**creds)})
+                    Output.event(
+                        'privilege',
+                        '[{hostname}] Administrative privileges for {domain}\\{username}'.format(**creds),
+                        target=smbscan.url(), severity='high', status='admin',
+                        data={'protocol': 'smb', 'domain': creds['domain'],
+                              'username': creds['username']},
+                        sensitive=True,
+                    )
 
                     # domain account 
                     cred_info = {
@@ -673,88 +720,6 @@ def smbscan_worker(target, actions, creds, timeout):
 
             if 'modules' in actions:
                 smb_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
-            if 'bruteforce' in actions:
-                if actions['bruteforce'].get('username_file') is not None:
-                    Output.highlight({'target': smbscan.url(), 'message': 'Starting bruteforce:'})
-
-                    if 'domain' in creds:
-                        domain = creds['domain']
-                    else:
-                        domain = 'WORKGROUP'
-                    username_file = actions['bruteforce']['username_file']
-                    password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                    ntlm_file = actions['bruteforce']['ntlm_file']
-                    bruteforce_workers = actions['bruteforce']['workers']
-                    bruteforce_delay = actions['bruteforce']['delay']
-                    bruteforce_jitter = actions['bruteforce']['jitter']
-                    strategy = actions['bruteforce']['strategy']
-                    max_attempts = actions['bruteforce']['max_attempts_per_account']
-                    state = CampaignState(
-                        continue_on_success=actions['bruteforce']['continue_on_success']
-                    )
-
-                    if username_file != None and ntlm_file == None:
-                        gen = bruteforce_generator(
-                            target, domain, username_file, password_file,
-                            strategy=strategy, max_attempts_per_account=max_attempts,
-                        )
-                        gen_size = bruteforce_generator_count(
-                            target, domain, username_file, password_file,
-                            strategy=strategy, max_attempts_per_account=max_attempts,
-                        )
-
-                        args = (bruteforce_delay, bruteforce_jitter, timeout, state)
-                        dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-                    elif ntlm_file != None:
-                        if username_file != None:
-                            campaign_users = username_file
-                            campaign_secrets = ntlm_file
-                        else:
-                            campaign_users = ntlm_file
-                            campaign_secrets = None
-
-                        gen = bruteforce_generator(
-                            target, domain, campaign_users, campaign_secrets,
-                            strategy=strategy, secret_kind='ntlm',
-                            max_attempts_per_account=max_attempts,
-                        )
-                        gen_size = bruteforce_generator_count(
-                            target, domain, campaign_users, campaign_secrets,
-                            strategy=strategy, secret_kind='ntlm',
-                            max_attempts_per_account=max_attempts,
-                        )
-
-                        args = (bruteforce_delay, bruteforce_jitter, timeout, state)
-                        dispatch(gen, gen_size, bruteforce_ntlm_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-
-            if 'simple_bruteforce' in actions:
-                if actions['simple_bruteforce'].get('username_file') is not None:
-                    Output.highlight({'target': smbscan.url(), 'message': 'Starting simple bruteforce:'})
-
-                    if 'domain' in creds:
-                        domain = creds['domain']
-                    else:
-                        domain = 'WORKGROUP'
-                    username_file = actions['simple_bruteforce']['username_file']
-                    bruteforce_workers = actions['simple_bruteforce']['workers']
-                    bruteforce_delay = actions['simple_bruteforce']['delay']
-                    bruteforce_jitter = actions['simple_bruteforce']['jitter']
-                    state = CampaignState(
-                        continue_on_success=actions['simple_bruteforce']['continue_on_success']
-                    )
-
-                    gen = bruteforce_generator(
-                        target, domain, username_file, None, simple_bruteforce=True,
-                        max_attempts_per_account=actions['simple_bruteforce']['max_attempts_per_account'],
-                    )
-                    gen_size = bruteforce_generator_count(
-                        target, domain, username_file, None, simple=True,
-                        max_attempts_per_account=actions['simple_bruteforce']['max_attempts_per_account'],
-                    )
-
-                    args = (bruteforce_delay, bruteforce_jitter, timeout, state)
-                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-
     except ConnectionResetError:
         Output.write({'target': smbscan.url(), 'message': 'Connection reset by target'})
     except TypeError as e:
