@@ -1,10 +1,8 @@
 import socket
 import subprocess
 import traceback
-import copy
 from time import sleep
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 
 #from pysnmp.entity.rfc3413.oneliner import cmdgen
@@ -117,6 +115,7 @@ def snmpscan_worker(target, actions, creds, timeout):
                 'type': 'password',
                 'username': 'N/A',
                 'password': community,
+                '_secret_kind': 'community',
             }
             DB.insert_credential(cred_info)
 
@@ -145,74 +144,6 @@ def snmpscan_worker(target, actions, creds, timeout):
                         raise NotImplementedError("SNMPv2 only")
             except SNMPTimeout as e:
                 pass
-
-        if actions:
-            if 'bruteforce' in actions:
-                if actions['bruteforce'].get('community_file') is not None:
-                    Output.highlight({'target': snmp.url(), 'message': 'Starting bruteforce:'})
-
-                    community_file = actions['bruteforce']['community_file']
-                    bruteforce_workers = actions['bruteforce']['workers']
-
-                    gen = bruteforce_v2_generator(target, community_file)
-                    gen_size = bruteforce_v2_generator_count(target, community_file)
-
-                    args = (timeout,)
-                    dispatch(gen, gen_size, bruteforce_v2_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-
-def bruteforce_v2_generator(target, community_file):
-    community_f = open(community_file)
-    for c in community_f:
-        c = c.strip()
-        if len(c) == 0:
-            continue
-
-        t = copy.copy(target)
-        t['b_community'] = c
-
-        yield t
-    community_f.close()
-
-def bruteforce_v2_generator_count(target, community_file):
-    count = 0
-
-    community_f = open(community_file)
-    for c in community_f:
-        c = c.strip()
-        if len(c) == 0:
-            continue
-
-        count += 1
-    community_f.close()
-
-    return count
-
-def bruteforce_v2_worker(target, timeout):
-    community = target['b_community']
-    try:
-        snmp = SNMP(target['hostname'], target['port'], timeout)
-        snmp.request_v2(community=community)
-
-        Output.success({'target': snmp.url(), 'message': '(SNMPv2) Authentication success with community: %s' % community})
-        cred_info = {
-            'host': target['hostname'],
-            'port': target['port'],
-            'service': 'snmp',
-            'url': snmp.url(),
-            'type': 'password',
-            'username': 'N/A',
-            'password': community,
-        }
-        DB.insert_credential(cred_info)
-    except SNMPTimeout as e:
-        # Note: if wrong community, server won't answer... 
-        pass
-    except SNMPError as e:
-        Output.minor({'target': snmp.url(), 'message': str(e)})
-    except pysnmp.error.PySnmpError:
-        pass
-    except Exception as e:
-        Output.error({'target': snmp.url(), 'message': "%s: %s\n%s" % (type(e), str(e), traceback.format_exc())})
 
 class SNMP:
 

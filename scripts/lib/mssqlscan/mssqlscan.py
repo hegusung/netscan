@@ -6,11 +6,8 @@ import traceback
 import struct
 
 from .mssql import MSSQLScan
-from .mssql_bruteforce import *
-
 from utils.utils import AuthFailure
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 
 def mssqlscan_worker(target, actions, creds, timeout):
@@ -218,25 +215,6 @@ def mssqlscan_worker(target, actions, creds, timeout):
                             Output.highlight({'target': mssqlscan.url(), 'message': '[-] You are not an admin'})
 
 
-
-            if 'bruteforce' in actions:
-                if actions['bruteforce'].get('username_file') is not None:
-                    Output.highlight({'target': mssqlscan.url(), 'message': 'Starting bruteforce:'})
-
-                    if 'domain' in creds:
-                        domain = creds['domain']
-                    else:
-                        domain = None
-                    username_file = actions['bruteforce']['username_file']
-                    password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                    bruteforce_workers = actions['bruteforce']['workers']
-
-                    # The generator will provide a username:password_list couple
-                    gen = bruteforce_generator(target, domain, username_file, password_file)
-                    gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
-
-                    args = (timeout,)
-                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except OSError:
         pass

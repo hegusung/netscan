@@ -36,6 +36,24 @@ from utils.mcp_jobs import ScanJobManager
 JOB_MANAGER = ScanJobManager()
 CREDENTIAL_CATALOG = CredentialCatalog()
 
+CREDENTIAL_REUSE_MODULES = (
+    "adscan", "ftpscan", "mongoscan", "mssqlscan", "mysqlscan",
+    "postgrescan", "rdpscan", "redisscan", "smbscan", "snmpscan",
+    "sshscan", "telnetscan", "vncscan", "winrmscan",
+)
+CredentialModule = Literal[
+    "adscan", "ftpscan", "mongoscan", "mssqlscan", "mysqlscan",
+    "postgrescan", "rdpscan", "redisscan", "smbscan", "snmpscan",
+    "sshscan", "telnetscan", "vncscan", "winrmscan",
+]
+USERNAME_CREDENTIAL_MODULES = frozenset(
+    CREDENTIAL_REUSE_MODULES
+) - {"redisscan", "snmpscan", "vncscan"}
+DOMAIN_CREDENTIAL_MODULES = frozenset(
+    {"adscan", "mssqlscan", "rdpscan", "smbscan", "winrmscan"}
+)
+HASH_CREDENTIAL_MODULES = DOMAIN_CREDENTIAL_MODULES
+
 
 mcp = MCPServer(
     "netscan",
@@ -53,12 +71,15 @@ mcp = MCPServer(
         "processes through WMI and applications through remote Windows commands. NetScan can "
         "validate SMB administrative access, validate the MSSQL sysadmin role, execute Windows "
         "commands, PowerShell, or payloads over SMB, and perform multi-host credential testing "
-        "with username/password or NTLM files on supported protocols. SMB, SSH, and WinRM share "
-        "a scope-wide credential campaign engine. Use spray=true for secret-major scheduling "
+        "with username/password or NTLM files on supported protocols. FTP, MongoDB, MSSQL, "
+        "MySQL, PostgreSQL, RDP, Redis, SMB, SNMP, SSH, Telnet, VNC, and WinRM share a "
+        "scope-wide credential campaign engine. Use spray=true for secret-major scheduling "
         "across every target, spray_round_delay and credential_jitter to pace attempts, and "
         "max_attempts_per_account to enforce an account budget. Campaigns stop after a success "
         "and suppress locked accounts unless explicitly configured otherwise. Respect the "
-        "operator's lockout policy and authorization. NetScan's database is the configured, "
+        "operator's lockout policy and authorization. Every campaign attempt is persisted as a "
+        "secret-free credential_validation document with target, protocol, result, correlation "
+        "reference, and observed administrative privilege. NetScan's database is the configured, "
         "session-scoped Elasticsearch index. It persists scan invocations, services, findings, "
         "credentials, hashes, secrets, AD objects, and discovered admin relationships. "
         "NetScan also has an AD-to-BloodHound workflow: collect domains, containers/OUs, users, "
@@ -105,7 +126,7 @@ async def netscan_status() -> dict[str, object]:
         "maximum_artifact_bytes": JOB_MANAGER.artifact_file_limit,
         "maximum_artifact_total_bytes": JOB_MANAGER.artifact_total_limit,
         "persistent_state_directory": str(JOB_MANAGER.state_dir),
-        "credential_reuse_modules": ["smbscan", "sshscan", "winrmscan"],
+        "credential_reuse_modules": list(CREDENTIAL_REUSE_MODULES),
     }
 
 
@@ -125,7 +146,7 @@ async def netscan_credentials(
     domain: str | None = None,
     service: str | None = None,
     host: str | None = None,
-    kind: Literal["password", "hash"] | None = None,
+    kind: Literal["password", "hash", "community"] | None = None,
     limit: Annotated[int, Field(ge=1, le=1000)] = 100,
 ) -> dict[str, object]:
     """List opaque IDs and non-secret metadata for persisted NetScan credentials."""
@@ -142,10 +163,13 @@ async def netscan_credentials(
         raise ToolError(str(exc)) from exc
 
 
-def _validate_credential_arguments(arguments: list[str]) -> None:
+def _validate_credential_arguments(module: str, arguments: list[str]) -> None:
     forbidden = {
-        "-u", "-d", "--pass", "--hash", "--key", "-U", "-P", "--ntlm-file"
+        "-u", "--pass", "--hash", "--key", "-c", "--community",
+        "-U", "-P", "-C", "--ntlm-file"
     }
+    if module in DOMAIN_CREDENTIAL_MODULES:
+        forbidden.add("-d")
     if any(item.split("=", 1)[0] in forbidden for item in arguments):
         raise MCPRuntimeError(
             "Authentication arguments cannot be combined with credential_id"
@@ -160,17 +184,22 @@ def _start_credential_job(
     arguments: list[str],
     timeout_seconds: int,
 ) -> dict[str, Any]:
-    if module == "sshscan" and credential["kind"] != "password":
-        raise MCPRuntimeError("SSH credential reuse currently requires a password")
-    native_arguments = [targets, "-u", str(credential["username"])]
-    if module in {"smbscan", "winrmscan"} and credential.get("domain"):
+    if credential["kind"] == "hash" and module not in HASH_CREDENTIAL_MODULES:
+        raise MCPRuntimeError(f"{module} credential reuse requires a password")
+    if credential["kind"] == "community" and module != "snmpscan":
+        raise MCPRuntimeError("SNMP communities can only be reused with snmpscan")
+    native_arguments = [targets]
+    if module in USERNAME_CREDENTIAL_MODULES:
+        native_arguments.extend(["-u", str(credential["username"])])
+    if module in DOMAIN_CREDENTIAL_MODULES and credential.get("domain"):
         native_arguments.extend(["-d", str(credential["domain"])])
     native_arguments.extend(arguments)
-    secret_name = (
-        "NETSCAN_MCP_CREDENTIAL_PASSWORD"
-        if credential["kind"] == "password"
-        else "NETSCAN_MCP_CREDENTIAL_HASH"
-    )
+    if module == "snmpscan":
+        secret_name = "NETSCAN_MCP_CREDENTIAL_COMMUNITY"
+    elif credential["kind"] == "password":
+        secret_name = "NETSCAN_MCP_CREDENTIAL_PASSWORD"
+    else:
+        secret_name = "NETSCAN_MCP_CREDENTIAL_HASH"
     credential_context = {
         "credential_id": credential_id,
         "session": credential.get("session"),
@@ -192,7 +221,7 @@ def _start_credential_job(
 
 @mcp.tool()
 async def netscan_run_with_credential(
-    module: Literal["smbscan", "sshscan", "winrmscan"],
+    module: CredentialModule,
     targets: str,
     credential_id: str,
     arguments: list[str] | None = None,
@@ -202,7 +231,7 @@ async def netscan_run_with_credential(
     """Start a scan with a stored credential while keeping its secret server-side."""
     arguments = list(arguments or [])
     try:
-        _validate_credential_arguments(arguments)
+        _validate_credential_arguments(module, arguments)
         credential = CREDENTIAL_CATALOG.resolve(credential_id, session=session)
         return _start_credential_job(
             module, targets, credential, credential_id, arguments, timeout_seconds
@@ -213,7 +242,7 @@ async def netscan_run_with_credential(
 
 @mcp.tool()
 async def netscan_run_with_credentials(
-    module: Literal["smbscan", "sshscan", "winrmscan"],
+    module: CredentialModule,
     targets: str,
     credential_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
     arguments: list[str] | None = None,
@@ -223,15 +252,19 @@ async def netscan_run_with_credentials(
     """Start one bounded, traceable scan job per stored credential ID."""
     arguments = list(arguments or [])
     try:
-        _validate_credential_arguments(arguments)
+        _validate_credential_arguments(module, arguments)
         resolved = [
             (credential_id, CREDENTIAL_CATALOG.resolve(credential_id, session=session))
             for credential_id in credential_ids
         ]
-        if module == "sshscan" and any(
-            credential["kind"] != "password" for _, credential in resolved
+        if module not in HASH_CREDENTIAL_MODULES and any(
+            credential["kind"] == "hash" for _, credential in resolved
         ):
-            raise MCPRuntimeError("SSH credential reuse currently requires passwords")
+            raise MCPRuntimeError(f"{module} credential reuse requires passwords")
+        if module != "snmpscan" and any(
+            credential["kind"] == "community" for _, credential in resolved
+        ):
+            raise MCPRuntimeError("SNMP communities can only be reused with snmpscan")
         jobs = [
             _start_credential_job(
                 module,

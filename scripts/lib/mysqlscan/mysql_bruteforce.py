@@ -1,100 +1,39 @@
-import copy
 from .mysql import MySQLScan
+from utils.credential_campaign import credential_attempt_count, iter_credential_attempts, record_credential_validation, wait_before_attempt
+from utils.db import DB
 from utils.output import Output
 from utils.utils import AuthFailure
-from utils.db import DB
 
-def bruteforce_worker(target, timeout):
-    for password in target['b_password_list']:
-        username = target['b_username']
 
-        mysqlscan = MySQLScan(target['hostname'], target['port'], timeout)
-
-        success = False
-        stop = False
+def bruteforce_worker(target, timeout, delay, jitter, state):
+    username, password = target['b_username'], target['b_secret']
+    scanner = MySQLScan(target['hostname'], target['port'], timeout)
+    state.begin_attempt(target)
+    try:
+        if not state.claim_attempt(target, None, username):
+            return
+        wait_before_attempt(delay, jitter)
+        success, _ = scanner.auth(username, password)
+        record_credential_validation(target, service='mysql', username=username, secret=password, status='success' if success else 'failure', url=scanner.url())
+        if not success:
+            return
+        state.mark_success(target, None, username)
+        Output.event('authentication', 'Authentication success for account %s' % username, target=scanner.url(), severity='success', status='success', data={'protocol': 'mysql', 'username': username, 'secret_type': 'password'}, sensitive=True)
+        DB.insert_credential({'host': target['hostname'], 'port': target['port'], 'service': 'mysql', 'url': scanner.url(), 'type': 'password', 'username': username, 'password': password})
+        DB.insert_vulnerability({'host': target['hostname'], 'port': target['port'], 'service': 'mysql', 'url': scanner.url(), 'name': 'Default or predictable credentials on MySQL service', 'description': 'MySQL accepts a password from the authorized credential campaign for account %s' % username})
+    except AuthFailure:
+        record_credential_validation(target, service='mysql', username=username, secret=password, status='failure', url=scanner.url())
+    finally:
         try:
-            success, _ = mysqlscan.auth(target['b_username'], password)
-            Output.success({'target': mysqlscan.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
-            cred_info = {
-                'host': target['hostname'],
-                'port': target['port'],
-                'service': 'mysql',
-                'url': mysqlscan.url(),
-                'type': 'password',
-                'username': username,
-                'password': password,
-            }
-            DB.insert_credential(cred_info)
-
-            vuln_info = {
-                'host': target['hostname'],
-                'port': target['port'],
-                'service': 'mysql',
-                'url': mysqlscan.url(),
-                'name': 'Default or predictable credentials on MySQL service',
-                'description': 'Service %s possess the following default or weak credentials: %s:%s' % (mysqlscan.url(), username, password),
-            }
-            DB.insert_vulnerability(vuln_info)
-
-            stop = True
-
-        except AuthFailure as e:
+            scanner.disconnect()
+        except Exception:
             pass
-        except Exception as e:
-            # Another error, stop it
-            stop = True
+        state.complete_attempt(target)
 
-        try:
-            mysqlscan.disconnect()
-        except:
-            pass
 
-        if stop:
-            break
+def bruteforce_generator(target, username_file, password_file, simple_bruteforce=False, **options):
+    return iter_credential_attempts(target, username_file, password_file, simple=simple_bruteforce, **options)
 
-def bruteforce_generator(target, username_file, password_file, simple_bruteforce=False):
-    password_list = []
-    if password_file != None:
-        password_f = open(password_file)
-        for f in password_f:
-            f = f.strip()
-            password_list.append(f)
-        password_f.close()
 
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
-
-        if not simple_bruteforce:
-            if ':' in u:
-                p = [u.split(':', 1)[-1]]
-                u = u.split(':', 1)[0]
-            else:
-                p = password_list
-        else:
-            if ':' in u:
-                u = u.split(':', 1)[0]
-            p = [u]
-
-        t = copy.copy(target)
-        t['b_username'] = u
-        t['b_password_list'] = p
-
-        yield t
-    username_f.close()
-
-def bruteforce_generator_count(target, username_file, password_file):
-    count = 0
-
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
-
-        count += 1
-    username_f.close()
-
-    return count
+def bruteforce_generator_count(target, username_file, password_file, **options):
+    return credential_attempt_count(target, username_file, password_file, **options)

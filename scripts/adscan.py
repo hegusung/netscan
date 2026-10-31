@@ -10,6 +10,7 @@ from lib.adscan.adscan import adscan_worker, ad_modules
 from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+from utils.credential_campaign import apply_mcp_credential_environment
 
 
 def main():
@@ -116,6 +117,7 @@ def main():
     misc_group.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+    apply_mcp_credential_environment(args)
 
     Output.setup()
 

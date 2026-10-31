@@ -63,6 +63,22 @@ class NormalizedEventTests(unittest.TestCase):
         self.assertEqual(event["data"]["username"], "alice")
         self.assertNotIn("HighlySecret!", repr(event))
 
+    def test_validation_event_preserves_semantic_result(self):
+        event = event_from_document(
+            {
+                "doc_type": "credential_validation",
+                "session": "engagement-42",
+                "url": "smb://192.0.2.1:445",
+                "service": "smb",
+                "username": "alice",
+                "status": "success",
+                "admin": True,
+            }
+        )
+        self.assertEqual(event["category"], "authentication")
+        self.assertEqual(event["status"], "success")
+        self.assertTrue(event["data"]["admin"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,10 +7,7 @@ import traceback
 import struct
 
 from .rdp import RDP
-from .rdp_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_generator_count
-
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
 
@@ -113,43 +110,6 @@ def rdpscan_worker(target, actions, creds, timeout):
 
             if 'modules' in actions:
                 rdp_modules.execute_modules(actions['modules']['modules'], (target, actions['modules']['args'], creds, timeout))
-
-            if 'bruteforce' in actions:
-                if actions['bruteforce'].get('username_file') is not None:
-                    Output.highlight({'target': rdp.url(), 'message': 'Starting bruteforce:'})
-
-                    if 'domain' in creds:
-                        domain = creds['domain']
-                    else:
-                        domain = 'WORKGROUP'
-                    username_file = actions['bruteforce']['username_file']
-                    password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                    bruteforce_workers = actions['bruteforce']['workers']
-
-                    # The generator will provide a username:password_list couple
-                    gen = bruteforce_generator(target, domain, username_file, password_file)
-                    gen_size = bruteforce_generator_count(target, domain, username_file, password_file)
-
-                    args = (timeout,)
-                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
-
-            if 'simple_bruteforce' in actions:
-                if actions['simple_bruteforce'].get('username_file') is not None:
-                    Output.highlight({'target': rdp.url(), 'message': 'Starting simple bruteforce:'})
-
-                    if 'domain' in creds:
-                        domain = creds['domain']
-                    else:
-                        domain = 'WORKGROUP'
-                    username_file = actions['simple_bruteforce']['username_file']
-                    bruteforce_workers = actions['simple_bruteforce']['workers']
-
-                    # The generator will provide a username:password_list couple
-                    gen = bruteforce_generator(target, domain, username_file, None, simple_bruteforce=True)
-                    gen_size = bruteforce_generator_count(target, domain, username_file, None)
-
-                    args = (timeout,)
-                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except ssl.SSLError as e:
         pass

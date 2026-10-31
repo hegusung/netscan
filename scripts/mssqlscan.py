@@ -9,6 +9,8 @@ from lib.mssqlscan.mssqlscan import mssqlscan_worker
 from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+from utils.credential_campaign import apply_mcp_credential_environment, dispatch_credential_campaign
+from lib.mssqlscan.mssql_bruteforce import bruteforce_worker
 
 
 
@@ -37,9 +39,16 @@ def main():
     
     # Bruteforce
     parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
+    parser.add_argument("--spray", action='store_true', help='Try each password across the full target scope before the next password')
+    parser.add_argument("--simple-bruteforce", action='store_true', dest='simple_bruteforce')
     parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
     parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers for the bruteforce', default=5, dest='bruteforce_workers')
+    parser.add_argument('--bruteforce-delay', type=int, default=0, dest='bruteforce_delay')
+    parser.add_argument('--credential-jitter', type=int, default=0, dest='credential_jitter')
+    parser.add_argument('--spray-round-delay', type=int, default=0, dest='spray_round_delay')
+    parser.add_argument('--max-attempts-per-account', type=int, default=None, dest='max_attempts_per_account')
+    parser.add_argument('--continue-on-success', action='store_true', dest='continue_on_success')
     
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
@@ -51,6 +60,14 @@ def main():
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+    apply_mcp_credential_environment(args)
+    if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
+        parser.error('--max-attempts-per-account must be greater than zero')
+    if args.bruteforce or args.spray or args.simple_bruteforce:
+        if args.username_file is None:
+            parser.error('-U is required for a credential campaign')
+        if not args.simple_bruteforce and args.password_file is None:
+            parser.error('-P is required unless --simple-bruteforce is selected')
 
     Output.setup()
 
@@ -109,8 +126,8 @@ def main():
         actions['admin_check'] = {}
         if args.link:
             actions['admin_check']['link'] = args.link
-    if args.bruteforce:
-        actions['bruteforce'] ={'username_file': normalize_path(args.username_file), 'password_file': normalize_path(args.password_file), 'workers': args.bruteforce_workers}
+    if args.bruteforce or args.spray or args.simple_bruteforce:
+        actions['bruteforce'] = {'username_file': normalize_path(args.username_file), 'password_file': normalize_path(args.password_file), 'workers': args.bruteforce_workers, 'strategy': 'spray' if args.spray else 'bruteforce', 'simple': args.simple_bruteforce, 'delay': args.bruteforce_delay, 'jitter': args.credential_jitter, 'spray_round_delay': args.spray_round_delay, 'max_attempts_per_account': args.max_attempts_per_account, 'continue_on_success': args.continue_on_success}
 
 
     mssqlscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
@@ -120,8 +137,12 @@ def main():
 
 
 def mssqlscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-    args = (actions, creds, timeout)
+    scan_actions = dict(actions)
+    campaign = scan_actions.pop('bruteforce', None)
+    args = (scan_actions, creds, timeout)
     dispatch_targets(input_targets, static_inputs, mssqlscan_worker, args, workers=workers, delay=delay, resume=resume)
+    if campaign:
+        dispatch_credential_campaign(input_targets, static_inputs, campaign, bruteforce_worker, timeout=timeout, default_domain=creds.get('domain'), progress_name='MSSQL credentials')
 
 
 if __name__ == '__main__':

@@ -39,6 +39,7 @@ DOCUMENT_CATEGORIES = {
     "database": "database",
     "cred_password": "credential",
     "cred_hash": "credential",
+    "credential_validation": "authentication",
     "vuln": "vulnerability",
     "secret": "secret",
     "snmp": "credential",
@@ -67,6 +68,10 @@ SAFE_DOCUMENT_FIELDS = frozenset(
         "target",
         "query_type",
         "format",
+        "secret_kind",
+        "status",
+        "admin",
+        "source",
         "tags",
     }
 )
@@ -178,19 +183,32 @@ def event_from_document(document: Mapping[str, Any]) -> dict[str, Any] | None:
         for key, value in source.items()
         if key in SAFE_DOCUMENT_FIELDS and value is not None
     }
+    event_status = "persisted"
+    message = f"Persisted {document_type}: {label}"
+    if document_type == "credential_validation":
+        event_status = str(source.get("status", "unknown"))
+        if event_status == "success":
+            severity = "success"
+        elif event_status in {"locked", "error"}:
+            severity = "warning"
+        message = "Credential validation %s for account %s" % (
+            event_status,
+            source.get("username", "unknown"),
+        )
     legacy_type = {
         "high": "major",
         "success": "success",
+        "warning": "highlight",
     }.get(severity, "normal")
     return normalize_output_event(
         {
             "type": legacy_type,
             "target": target,
-            "message": f"Persisted {document_type}: {label}",
+            "message": message,
             "event": {
                 "category": category,
                 "severity": severity,
-                "status": "persisted",
+                "status": event_status,
                 "sensitive": category in {"credential", "secret"},
                 "data": data,
             },

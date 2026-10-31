@@ -8,10 +8,7 @@ import logging
 import paramiko
 
 from .telnet import Telnet
-from .telnet_bruteforce import *
-
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 
 def telnetscan_worker(target, actions, creds, timeout):
@@ -53,21 +50,6 @@ def telnetscan_worker(target, actions, creds, timeout):
                     Output.highlight({'target': target['hostname'], 'message': output})
             else:
                 Output.minor({'target': telnet.url(), 'message': 'Authentication failure with username %s and password %s' % (creds['username'], creds['password'])})
-
-        if 'bruteforce' in actions:
-            if actions['bruteforce'].get('username_file') is not None:
-                Output.highlight({'target': telnet.url(), 'message': 'Starting bruteforce:'})
-
-                username_file = actions['bruteforce']['username_file']
-                password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                bruteforce_workers = actions['bruteforce']['workers']
-
-                # The generator will provide a username:password_list couple
-                gen = bruteforce_generator(target, username_file, password_file)
-                gen_size = bruteforce_generator_count(target, username_file, password_file)
-
-                args = (timeout,)
-                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except OSError:
         pass

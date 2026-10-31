@@ -1,96 +1,41 @@
-import copy
-import socket
-import traceback
-import paramiko
 from .telnet import Telnet
-from utils.output import Output
-from utils.utils import AuthFailure
+from utils.credential_campaign import credential_attempt_count, iter_credential_attempts, record_credential_validation, wait_before_attempt
 from utils.db import DB
+from utils.output import Output
 
-def bruteforce_worker(target, timeout):
-    for password in target['b_password_list']:
-        username = target['b_username']
 
-        try:
-
-            telnet = Telnet(target['hostname'], target['port'], timeout)
-            banner = telnet.connect()
-            success = False
-            stop = False
-
-            success = telnet.auth(username, password)
-            if success:
-                Output.success({'target': telnet.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
-                cred_info = {
-                    'host': target['hostname'],
-                    'port': target['port'],
-                    'service': 'telnet',
-                    'url': telnet.url(),
-                    'type': 'password',
-                    'username': username,
-                    'password': password,
-                }
-                DB.insert_credential(cred_info)
-
-                stop = True
-
-        except ConnectionRefusedError:
-            stop = True
-        except Exception as e:
-            stop = True
-            print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
-        finally:
+def bruteforce_worker(target, timeout, delay, jitter, state):
+    username, password = target['b_username'], target['b_secret']
+    scanner = None
+    state.begin_attempt(target)
+    try:
+        if not state.claim_attempt(target, None, username):
+            return
+        wait_before_attempt(delay, jitter)
+        scanner = Telnet(target['hostname'], target['port'], timeout)
+        scanner.connect()
+        success = scanner.auth(username, password)
+        record_credential_validation(target, service='telnet', username=username, secret=password, status='success' if success else 'failure', url=scanner.url())
+        if not success:
+            return
+        state.mark_success(target, None, username)
+        Output.event('authentication', 'Authentication success for account %s' % username, target=scanner.url(), severity='success', status='success', data={'protocol': 'telnet', 'username': username, 'secret_type': 'password'}, sensitive=True)
+        DB.insert_credential({'host': target['hostname'], 'port': target['port'], 'service': 'telnet', 'url': scanner.url(), 'type': 'password', 'username': username, 'password': password})
+    except ConnectionRefusedError:
+        if scanner is not None:
+            record_credential_validation(target, service='telnet', username=username, secret=password, status='error', url=scanner.url())
+    finally:
+        if scanner is not None:
             try:
-                telnet.disconnect()
-            except:
+                scanner.disconnect()
+            except Exception:
                 pass
+        state.complete_attempt(target)
 
-        if stop:
-            break
 
-def bruteforce_generator(target, username_file, password_file, simple_bruteforce=False):
-    password_list = []
-    if password_file != None:
-        password_f = open(password_file)
-        for f in password_f:
-            f = f.strip()
-            password_list.append(f)
-        password_f.close()
+def bruteforce_generator(target, username_file, password_file, simple_bruteforce=False, **options):
+    return iter_credential_attempts(target, username_file, password_file, simple=simple_bruteforce, **options)
 
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
 
-        if not simple_bruteforce:
-            if ':' in u:
-                p = [u.split(':', 1)[-1]]
-                u = u.split(':', 1)[0]
-            else:
-                p = password_list
-        else:
-            if ':' in u:
-                u = u.split(':', 1)[0]
-            p = [u]
-
-        t = copy.copy(target)
-        t['b_username'] = u
-        t['b_password_list'] = p
-
-        yield t
-    username_f.close()
-
-def bruteforce_generator_count(target, username_file, password_file):
-    count = 0
-
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
-
-        count += 1
-    username_f.close()
-
-    return count
+def bruteforce_generator_count(target, username_file, password_file, **options):
+    return credential_attempt_count(target, username_file, password_file, **options)

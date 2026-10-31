@@ -50,12 +50,14 @@ class WinRMBruteforceTests(unittest.TestCase):
             self.assertEqual(generated[0]["b_secret"], "alice")
 
     @patch("lib.winrmscan.winrm_bruteforce.Output.event")
+    @patch("lib.winrmscan.winrm_bruteforce.DB.insert_credential_validation")
     @patch("lib.winrmscan.winrm_bruteforce.DB.insert_vulnerability")
     @patch("lib.winrmscan.winrm_bruteforce.DB.insert_credential")
     @patch("lib.winrmscan.winrm_bruteforce.DB.insert_port")
     @patch("lib.winrmscan.winrm_bruteforce.WinRMScan")
     def test_successful_attempt_is_persisted(
-        self, scanner_type, insert_port, insert_credential, insert_vulnerability, success
+        self, scanner_type, insert_port, insert_credential, insert_vulnerability,
+        insert_validation, success
     ):
         scanner = MagicMock()
         scanner.auth.return_value = True
@@ -78,6 +80,7 @@ class WinRMBruteforceTests(unittest.TestCase):
         insert_port.assert_called_once()
         insert_credential.assert_called_once()
         insert_vulnerability.assert_called_once()
+        insert_validation.assert_called_once()
         success.assert_called_once()
         scanner.disconnect.assert_called_once()
 

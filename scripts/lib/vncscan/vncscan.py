@@ -85,32 +85,6 @@ def vncscan_worker(target, actions, creds, timeout):
                 run_ducky(vnc, actions['ducky']['ducky_script'])
                 Output.highlight({'target': vnc.url(), 'message': 'Ducky script executed'})
 
-        if 'bruteforce' in actions:
-            if "VNC Authentication" in vnc.supported_security_types:
-                if actions['bruteforce'].get('password_file') is not None:
-                    Output.highlight({'target': vnc.url(), 'message': 'Starting bruteforce:'})
-                    for password in open(actions['bruteforce']['password_file']):
-                        password = password.strip()
-                        v = VNC(target['hostname'], target['port'], timeout)
-                        v.connect()
-                        code, _ = v.auth("VNC Authentication", password=password)
-                        if code == 0:
-                            Output.success({'target': vnc.url(), 'message': 'Authentication success with password: %s' % password})
-                            cred_info = {
-                                'host': target['hostname'],
-                                'port': target['port'],
-                                'service': 'vnc',
-                                'url': vnc.url(),
-                                'type': 'password',
-                                'username': 'N/A',
-                                'password': password,
-                            }
-                            DB.insert_credential(cred_info)
-
-                        v.disconnect()
-                        sleep(0.5)
-            else:
-                Output.error({'target': vnc.url(), 'message': 'Unsupported authentication mechanism for bruteforce'})
     except ConnectionRefusedError:
         pass
     except OSError as e:

@@ -9,6 +9,8 @@ from lib.vncscan.vncscan import vncscan_worker
 from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+from utils.credential_campaign import apply_mcp_credential_environment, dispatch_credential_campaign
+from lib.vncscan.vnc_bruteforce import bruteforce_worker
 
 
 def main():
@@ -27,7 +29,14 @@ def main():
     
     # Bruteforce
     parser.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
+    parser.add_argument("--spray", action='store_true', help='Try each password across the full target scope before the next password')
     parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
+    parser.add_argument('-W', metavar='number worker', type=int, default=5, dest='bruteforce_workers')
+    parser.add_argument('--bruteforce-delay', type=int, default=0, dest='bruteforce_delay')
+    parser.add_argument('--credential-jitter', type=int, default=0, dest='credential_jitter')
+    parser.add_argument('--spray-round-delay', type=int, default=0, dest='spray_round_delay')
+    parser.add_argument('--max-attempts-per-account', type=int, default=None, dest='max_attempts_per_account')
+    parser.add_argument('--continue-on-success', action='store_true', dest='continue_on_success')
     
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
@@ -39,6 +48,11 @@ def main():
     parser.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+    apply_mcp_credential_environment(args)
+    if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
+        parser.error('--max-attempts-per-account must be greater than zero')
+    if (args.bruteforce or args.spray) and args.password_file is None:
+        parser.error('-P is required for a credential campaign')
 
     Output.setup()
     Config.load_config()
@@ -66,8 +80,8 @@ def main():
         actions['screenshot'] = {}
     if args.ducky:
         actions['ducky'] = {'ducky_script': args.ducky}
-    if args.bruteforce:
-        actions['bruteforce'] = {'password_file': normalize_path(args.password_file)}
+    if args.bruteforce or args.spray:
+        actions['bruteforce'] = {'secret_file': normalize_path(args.password_file), 'workers': args.bruteforce_workers, 'strategy': 'spray' if args.spray else 'bruteforce', 'delay': args.bruteforce_delay, 'jitter': args.credential_jitter, 'spray_round_delay': args.spray_round_delay, 'max_attempts_per_account': args.max_attempts_per_account, 'continue_on_success': args.continue_on_success}
 
 
     vncscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
@@ -77,8 +91,12 @@ def main():
 
 
 def vncscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-    args = (actions, creds, timeout)
+    scan_actions = dict(actions)
+    campaign = scan_actions.pop('bruteforce', None)
+    args = (scan_actions, creds, timeout)
     dispatch_targets(input_targets, static_inputs, vncscan_worker, args, workers=workers, delay=delay, resume=resume)
+    if campaign:
+        dispatch_credential_campaign(input_targets, static_inputs, campaign, bruteforce_worker, timeout=timeout, username='N/A', progress_name='VNC credentials')
 
 
 if __name__ == '__main__':

@@ -7,11 +7,8 @@ import struct
 import redis as redislib
 
 from .redis import Redis
-from .redis_bruteforce import *
-
 from utils.utils import AuthFailure
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.db import DB
 
 def redisscan_worker(target, actions, creds, timeout):
@@ -119,20 +116,6 @@ def redisscan_worker(target, actions, creds, timeout):
                         output += " "*60+"\t- %s\n" % table
                 Output.write({'target': redis.url(), 'message': output})
             """
-
-        if 'bruteforce' in actions:
-            if 'password_file' in actions['bruteforce'] != None:
-                Output.write({'target': redis.url(), 'message': 'Starting bruteforce:'})
-
-                password_file = actions['bruteforce']['password_file']
-                bruteforce_workers = actions['bruteforce']['workers']
-
-                # The generator will provide a username:password_list couple
-                gen = bruteforce_generator(target, password_file)
-                gen_size = bruteforce_generator_count(target, password_file)
-
-                args = (timeout,)
-                dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except OSError:
         pass

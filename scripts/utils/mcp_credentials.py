@@ -135,7 +135,7 @@ class CredentialCatalog:
             "credential_id": identifier,
             "session": source.get("session"),
             "scope": "domain" if document_type.startswith("domain_") else "host",
-            "kind": secret_field,
+            "kind": source.get("secret_kind", secret_field),
             "format": source.get("format"),
             "domain": source.get("domain"),
             "username": username,
@@ -158,7 +158,7 @@ class CredentialCatalog:
         domain: str | None = None,
         service: str | None = None,
         host: str | None = None,
-        kind: Literal["password", "hash"] | None = None,
+        kind: Literal["password", "hash", "community"] | None = None,
         limit: int = 100,
     ) -> dict[str, Any]:
         if limit < 1 or limit > 1000:

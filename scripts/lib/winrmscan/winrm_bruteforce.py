@@ -3,6 +3,7 @@ from utils.credential_campaign import (
     CampaignState,
     credential_attempt_count,
     iter_credential_attempts,
+    record_credential_validation,
     wait_before_attempt,
 )
 from utils.db import DB
@@ -29,6 +30,10 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         )
         try:
             if not scanner.auth(domain, user, password, None):
+                record_credential_validation(
+                    target, service='winrm', domain=domain, username=username,
+                    secret=password, status='failure', url=scanner.url(),
+                )
                 Output.event(
                     'authentication', 'Authentication failure for account %s' % user,
                     target=scanner.url(), severity='debug', status='failure',
@@ -38,6 +43,10 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
                 return
 
             state.mark_success(target, domain, username)
+            record_credential_validation(
+                target, service='winrm', domain=domain, username=username,
+                secret=password, status='success', url=scanner.url(),
+            )
             Output.event(
                 'authentication', 'Authentication success for account %s' % user,
                 target=scanner.url(), severity='success', status='success',

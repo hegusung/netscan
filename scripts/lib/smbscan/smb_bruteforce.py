@@ -2,6 +2,7 @@ from .smb import SMBScan
 from utils.credential_campaign import (
     credential_attempt_count,
     iter_credential_attempts,
+    record_credential_validation,
     wait_before_attempt,
 )
 from utils.output import Output
@@ -29,6 +30,11 @@ def _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=False):
             if not success:
                 return
             state.mark_success(target, domain, username)
+            record_credential_validation(
+                target, service='smb', domain=domain, username=username,
+                secret=secret, secret_kind='hash' if use_hash else 'password',
+                status='success', admin=is_admin, url=smbscan.url(),
+            )
             Output.event(
                 'authentication', 'Authentication success for account %s\\%s' % (domain, username),
                 target=smbscan.url(), severity='success', status='success',
@@ -71,6 +77,11 @@ def _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=False):
         except AuthFailure as exc:
             if str(exc) == "STATUS_ACCOUNT_LOCKED_OUT":
                 state.mark_locked(target, domain, username)
+                record_credential_validation(
+                    target, service='smb', domain=domain, username=username,
+                    secret=secret, secret_kind='hash' if use_hash else 'password',
+                    status='locked', url=smbscan.url(),
+                )
                 Output.event(
                     'authentication', 'Account locked out: %s\\%s' % (domain, username),
                     target=smbscan.url(), severity='warning', status='locked',
@@ -78,7 +89,11 @@ def _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=False):
                     sensitive=True,
                 )
             elif str(exc) == "STATUS_LOGON_FAILURE":
-                pass
+                record_credential_validation(
+                    target, service='smb', domain=domain, username=username,
+                    secret=secret, secret_kind='hash' if use_hash else 'password',
+                    status='failure', url=smbscan.url(),
+                )
             else:
                 Output.write({'target': smbscan.url(), 'message': 'Authentication failure for %s\\%s: %s' % (domain, username, str(exc))})
         finally:

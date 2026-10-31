@@ -48,10 +48,10 @@ General-purpose tools are also available:
   credential-safe Elastic MCP handoff.
 - `netscan_credentials`: list opaque IDs and non-secret metadata for credentials
   already persisted in the selected NetScan session.
-- `netscan_run_with_credential`: reuse one stored credential with SMB, SSH, or
-  WinRM without returning its password or hash to the MCP client.
+- `netscan_run_with_credential`: reuse one stored credential with a supported
+  authentication scanner without returning its password or hash to the client.
 - `netscan_run_with_credentials`: validate an opaque-ID set, then enqueue one
-  bounded and independently traceable SMB, SSH, or WinRM job per credential.
+  bounded and independently traceable job per credential.
 - `netscan_module_help`: get the native help for a command.
 - `netscan_list_scans`: list queued, active, and completed jobs.
 - `netscan_scan_status`: poll one job and its output progress.
@@ -98,7 +98,7 @@ Important mappings include:
 
 | Objective | MCP tool and relevant arguments |
 | --- | --- |
-| Multi-host password testing or spraying | SMB, SSH, and WinRM use a shared scope-wide campaign engine. Select `spray=true` for secret-major ordering across every target; use `spray_round_delay`, `credential_jitter`, `max_attempts_per_account`, and `continue_on_success` to control the campaign. SMB also accepts `ntlm_file`. |
+| Multi-host password testing or spraying | FTP, MongoDB, MSSQL, MySQL, PostgreSQL, RDP, Redis, SMB, SNMP, SSH, Telnet, VNC, and WinRM use the shared scope-wide campaign engine. Select `spray=true` for secret-major ordering across every target; use `spray_round_delay`, `credential_jitter`, `max_attempts_per_account`, and `continue_on_success` to control it. SMB also accepts `ntlm_file`; SNMP campaigns use community files. |
 | Persist and correlate results | Leave `nodb` false. Results are stored in the configured Elasticsearch index and separated by the configured NetScan session. |
 | Validate Windows administrative access | `netscan_smbscan` validates access to the remote Service Control Manager after password, NTLM, or Kerberos authentication and reports administrative privileges. |
 | Validate MSSQL administrative access | `netscan_mssqlscan` checks membership in the `sysadmin` server role; `admin_check` can also test it explicitly. |
@@ -120,19 +120,30 @@ reuse.
 ### Stored credential reuse
 
 Call `netscan_credentials` with the exact session and optional domain, service,
-host, or password/hash filters. It returns stable opaque `credential_id` values,
-provenance, and targeting metadata, but never the password or hash. The ID is an
+host, or password/hash/community filters. It returns stable opaque
+`credential_id` values, provenance, and targeting metadata, but never the
+password, hash, or community. The ID is an
 HMAC of the Elasticsearch document identity using a private key in the MCP state
 directory; neither the Elasticsearch document ID nor its secret-bearing source
 is exposed.
 
-Use `netscan_run_with_credential` to apply one ID to an authorized SMB, SSH, or
-WinRM target scope. Additional non-authentication scanner arguments remain
-available. The server resolves the secret internally and injects it into the
-scanner subprocess environment rather than its command line. Authentication
-arguments cannot be mixed with `credential_id`, and SSH currently accepts only
-stored passwords. The resulting tool response and normalized events do not
-contain the secret.
+Use `netscan_run_with_credential` to apply one ID to an authorized target scope.
+Reuse is supported by AD/LDAP, FTP, MongoDB, MSSQL, MySQL, PostgreSQL, RDP,
+Redis, SMB, SNMP, SSH, Telnet, VNC, and WinRM. Additional non-authentication
+scanner arguments remain available. The server resolves the secret internally
+and injects it into the scanner subprocess environment rather than its command
+line. Authentication arguments cannot be mixed with `credential_id`. NTLM
+hashes are accepted only by AD, MSSQL, RDP, SMB, and WinRM; other protocols
+require stored passwords. The response and normalized events do not contain the
+secret.
+
+Each campaign attempt writes a `credential_validation` document to the selected
+Elasticsearch session. It contains a session-scoped `credential_ref`, target,
+service, account, secret kind, result (`success`, `failure`, `locked`, or
+`error`), source, timestamp, and observed administrative status, but never the
+password, hash, or community. Successful credentials store the same reference,
+allowing Kibana queries to correlate credential provenance and validation
+coverage without retrieving secret material.
 
 For a selected set, `netscan_run_with_credentials` resolves and validates every
 ID before enqueuing any work, then returns one `scan_id` per credential. Jobs use

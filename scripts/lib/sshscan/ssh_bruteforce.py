@@ -5,6 +5,7 @@ from .ssh import SSH
 from utils.credential_campaign import (
     credential_attempt_count,
     iter_credential_attempts,
+    record_credential_validation,
     wait_before_attempt,
 )
 from utils.output import Output
@@ -23,8 +24,16 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
         ssh = SSH(target['hostname'], target['port'], timeout)
         try:
             if not ssh.auth(username, password):
+                record_credential_validation(
+                    target, service='ssh', username=username, secret=password,
+                    status='failure', url=ssh.url(),
+                )
                 return
             state.mark_success(target, domain, username)
+            record_credential_validation(
+                target, service='ssh', username=username, secret=password,
+                status='success', url=ssh.url(),
+            )
             Output.event(
                 'authentication', 'Authentication success for account %s' % username,
                 target=ssh.url(), severity='success', status='success',
@@ -42,7 +51,10 @@ def bruteforce_worker(target, timeout, delay, jitter, state):
                 'description': 'SSH accepts a password from the supplied authorized credential campaign for account %s' % username,
             })
         except paramiko.AuthenticationException:
-            pass
+            record_credential_validation(
+                target, service='ssh', username=username, secret=password,
+                status='failure', url=ssh.url(),
+            )
         except ValueError:
             pass
         except paramiko.SSHException:

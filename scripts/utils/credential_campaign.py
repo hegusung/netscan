@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import random
 import threading
 import time
@@ -120,6 +121,19 @@ class CampaignState:
                 self._current_round += 1
                 self._next_round_at = time.monotonic() + self.spray_round_delay
                 self._round_condition.notify_all()
+
+
+def apply_mcp_credential_environment(arguments) -> None:
+    """Consume server-injected authentication material before child processes run."""
+    mappings = {
+        "password": "NETSCAN_MCP_CREDENTIAL_PASSWORD",
+        "hash": "NETSCAN_MCP_CREDENTIAL_HASH",
+        "community": "NETSCAN_MCP_CREDENTIAL_COMMUNITY",
+    }
+    for attribute, environment_name in mappings.items():
+        value = os.environ.pop(environment_name, None)
+        if hasattr(arguments, attribute) and getattr(arguments, attribute) is None:
+            setattr(arguments, attribute, value)
 
 
 def _read_nonempty(path: str | Path | None) -> list[str]:
@@ -277,6 +291,133 @@ def target_credential_attempt_count(
     return count_process_inputs(input_targets, static_inputs) * attempts_per_target
 
 
+def iter_target_secret_attempts(
+    input_targets: dict,
+    static_inputs: dict,
+    secret_file: str | Path,
+    *,
+    username: str = "N/A",
+    secret_kind: str = "password",
+    strategy: str = "bruteforce",
+    max_attempts_per_account: int | None = None,
+) -> Iterator[dict]:
+    secrets = _read_nonempty(secret_file)
+    if max_attempts_per_account is not None:
+        secrets = secrets[:max_attempts_per_account]
+    target_count = count_process_inputs(input_targets, static_inputs)
+    if strategy == "spray":
+        for round_id, secret in enumerate(secrets):
+            for target in process_inputs(input_targets, static_inputs):
+                attempt = copy.copy(target)
+                attempt.update(
+                    {
+                        "b_domain": None,
+                        "b_username": username,
+                        "b_secret": secret,
+                        "b_secret_kind": secret_kind,
+                        "b_spray_round": round_id,
+                        "b_spray_round_size": target_count,
+                    }
+                )
+                yield attempt
+        return
+    for target in process_inputs(input_targets, static_inputs):
+        for secret in secrets:
+            attempt = copy.copy(target)
+            attempt.update(
+                {
+                    "b_domain": None,
+                    "b_username": username,
+                    "b_secret": secret,
+                    "b_secret_kind": secret_kind,
+                }
+            )
+            yield attempt
+
+
+def target_secret_attempt_count(
+    input_targets: dict,
+    static_inputs: dict,
+    secret_file: str | Path,
+    *,
+    max_attempts_per_account: int | None = None,
+    **_options,
+) -> int:
+    secrets = _read_nonempty(secret_file)
+    if max_attempts_per_account is not None:
+        secrets = secrets[:max_attempts_per_account]
+    return count_process_inputs(input_targets, static_inputs) * len(secrets)
+
+
+def dispatch_credential_campaign(
+    input_targets: dict,
+    static_inputs: dict,
+    settings: dict,
+    worker,
+    *,
+    timeout: int,
+    default_domain: str | None = None,
+    username: str | None = None,
+    secret_kind: str = "password",
+    progress_name: str = "Credentials",
+) -> None:
+    """Dispatch one scope-wide campaign using the common worker contract."""
+    from utils.dispatch import dispatch
+
+    common = {
+        "strategy": settings.get("strategy", "bruteforce"),
+        "secret_kind": secret_kind,
+        "max_attempts_per_account": settings.get("max_attempts_per_account"),
+    }
+    username_file = settings.get("username_file")
+    secret_file = settings.get("password_file") or settings.get("secret_file")
+    if username_file is None:
+        generator = iter_target_secret_attempts(
+            input_targets,
+            static_inputs,
+            secret_file,
+            username=username or "N/A",
+            **common,
+        )
+        size = target_secret_attempt_count(
+            input_targets,
+            static_inputs,
+            secret_file,
+            **common,
+        )
+    else:
+        common.update(
+            {
+                "default_domain": default_domain,
+                "simple": settings.get("simple", False),
+            }
+        )
+        generator = iter_target_credential_attempts(
+            input_targets, static_inputs, username_file, secret_file, **common
+        )
+        size = target_credential_attempt_count(
+            input_targets, static_inputs, username_file, secret_file, **common
+        )
+    state = CampaignState(
+        continue_on_success=settings.get("continue_on_success", False),
+        spray_round_delay=settings.get("spray_round_delay", 0),
+    )
+    dispatch(
+        generator,
+        size,
+        worker,
+        (
+            timeout,
+            settings.get("delay", 0),
+            settings.get("jitter", 0),
+            state,
+        ),
+        workers=settings.get("workers", 1),
+        process=False,
+        pg_name=progress_name,
+    )
+
+
 def _attempt(target: dict, account: Account, secret: str, secret_kind: str) -> dict:
     generated = copy.copy(target)
     generated["b_domain"] = account.domain
@@ -292,3 +433,38 @@ def wait_before_attempt(delay: float = 0, jitter: float = 0) -> None:
         duration += random.uniform(0, float(jitter))
     if duration:
         time.sleep(duration)
+
+
+def record_credential_validation(
+    target: dict,
+    *,
+    service: str,
+    username: str,
+    secret: str,
+    status: str,
+    url: str,
+    domain: str | None = None,
+    secret_kind: str = "password",
+    admin: bool = False,
+    source: str = "campaign",
+) -> str:
+    """Persist a secret-free validation result and return its correlation ref."""
+    from utils.db import DB
+
+    credential_ref = DB.credential_reference(domain, username, secret_kind, secret)
+    DB.insert_credential_validation(
+        {
+            "credential_ref": credential_ref,
+            "host": target.get("hostname"),
+            "port": target.get("port"),
+            "url": url,
+            "service": service,
+            "domain": domain,
+            "username": username,
+            "secret_kind": secret_kind,
+            "status": status,
+            "admin": bool(admin),
+            "source": source,
+        }
+    )
+    return credential_ref

@@ -2,10 +2,7 @@ import traceback
 import socket
 import time
 from .ftp import FTPScan
-from .ftp_bruteforce import *
-
 from utils.output import Output
-from utils.dispatch import dispatch
 from utils.utils import sizeof_fmt, gen_random_string
 from utils.db import DB
 
@@ -97,35 +94,6 @@ def ftpscan_worker(target, actions, creds, timeout, passive):
                 else:
                     Output.minor({'target': ftpscan.url(), 'message': 'Connection failed with anonymous credentials'})
 
-
-        if 'bruteforce' in actions:
-            if actions['bruteforce'].get('username_file') is not None:
-                # Try random creds
-                ftpscan = FTPScan(target['hostname'], target['port'], timeout)
-                rnd_user = gen_random_string()
-                rnd_pass = gen_random_string()
-                # small delay to prevent errors
-                time.sleep(1)
-                ftpscan.connect()
-                success = ftpscan.auth(rnd_user, rnd_pass)
-
-                if success == True:
-                    Output.success({'target': ftpscan.url(), 'message': 'FTP server accepts any credentials'})
-
-                else:
-
-                    Output.write({'target': ftpscan.url(), 'message': 'Starting bruteforce:'})
-
-                    username_file = actions['bruteforce']['username_file']
-                    password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
-                    bruteforce_workers = actions['bruteforce']['workers']
-
-                    # The generator will provide a username:password_list couple
-                    gen = bruteforce_generator(target, username_file, password_file)
-                    gen_size = bruteforce_generator_count(target, username_file, password_file)
-
-                    args = (timeout,)
-                    dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except TimeoutError:
         pass

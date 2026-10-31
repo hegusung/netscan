@@ -74,6 +74,7 @@ es_ids = {
     'database': 'database_{session}_{url}_{account}_{database}_{table}',
     'cred_password': 'cred_password_{session}_{url}_{username}_{password}',
     'cred_hash': 'cred_hash_{session}_{url}_{username}_{format}_{hash}',
+    'credential_validation': 'credential_validation_{session}_{credential_ref}_{url}',
     'vuln': 'vuln_{session}_{url}_{name}_{description}',
     'secret': 'secret_{session}_{filepath}_{line}',
     'snmp': 'snmp_{session}_{host}_{port}_{snmp_key}',
@@ -542,6 +543,7 @@ class DB:
 
     @classmethod
     def insert_credential(self, credential_doc):
+        secret_kind_override = credential_doc.pop('_secret_kind', None)
         if 'password' in credential_doc:
             credential_doc['doc_type'] = 'cred_password'
         elif 'hash' in credential_doc:
@@ -556,7 +558,54 @@ class DB:
             if credential_doc['hash'].startswith('aad3b435b51404eeaad3b435b51404ee:'):  # Remove empty LN
                 credential_doc['hash'] = credential_doc['hash'][len('aad3b435b51404eeaad3b435b51404ee:'):]
 
+        secret_field = 'password' if 'password' in credential_doc else 'hash'
+        secret_kind = secret_kind_override or secret_field
+        credential_doc['secret_kind'] = secret_kind
+        credential_doc['credential_ref'] = self.credential_reference(
+            credential_doc.get('domain'), credential_doc['username'], secret_kind,
+            credential_doc[secret_field],
+        )
+
+        self.insert_credential_validation({
+            'credential_ref': credential_doc['credential_ref'],
+            'host': credential_doc.get('host'),
+            'port': credential_doc.get('port'),
+            'url': credential_doc['url'],
+            'service': credential_doc['service'],
+            'domain': credential_doc.get('domain'),
+            'username': credential_doc['username'],
+            'secret_kind': secret_kind,
+            'status': 'success',
+            'source': 'credential_insert',
+        })
+
         self.send(credential_doc)
+
+    @classmethod
+    def credential_reference(self, domain, username, secret_kind, secret):
+        """Return a session-scoped opaque correlation reference for one credential."""
+        material = '\0'.join([
+            str(getattr(self, 'session', 'Unknown')),
+            str(domain or '').lower(),
+            str(username or '').lower(),
+            str(secret_kind),
+            str(secret),
+        ])
+        return hashlib.sha256(material.encode()).hexdigest()
+
+    @classmethod
+    def insert_credential_validation(self, validation_doc):
+        validation_doc['doc_type'] = 'credential_validation'
+        validation_doc = check_entry(
+            validation_doc,
+            ['credential_ref', 'url', 'service', 'username', 'status'],
+            ['domain', 'secret_kind', 'admin', 'source'],
+        )
+        validation_doc['service'] = validation_doc['service'].lower()
+        validation_doc['username'] = validation_doc['username'].lower()
+        if validation_doc.get('domain'):
+            validation_doc['domain'] = validation_doc['domain'].lower()
+        self.send(validation_doc)
 
     @classmethod
     def insert_vulnerability(self, vulnerability_doc):
@@ -789,6 +838,12 @@ class DB:
 
         credential_doc['domain'] = credential_doc['domain'].lower()
         credential_doc['username'] = credential_doc['username'].lower()
+        secret_kind = 'password' if 'password' in credential_doc else 'hash'
+        credential_doc['secret_kind'] = secret_kind
+        credential_doc['credential_ref'] = self.credential_reference(
+            credential_doc['domain'], credential_doc['username'], secret_kind,
+            credential_doc[secret_kind],
+        )
 
         self.send(credential_doc)
 

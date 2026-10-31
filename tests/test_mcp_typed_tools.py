@@ -107,6 +107,28 @@ class TypedMCPToolTests(unittest.TestCase):
             ):
                 self.assertIn(argument, campaign)
 
+        for tool_name in (
+            "netscan_ftpscan",
+            "netscan_mongoscan",
+            "netscan_mssqlscan",
+            "netscan_mysqlscan",
+            "netscan_postgrescan",
+            "netscan_rdpscan",
+            "netscan_redisscan",
+            "netscan_snmpscan",
+            "netscan_telnetscan",
+            "netscan_vncscan",
+        ):
+            campaign = tools[tool_name].input_schema["properties"]
+            for argument in (
+                "spray",
+                "credential_jitter",
+                "spray_round_delay",
+                "max_attempts_per_account",
+                "continue_on_success",
+            ):
+                self.assertIn(argument, campaign)
+
     def test_stored_credential_secret_is_only_in_subprocess_environment(self):
         import netscan_mcp_server as server
 

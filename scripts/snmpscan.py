@@ -10,6 +10,8 @@ from lib.snmpscan.snmpscan import snmpscan_worker
 from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+from utils.credential_campaign import apply_mcp_credential_environment, dispatch_credential_campaign
+from lib.snmpscan.snmp_bruteforce import bruteforce_worker
 
 
 def main():
@@ -28,8 +30,14 @@ def main():
 
     bruteforce_group = parser.add_argument_group("Bruteforce")
     bruteforce_group.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
+    bruteforce_group.add_argument("--spray", action='store_true', help='Try each community across the full target scope before the next one')
     bruteforce_group.add_argument('-C', metavar='community file', type=str, nargs='?', help='Community list file', default=None, dest='community_file')
     bruteforce_group.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers for the bruteforce', default=1, dest='bruteforce_workers')
+    bruteforce_group.add_argument('--bruteforce-delay', type=int, default=0, dest='bruteforce_delay')
+    bruteforce_group.add_argument('--credential-jitter', type=int, default=0, dest='credential_jitter')
+    bruteforce_group.add_argument('--spray-round-delay', type=int, default=0, dest='spray_round_delay')
+    bruteforce_group.add_argument('--max-attempts-per-account', type=int, default=None, dest='max_attempts_per_account')
+    bruteforce_group.add_argument('--continue-on-success', action='store_true', dest='continue_on_success')
     
     misc_group = parser.add_argument_group("Misc")
     # Dispatcher arguments
@@ -42,6 +50,11 @@ def main():
     misc_group.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+    apply_mcp_credential_environment(args)
+    if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
+        parser.error('--max-attempts-per-account must be greater than zero')
+    if (args.bruteforce or args.spray) and args.community_file is None:
+        parser.error('-C is required for a credential campaign')
 
     Output.setup()
     Config.load_config()
@@ -67,8 +80,8 @@ def main():
     actions = {}
     if args.oid:
         actions['oid'] = args.oid
-    if args.bruteforce:
-        actions['bruteforce'] = {'community_file': normalize_path(args.community_file), 'workers': args.bruteforce_workers}
+    if args.bruteforce or args.spray:
+        actions['bruteforce'] = {'secret_file': normalize_path(args.community_file), 'workers': args.bruteforce_workers, 'strategy': 'spray' if args.spray else 'bruteforce', 'delay': args.bruteforce_delay, 'jitter': args.credential_jitter, 'spray_round_delay': args.spray_round_delay, 'max_attempts_per_account': args.max_attempts_per_account, 'continue_on_success': args.continue_on_success}
 
     snmpscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)
 
@@ -78,8 +91,12 @@ def main():
 
 
 def snmpscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-    args = (actions, creds, timeout)
+    scan_actions = dict(actions)
+    campaign = scan_actions.pop('bruteforce', None)
+    args = (scan_actions, creds, timeout)
     dispatch_targets(input_targets, static_inputs, snmpscan_worker, args, workers=workers, delay=delay, resume=resume)
+    if campaign:
+        dispatch_credential_campaign(input_targets, static_inputs, campaign, bruteforce_worker, timeout=timeout, username='N/A', secret_kind='community', progress_name='SNMP communities')
 
 
 if __name__ == '__main__':
