@@ -63,6 +63,50 @@ Agents should prefer `netscan_<module>`. `run_netscan` remains useful as a
 compatibility escape hatch when a newly added or unusual CLI behavior cannot be
 represented by the generated schema.
 
+### Capability guide for agents
+
+Do not decide that NetScan lacks a capability merely because there is no
+same-named top-level command. Some protocol features are actions of another
+scanner, and every action declared by that scanner's `argparse` interface is
+present in the corresponding strongly typed MCP schema. Use
+`netscan_module_help` when the tool description is not sufficient.
+
+Important mappings include:
+
+| Objective | MCP tool and relevant arguments |
+| --- | --- |
+| Multi-host password testing or spraying | The protocol tool's `bruteforce`, `username_file`, `password_file`, worker, and delay arguments. SMB also accepts `ntlm_file`. A one-entry password or hash list across multiple users and targets is a spray. |
+| Persist and correlate results | Leave `nodb` false. Results are stored in the configured Elasticsearch index and separated by the configured NetScan session. |
+| Validate Windows administrative access | `netscan_smbscan` validates access to the remote Service Control Manager after password, NTLM, or Kerberos authentication and reports administrative privileges. |
+| Validate MSSQL administrative access | `netscan_mssqlscan` checks membership in the `sysadmin` server role; `admin_check` can also test it explicitly. |
+| Execute on Windows | `netscan_smbscan` with `cmd`, `powershell`, or `payload`. Select `exec_method=wmiexec`, `smbexec`, or `mmcexec`; without a method NetScan tries WMI, SMB service execution, then MMC. |
+| Enumerate through WMI | `netscan_smbscan` with `processes`; application enumeration also uses a remote Windows command. |
+| Enumerate NFS | `netscan_rpcscan` with `rpc`, `mounts`, or `list`; `uid`, `gid`, and `recurse` control NFSv3 directory access and traversal. |
+| Collect AD data for BloodHound | `netscan_adscan` with `domains`, `users`, `groups`, `hosts`, `gpos`, and, when required, `cas` and `cert_templates`. SMB `admins`, `loggedin`, and `sessions` add host relationships. |
+| Export BloodHound data | After persisted collection, use `netscan_es_query` with the exact `session` and `export_bloodhound` output directory. |
+
+NetScan's database is not limited to port results. Elasticsearch stores scan
+invocations, services, vulnerabilities, content, applications, credentials,
+hashes, secrets, AD objects, ADCS objects, and discovered administrative
+relationships. The session is the engagement boundary. Use the Elasticsearch
+MCP to query and correlate those records; credentials can then be supplied to an
+appropriate typed scanner tool when the operator explicitly requests credential
+reuse.
+
+NetScan does not currently expose NetExec-style credential IDs or a global
+lockout-aware `--spray` scheduler. Its protocol scanners generate credential
+attempts from files, often concurrently and across multiple hosts. Use a single
+password or hash per authorized spray round, review the domain password policy,
+and set the scanner's worker and delay controls conservatively.
+
+The BloodHound exporter reads the selected Elasticsearch session and writes
+BloodHound JSON for domains, containers, OUs, users, groups, computers, GPOs,
+NTAuth stores, root CAs, AIA CAs, certificate templates, and enterprise CAs.
+The output directory is on the machine running the MCP server. `owned` can mark
+known compromised users and computers in the configured Neo4j instance, while
+`enrich_gpos` and `gpo_admins` provide additional GPO analysis. These actions are
+not substitutes for the initial AD and SMB collection.
+
 ### Agent workflow with Elasticsearch
 
 NetScan is the collection layer. When an Elasticsearch MCP server is connected,
@@ -79,6 +123,11 @@ agents should use it as the preferred analysis layer for persisted results:
    from the handoff so separate engagements are never mixed.
 6. Retrieve credentials, hashes, secrets, or recorded command lines only when the
    operator explicitly requires them.
+
+For a BloodHound workflow, collect the required AD and SMB records without
+`nodb`, wait for every job to complete, and then run `netscan_es_query` with
+`session` set to the handoff session and `export_bloodhound` set to a server-local
+directory. Do not export an unscoped or guessed session.
 
 The Elasticsearch MCP identity should be read-only and restricted to the NetScan
 index. If Elasticsearch MCP is unavailable, or a NetScan-specific export is

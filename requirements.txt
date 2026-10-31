@@ -7,7 +7,7 @@ pyOpenSSL
 ldap3
 git+https://github.com/wbond/oscrypto.git
 msldap
-mysqlclient
+#mysqlclient
 mysql-connector
 pycryptodome
 netaddr

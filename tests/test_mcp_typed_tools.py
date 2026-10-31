@@ -52,6 +52,23 @@ class TypedMCPToolTests(unittest.TestCase):
         self.assertIn("MS17-010", module_names)
         self.assertIn("PrintSpooler", module_names)
         self.assertIn("module_args", smbscan)
+        self.assertIn(
+            "wmiexec", set(smbscan["exec_method"]["anyOf"][0]["enum"])
+        )
+        self.assertIn("bruteforce", smbscan)
+        self.assertIn("ntlm_file", smbscan)
+        self.assertIn("processes", smbscan)
+
+        rpcscan = tools["netscan_rpcscan"].input_schema["properties"]
+        for argument in ("rpc", "mounts", "list", "uid", "gid", "recurse"):
+            self.assertIn(argument, rpcscan)
+
+        es_query = tools["netscan_es_query"].input_schema["properties"]
+        self.assertIn("session", es_query)
+        self.assertIn("export_bloodhound", es_query)
+
+        for argument in ("domains", "users", "groups", "hosts", "gpos"):
+            self.assertIn(argument, adscan)
 
 
 if __name__ == "__main__":
