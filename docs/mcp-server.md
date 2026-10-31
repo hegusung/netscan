@@ -80,6 +80,7 @@ Important mappings include:
 | Validate Windows administrative access | `netscan_smbscan` validates access to the remote Service Control Manager after password, NTLM, or Kerberos authentication and reports administrative privileges. |
 | Validate MSSQL administrative access | `netscan_mssqlscan` checks membership in the `sysadmin` server role; `admin_check` can also test it explicitly. |
 | Execute on Windows | `netscan_smbscan` with `cmd`, `powershell`, or `payload`. Select `exec_method=wmiexec`, `smbexec`, or `mmcexec`; without a method NetScan tries WMI, SMB service execution, then MMC. |
+| Test WinRM at scale | `netscan_winrmscan` accepts multiple ports, HTTP or HTTPS, direct password/hash authentication, command execution, and multi-host credential files with independent target and credential worker controls. |
 | Enumerate through WMI | `netscan_smbscan` with `processes`; application enumeration also uses a remote Windows command. |
 | Enumerate NFS | `netscan_rpcscan` with `rpc`, `mounts`, or `list`; `uid`, `gid`, and `recurse` control NFSv3 directory access and traversal. |
 | Collect AD data for BloodHound | `netscan_adscan` with `domains`, `users`, `groups`, `hosts`, `gpos`, and, when required, `cas` and `cert_templates`. SMB `admins`, `loggedin`, and `sessions` add host relationships. |
@@ -99,6 +100,11 @@ attempts from files, often concurrently and across multiple hosts. Use a single
 password or hash per authorized spray round, review the domain password policy,
 and set the scanner's worker and delay controls conservatively.
 
+For WinRM, `workers` controls concurrent targets and `bruteforce_workers`
+controls credential workers inside each target. Their product is the approximate
+upper bound for concurrent authentication attempts in one job. Port 5986 selects
+HTTPS automatically; use `ssl=true` for HTTPS on a non-standard port.
+
 The BloodHound exporter reads the selected Elasticsearch session and writes
 BloodHound JSON for domains, containers, OUs, users, groups, computers, GPOs,
 NTAuth stores, root CAs, AIA CAs, certificate templates, and enterprise CAs.
@@ -107,17 +113,18 @@ known compromised users and computers in the configured Neo4j instance, while
 `enrich_gpos` and `gpo_admins` provide additional GPO analysis. These actions are
 not substitutes for the initial AD and SMB collection.
 
-### Agent workflow with Elasticsearch
+### Agent workflow with Kibana and Elasticsearch
 
-NetScan is the collection layer. When an Elasticsearch MCP server is connected,
-agents should use it as the preferred analysis layer for persisted results:
+NetScan is the collection layer. When the Kibana Agent Builder MCP server is
+connected, agents should use it as the preferred analysis layer for persisted
+Elasticsearch results:
 
 1. Call `netscan_status` and `netscan_context`, then select the appropriate typed
    NetScan tool.
 2. Start the authorized scan without `--nodb` when its results need analysis.
 3. Poll `netscan_scan_status` using the returned `scan_id`, then retrieve
    `netscan_scan_result` when it reaches a terminal state.
-4. Pass the result's `elasticsearch.analysis_handoff` to the Elasticsearch MCP
+4. Pass the result's `elasticsearch.analysis_handoff` to the Kibana MCP
    and inspect the configured index mapping.
 5. Scope every search, aggregation, or ES|QL query to the exact index and session
    from the handoff so separate engagements are never mixed.
@@ -129,11 +136,15 @@ For a BloodHound workflow, collect the required AD and SMB records without
 `session` set to the handoff session and `export_bloodhound` set to a server-local
 directory. Do not export an unscoped or guessed session.
 
-The Elasticsearch MCP identity should be read-only and restricted to the NetScan
-index. If Elasticsearch MCP is unavailable, or a NetScan-specific export is
+The Kibana MCP identity should be read-only and restricted to the NetScan index.
+If Kibana MCP is unavailable, or a NetScan-specific export is
 needed, `netscan_es_query` remains available but must be used carefully because it
 also exposes destructive operations. A scan performed with `--nodb` has no results
 for Elasticsearch to analyze.
+
+For HTTPS Elasticsearch deployments, set `verify_certificates=true` and set
+`ca_certs` to the CA bundle when a private CA is used. The default remains false
+for compatibility with existing self-signed pentest deployments.
 
 ### Nested scanner modules
 
@@ -268,7 +279,8 @@ stdio channel.
   default `100` (active jobs are never evicted).
 - `NETSCAN_MCP_MAX_FINDINGS`: maximum structured findings retained per job;
   default `200`. Summary counters still cover every captured event.
-- `NETSCAN_ELASTIC_MCP_URL`: optional override for the Elastic Agent Builder MCP
-  URL returned in analysis handoffs.
+- `NETSCAN_KIBANA_MCP_URL`: optional override for the Kibana Agent Builder MCP
+  URL returned in analysis handoffs. `NETSCAN_ELASTIC_MCP_URL` remains accepted
+  as a backwards-compatible alias.
 - `NETSCAN_MCP_ALLOW_REMOTE_HTTP`: permits non-loopback HTTP binding but does not
   provide authentication.

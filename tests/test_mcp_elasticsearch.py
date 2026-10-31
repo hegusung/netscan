@@ -25,6 +25,7 @@ port = 9243
 ssl = true
 username = analyst
 password = highly-secret
+verify_certificates = true
 mcp_url = http://kibana:5601/api/agent_builder/mcp
 enable_file_storage = false
 """,
@@ -36,6 +37,11 @@ enable_file_storage = false
         self.assertEqual(context["session"], "engagement-42")
         self.assertEqual(context["endpoint"], "https://elastic.internal:9243")
         self.assertTrue(context["credentials_configured"])
+        self.assertTrue(context["certificate_verification"]["enabled"])
+        self.assertEqual(
+            context["analysis_handoff"]["preferred_server"],
+            "Kibana Agent Builder MCP",
+        )
         self.assertNotIn("username", context)
         self.assertNotIn("password", context)
         self.assertNotIn("highly-secret", repr(context))

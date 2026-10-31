@@ -9,12 +9,15 @@ from lib.winrmscan.winrmscan import winrmscan_worker
 from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+from utils.process_inputs import str_ports
 
 
 def main():
     parser = argparse.ArgumentParser(description='WinRMScan', formatter_class=ColoredSelectiveDefaultsHelpFormatter)
     parser.add_argument('targets', type=str, nargs='?')
     parser.add_argument('-H', metavar='target file', type=str, nargs='?', help='target file', dest='target_file')
+    parser.add_argument('-p', metavar='ports', type=str_ports, nargs='?', help='target port', default='5985', dest='port')
+    parser.add_argument('--ssl', action='store_true', help='Use WinRM over HTTPS (automatic on port 5986)')
     parser.add_argument('--timeout', metavar='timeout', nargs='?', type=int, help='Connect timeout', default=5, dest='timeout')
     parser.add_argument('--delay', metavar='seconds', nargs='?', type=int, help='Add a delay between each connections', default=0, dest='delay')
     
@@ -24,6 +27,14 @@ def main():
     parser.add_argument('--pass', metavar='password', type=str, nargs='?', help='Password', default=None, dest='password')
     parser.add_argument('--hash', metavar='ntlm hash', type=str, nargs='?', help='NTLM hash', default=None, dest='hash')
     parser.add_argument('--cmd', metavar='command', type=str, nargs='?', help='Execute a command', default=None, dest='command')
+
+    # Bruteforce / spraying
+    parser.add_argument('--bruteforce', action='store_true', help='Enable multi-host credential testing')
+    parser.add_argument('--simple-bruteforce', action='store_true', help='Try username=password', dest='simple_bruteforce')
+    parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (username or username:password)', default=None, dest='username_file')
+    parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
+    parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Concurrent workers for credential testing', default=5, dest='bruteforce_workers')
+    parser.add_argument('--bruteforce-delay', metavar='seconds', type=int, nargs='?', help='Delay between attempts for one account', default=0, dest='bruteforce_delay')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
@@ -36,6 +47,12 @@ def main():
 
     args = parser.parse_args()
 
+    if args.bruteforce or args.simple_bruteforce:
+        if args.username_file is None:
+            parser.error('-U is required with --bruteforce or --simple-bruteforce')
+        if args.bruteforce and args.password_file is None:
+            parser.error('-P is required with --bruteforce')
+
     Output.setup()
     Config.load_config()
     DB.start_worker(args.nodb)
@@ -47,7 +64,7 @@ def main():
     if args.target_file:
         targets['target_file'] = normalize_path(args.target_file)
 
-    static_inputs = {}
+    static_inputs = {'port': args.port, 'ssl': args.ssl}
 
     creds = {}
     if args.domain:
@@ -62,6 +79,14 @@ def main():
     actions = {}
     if args.command:
         actions['command'] ={'command': args.command}
+    if args.bruteforce or args.simple_bruteforce:
+        actions['bruteforce'] = {
+            'username_file': normalize_path(args.username_file),
+            'password_file': normalize_path(args.password_file),
+            'workers': args.bruteforce_workers,
+            'delay': args.bruteforce_delay,
+            'simple': args.simple_bruteforce,
+        }
 
 
     winrmscan(targets, static_inputs, args.workers, actions, creds, args.timeout, args.delay, args.resume)

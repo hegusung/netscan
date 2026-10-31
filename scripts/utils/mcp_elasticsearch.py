@@ -40,14 +40,21 @@ def _connection_status(
     password: str,
     *,
     timeout_seconds: float,
+    verify_certificates: bool,
+    ca_certs: str,
 ) -> dict[str, Any]:
     request = urllib.request.Request(url, method="GET")
     if username:
         token = base64.b64encode(f"{username}:{password}".encode()).decode()
         request.add_header("Authorization", f"Basic {token}")
-    context = ssl._create_unverified_context() if url.startswith("https://") else None
     started = time.monotonic()
     try:
+        context = None
+        if url.startswith("https://"):
+            if verify_certificates:
+                context = ssl.create_default_context(cafile=ca_certs or None)
+            else:
+                context = ssl._create_unverified_context()
         with urllib.request.urlopen(
             request, timeout=timeout_seconds, context=context
         ) as response:
@@ -95,9 +102,15 @@ def elasticsearch_context(
     port = _option(parser, "Elasticsearch", "port", "9200")
     index = _option(parser, "Elasticsearch", "index", "pentest").lower()
     session = _option(parser, "Global", "session", "Unknown")
-    mcp_url = os.environ.get("NETSCAN_ELASTIC_MCP_URL", "").strip() or _option(
-        parser, "Elasticsearch", "mcp_url", ""
+    mcp_url = (
+        os.environ.get("NETSCAN_KIBANA_MCP_URL", "").strip()
+        or os.environ.get("NETSCAN_ELASTIC_MCP_URL", "").strip()
+        or _option(parser, "Elasticsearch", "mcp_url", "")
     )
+    verify_certificates = _bool_option(
+        parser, "Elasticsearch", "verify_certificates", False
+    )
+    ca_certs = _option(parser, "Elasticsearch", "ca_certs", "")
     context: dict[str, Any] = {
         "config_present": path.is_file(),
         "enabled": enabled,
@@ -110,9 +123,13 @@ def elasticsearch_context(
         "credentials_configured": bool(
             _option(parser, "Elasticsearch", "username", "")
         ),
+        "certificate_verification": {
+            "enabled": verify_certificates,
+            "ca_certs_configured": bool(ca_certs),
+        },
         "connection": {"checked": False},
         "analysis_handoff": {
-            "preferred_server": "Elastic Agent Builder MCP",
+            "preferred_server": "Kibana Agent Builder MCP",
             "mcp_url": mcp_url or None,
             "required_scope": {"index": index, "session": session},
             "instructions": (
@@ -127,5 +144,7 @@ def elasticsearch_context(
             _option(parser, "Elasticsearch", "username", ""),
             _option(parser, "Elasticsearch", "password", ""),
             timeout_seconds=timeout_seconds,
+            verify_certificates=verify_certificates,
+            ca_certs=ca_certs,
         )
     return context

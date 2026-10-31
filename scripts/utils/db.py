@@ -6,6 +6,7 @@ import os.path
 import json
 import queue
 import traceback
+import shlex
 from datetime import datetime
 from multiprocessing import Manager
 from threading import Thread
@@ -20,6 +21,46 @@ import urllib3
 urllib3.disable_warnings()
 
 MAX_BULK = 100
+
+REDACTED = "<redacted>"
+SENSITIVE_SINGLE_VALUE_OPTIONS = frozenset({"--pass", "--hash", "--aes-key"})
+SENSITIVE_LAST_VALUE_OPTIONS = {
+    "--set-password": 2,
+    "--add-computer": 2,
+}
+
+
+def redact_command_arguments(arguments):
+    """Return argv with authentication material removed for audit storage."""
+    redacted = []
+    index = 0
+    while index < len(arguments):
+        argument = str(arguments[index])
+        option, separator, _ = argument.partition("=")
+
+        if separator and option in SENSITIVE_SINGLE_VALUE_OPTIONS:
+            redacted.append(f"{option}={REDACTED}")
+            index += 1
+            continue
+
+        redacted.append(argument)
+        if option in SENSITIVE_SINGLE_VALUE_OPTIONS and index + 1 < len(arguments):
+            redacted.append(REDACTED)
+            index += 2
+            continue
+
+        protected_values = SENSITIVE_LAST_VALUE_OPTIONS.get(option)
+        if protected_values:
+            values = list(arguments[index + 1:index + 1 + protected_values])
+            if values:
+                values[-1] = REDACTED
+                redacted.extend(str(value) for value in values)
+            index += 1 + len(values)
+            continue
+
+        index += 1
+
+    return redacted
 
 es_ids = {
     'tool': 'ip_{session}_{@timestamp}',
@@ -369,7 +410,7 @@ class DB:
         
         netscan = "netscan"
         tool = os.path.basename(sys.argv[0]).split(".")[0]
-        args = " ".join(sys.argv[1:])
+        args = shlex.join(redact_command_arguments(sys.argv[1:]))
 
         cmdline = "%s %s %s" % (netscan, tool, args)
 
@@ -925,10 +966,21 @@ class Elasticsearch(object):
 
             username = Config.config.get('Elasticsearch', 'username')
             password = Config.config.get('Elasticsearch', 'password')
+            verify_certs = Config.config.getboolean('Elasticsearch', 'verify_certificates', fallback=False)
+            ca_certs = Config.config.get('Elasticsearch', 'ca_certs', fallback='').strip()
+            connection_options = {
+                'max_retries': 5,
+                'retry_on_timeout': True,
+                'verify_certs': verify_certs,
+                'ssl_show_warn': verify_certs,
+            }
+            if ca_certs:
+                connection_options['ca_certs'] = normalize_path(ca_certs)
             if len(username) != 0:
-                self.elasticsearch_instance = (elasticsearch.Elasticsearch([url], max_retries=5, retry_on_timeout=True, http_auth=(username, password), verify_certs=False, ssl_show_warn=False), es_index)
+                connection_options['basic_auth'] = (username, password)
+                self.elasticsearch_instance = (elasticsearch.Elasticsearch([url], **connection_options), es_index)
             else:
-                self.elasticsearch_instance = (elasticsearch.Elasticsearch([url], max_retries=5, retry_on_timeout=True, verify_certs=False, ssl_show_warn=False), es_index)
+                self.elasticsearch_instance = (elasticsearch.Elasticsearch([url], **connection_options), es_index)
 
         return self.elasticsearch_instance
 

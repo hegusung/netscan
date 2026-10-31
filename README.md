@@ -83,6 +83,8 @@
 - [x] WinRM scanner
   - [x] WinRM authentication
   - [x] WinRM multi-host bruteforce
+  - [x] WinRM password and NTLM authentication
+  - [x] WinRM command execution over HTTP or HTTPS
 - [x] Rsync scanner
 - [x] RTSP scanner
   - [x] Screenshot

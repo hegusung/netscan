@@ -7,11 +7,14 @@ index = pentest
 host = 127.0.0.1
 port = 9200
 ssl = false
+# Verify the Elasticsearch HTTPS certificate. Set ca_certs for a private CA.
+verify_certificates = false
+ca_certs =
 username = 
 password = 
 enable_file_storage = false
 document_storage_file = /tmp/es_file_storage.txt
-# Optional Elastic Agent Builder MCP endpoint used in agent handoff metadata
+# Optional Kibana Agent Builder MCP endpoint used in agent handoff metadata
 mcp_url = http://127.0.0.1:5601/api/agent_builder/mcp
 
 [Neo4J]

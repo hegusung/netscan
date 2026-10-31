@@ -55,6 +55,9 @@ class TypedMCPToolTests(unittest.TestCase):
         self.assertIn(
             "wmiexec", set(smbscan["exec_method"]["anyOf"][0]["enum"])
         )
+        self.assertNotIn(
+            "atexec", set(smbscan["exec_method"]["anyOf"][0]["enum"])
+        )
         self.assertIn("bruteforce", smbscan)
         self.assertIn("ntlm_file", smbscan)
         self.assertIn("processes", smbscan)
@@ -69,6 +72,19 @@ class TypedMCPToolTests(unittest.TestCase):
 
         for argument in ("domains", "users", "groups", "hosts", "gpos"):
             self.assertIn(argument, adscan)
+
+        winrmscan = tools["netscan_winrmscan"].input_schema["properties"]
+        for argument in (
+            "port",
+            "ssl",
+            "bruteforce",
+            "simple_bruteforce",
+            "username_file",
+            "password_file",
+            "bruteforce_workers",
+            "bruteforce_delay",
+        ):
+            self.assertIn(argument, winrmscan)
 
 
 if __name__ == "__main__":

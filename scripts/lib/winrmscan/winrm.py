@@ -5,13 +5,19 @@ import requests
 
 class WinRMScan:
 
-    def __init__(self, hostname, timeout):
+    def __init__(self, hostname, port, timeout, ssl=False):
         self.hostname = hostname
+        self.port = port
         self.timeout = timeout
+        self.ssl = ssl
 
         self.conn = None
 
         #TODO: use requests to check in http server for winrm is running
+
+    def url(self):
+        scheme = 'https' if self.ssl else 'http'
+        return '%s://%s:%d/wsman' % (scheme, self.hostname, self.port)
 
     def auth(self, domain=None, username=None, password=None, hash=None):
 
@@ -27,9 +33,9 @@ class WinRMScan:
 
         try:
             if password:
-                self.conn = Client(self.hostname, auth='ntlm', username=username, password=password, ssl=False, connection_timeout=self.timeout)
+                self.conn = Client(self.hostname, auth='ntlm', username=username, password=password, ssl=self.ssl, port=self.port, cert_validation=False, connection_timeout=self.timeout)
             else:
-                self.conn = Client(self.hostname, auth='ntlm', username=username, password=hash, ssl=False, connection_timeout=self.timeout)
+                self.conn = Client(self.hostname, auth='ntlm', username=username, password=hash, ssl=self.ssl, port=self.port, cert_validation=False, connection_timeout=self.timeout)
 
             # check if it works
             self.conn.execute_ps("hostname")

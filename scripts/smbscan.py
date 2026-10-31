@@ -43,7 +43,7 @@ def main():
     
     # Execution-related
     cmd_group = parser.add_argument_group("Command execution (admin rights required)")
-    cmd_group.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec", "atexec"}, default=None, help="method to execute the command. (default: wmiexec)", dest='exec_method')
+    cmd_group.add_argument('--exec-method', choices={"wmiexec", "mmcexec", "smbexec"}, default=None, help="method to execute the command. (default: wmiexec with smbexec/mmcexec fallback)", dest='exec_method')
     cmd_group.add_argument("--cmd", metavar="COMMAND", help="execute the specified command", dest='command')
     cmd_group.add_argument("--powershell", metavar="COMMAND", help="execute the specified command with powershell", dest='powershell')
     cmd_group.add_argument("--payload", metavar="PAYLOAD", help="execute the specified payload", nargs='+', dest='payload')
