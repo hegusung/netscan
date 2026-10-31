@@ -28,6 +28,7 @@ class TypedMCPToolTests(unittest.TestCase):
             "netscan_cancel_scan",
             "netscan_scan_result",
             "netscan_scan_output",
+            "netscan_scan_artifacts",
             "run_netscan",
         }
         self.assertEqual(set(tools), expected | general_tools)
@@ -83,8 +84,24 @@ class TypedMCPToolTests(unittest.TestCase):
             "password_file",
             "bruteforce_workers",
             "bruteforce_delay",
+            "spray",
+            "credential_jitter",
+            "spray_round_delay",
+            "max_attempts_per_account",
+            "continue_on_success",
         ):
             self.assertIn(argument, winrmscan)
+
+        for tool_name in ("netscan_smbscan", "netscan_sshscan"):
+            campaign = tools[tool_name].input_schema["properties"]
+            for argument in (
+                "spray",
+                "credential_jitter",
+                "spray_round_delay",
+                "max_attempts_per_account",
+                "continue_on_success",
+            ):
+                self.assertIn(argument, campaign)
 
 
 if __name__ == "__main__":

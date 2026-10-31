@@ -14,6 +14,7 @@ from utils.output import Output
 from utils.dispatch import dispatch
 from utils.db import DB
 from utils.modulemanager import ModuleManager
+from utils.credential_campaign import CampaignState
 
 logging.getLogger("paramiko").setLevel(logging.CRITICAL)
 
@@ -80,11 +81,29 @@ def sshscan_worker(target, actions, creds, timeout):
                 password_file = actions['bruteforce']['password_file'] if 'password_file' in actions['bruteforce'] else None
                 bruteforce_workers = actions['bruteforce']['workers']
 
-                # The generator will provide a username:password_list couple
-                gen = bruteforce_generator(target, username_file, password_file)
-                gen_size = bruteforce_generator_count(target, username_file, password_file)
-
-                args = (timeout,actions['bruteforce']['bruteforce_delay'])
+                options = {
+                    'strategy': actions['bruteforce']['strategy'],
+                    'simple_bruteforce': actions['bruteforce']['simple'],
+                    'max_attempts_per_account': actions['bruteforce']['max_attempts_per_account'],
+                }
+                gen = bruteforce_generator(target, username_file, password_file, **options)
+                gen_size = bruteforce_generator_count(
+                    target,
+                    username_file,
+                    password_file,
+                    strategy=options['strategy'],
+                    simple=options['simple_bruteforce'],
+                    max_attempts_per_account=options['max_attempts_per_account'],
+                )
+                state = CampaignState(
+                    continue_on_success=actions['bruteforce']['continue_on_success']
+                )
+                args = (
+                    timeout,
+                    actions['bruteforce']['bruteforce_delay'],
+                    actions['bruteforce']['jitter'],
+                    state,
+                )
                 dispatch(gen, gen_size, bruteforce_worker, args, workers=bruteforce_workers, process=False, pg_name=target['hostname'])
 
     except paramiko.AuthenticationException as e:

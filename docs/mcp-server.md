@@ -53,11 +53,19 @@ General-purpose tools are also available:
 - `netscan_scan_result`: get its semantic summary, findings, and persistence
   metadata.
 - `netscan_scan_output`: page through retained terminal output.
+- `netscan_scan_artifacts`: list files produced by a completed job and their
+  confined resource URIs.
 - `run_netscan`: enqueue a command using an argv-style list.
 
 Clients that support MCP resources can read the same output from
 `netscan://scans/{scan_id}/output`. Output is bounded by
 `NETSCAN_MCP_MAX_OUTPUT`, keeping server memory use predictable.
+
+Structured findings returned by `netscan_scan_result` use event schema version
+1. Each event has `category`, `severity`, `status`, `target`, `message`,
+`timestamp`, `sensitive`, `data`, and `legacy_type` fields. Agents should use
+these stable fields instead of parsing colored terminal output. The summary
+contains counts by both normalized category and legacy output type.
 
 Agents should prefer `netscan_<module>`. `run_netscan` remains useful as a
 compatibility escape hatch when a newly added or unusual CLI behavior cannot be
@@ -75,7 +83,7 @@ Important mappings include:
 
 | Objective | MCP tool and relevant arguments |
 | --- | --- |
-| Multi-host password testing or spraying | The protocol tool's `bruteforce`, `username_file`, `password_file`, worker, and delay arguments. SMB also accepts `ntlm_file`. A one-entry password or hash list across multiple users and targets is a spray. |
+| Multi-host password testing or spraying | SMB, SSH, and WinRM use a shared scope-wide campaign engine. Select `spray=true` for secret-major ordering across every target; use `spray_round_delay`, `credential_jitter`, `max_attempts_per_account`, and `continue_on_success` to control the campaign. SMB also accepts `ntlm_file`. |
 | Persist and correlate results | Leave `nodb` false. Results are stored in the configured Elasticsearch index and separated by the configured NetScan session. |
 | Validate Windows administrative access | `netscan_smbscan` validates access to the remote Service Control Manager after password, NTLM, or Kerberos authentication and reports administrative privileges. |
 | Validate MSSQL administrative access | `netscan_mssqlscan` checks membership in the `sysadmin` server role; `admin_check` can also test it explicitly. |
@@ -94,21 +102,27 @@ MCP to query and correlate those records; credentials can then be supplied to an
 appropriate typed scanner tool when the operator explicitly requests credential
 reuse.
 
-NetScan does not currently expose NetExec-style credential IDs or a global
-lockout-aware `--spray` scheduler. Its protocol scanners generate credential
-attempts from files, often concurrently and across multiple hosts. Use a single
-password or hash per authorized spray round, review the domain password policy,
-and set the scanner's worker and delay controls conservatively.
+The shared campaign engine schedules a spray one secret at a time over the full
+target scope. A new round does not start until all attempts in the previous round
+finish, then waits for `spray_round_delay`. It stops further attempts for a
+target/account after success unless `continue_on_success=true`, suppresses an
+account after an observed lockout, supports `DOMAIN\\user` entries and inline
+`user:password` entries, and adds per-attempt delay plus random jitter. These are
+safety controls, not a substitute for reviewing the domain password policy.
 
-For WinRM, `workers` controls concurrent targets and `bruteforce_workers`
-controls credential workers inside each target. Their product is the approximate
-upper bound for concurrent authentication attempts in one job. Port 5986 selects
-HTTPS automatically; use `ssl=true` for HTTPS on a non-standard port.
+`workers` still controls the initial discovery scan. `bruteforce_workers`
+controls the subsequent credential campaign across the whole target scope. Port
+5986 selects WinRM HTTPS automatically; use `ssl=true` for HTTPS on a
+non-standard port.
 
 The BloodHound exporter reads the selected Elasticsearch session and writes
 BloodHound JSON for domains, containers, OUs, users, groups, computers, GPOs,
 NTAuth stores, root CAs, AIA CAs, certificate templates, and enterprise CAs.
-The output directory is on the machine running the MCP server. `owned` can mark
+For MCP jobs, export and dump destinations supplied to `netscan_es_query` are
+replaced with a private per-job directory. Once the job is complete, call
+`netscan_scan_artifacts`, then read each
+`netscan://scans/{scan_id}/artifacts/{artifact_id}` resource. This prevents a
+client from selecting arbitrary server filesystem output paths. `owned` can mark
 known compromised users and computers in the configured Neo4j instance, while
 `enrich_gpos` and `gpo_admins` provide additional GPO analysis. These actions are
 not substitutes for the initial AD and SMB collection.
@@ -133,8 +147,10 @@ Elasticsearch results:
 
 For a BloodHound workflow, collect the required AD and SMB records without
 `nodb`, wait for every job to complete, and then run `netscan_es_query` with
-`session` set to the handoff session and `export_bloodhound` set to a server-local
-directory. Do not export an unscoped or guessed session.
+`session` set to the handoff session and `export_bloodhound` set to any typed
+string value. The MCP server confines the actual destination; retrieve the JSON
+files through `netscan_scan_artifacts`. Do not export an unscoped or guessed
+session.
 
 The Kibana MCP identity should be read-only and restricted to the NetScan index.
 If Kibana MCP is unavailable, or a NetScan-specific export is
@@ -279,6 +295,11 @@ stdio channel.
   default `100` (active jobs are never evicted).
 - `NETSCAN_MCP_MAX_FINDINGS`: maximum structured findings retained per job;
   default `200`. Summary counters still cover every captured event.
+- `NETSCAN_MCP_MAX_ARTIFACT_BYTES`: maximum size of one downloadable artifact;
+  default `25000000` bytes.
+- `NETSCAN_MCP_MAX_ARTIFACT_TOTAL_BYTES`: maximum total downloadable artifact
+  size retained for one job; default `100000000` bytes. Files beyond either
+  limit are not published.
 - `NETSCAN_KIBANA_MCP_URL`: optional override for the Kibana Agent Builder MCP
   URL returned in analysis handoffs. `NETSCAN_ELASTIC_MCP_URL` remains accepted
   as a backwards-compatible alias.

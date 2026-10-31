@@ -5,13 +5,19 @@ import sys
 import os
 from utils.utils import normalize_path
 from utils.process_inputs import str_ports
-from utils.dispatch import dispatch_targets
+from utils.dispatch import dispatch, dispatch_targets
 from utils.output import Output
 from server.payload_manager import PayloadManager
 from lib.smbscan.smbscan import smbscan_worker, smb_modules
 from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
+from utils.credential_campaign import (
+    CampaignState,
+    iter_target_credential_attempts,
+    target_credential_attempt_count,
+)
+from lib.smbscan.smb_bruteforce import bruteforce_ntlm_worker, bruteforce_worker
 
 
 
@@ -70,12 +76,17 @@ def main():
     # Bruteforce
     bruteforce_group = parser.add_argument_group("Bruteforce")
     bruteforce_group.add_argument("--bruteforce", action='store_true', help='Enable bruteforce')
+    bruteforce_group.add_argument("--spray", action='store_true', help='Try each password/hash across all users before the next secret')
     bruteforce_group.add_argument("--simple-bruteforce", action='store_true', help='Enable simple bruteforce (username=password)', dest='simple_bruteforce')
     bruteforce_group.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (format username or username:password)', default=None, dest='username_file')
     bruteforce_group.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
     bruteforce_group.add_argument('--ntlm-file', metavar='ntlm file', type=str, nargs='?', help='NTLM (with -U) or User:NTLM (without -U) file', default=None, dest='ntlm_file')
     bruteforce_group.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers for the bruteforce', default=5, dest='bruteforce_workers')
     bruteforce_group.add_argument('--bruteforce-delay', metavar='seconds', nargs='?', type=int, help='Delay between each bruteforce attempt', default=0, dest='bruteforce_delay')
+    bruteforce_group.add_argument('--credential-jitter', metavar='seconds', type=int, nargs='?', help='Add random delay up to this value before each attempt', default=0, dest='credential_jitter')
+    bruteforce_group.add_argument('--spray-round-delay', metavar='seconds', type=int, nargs='?', help='Minimum delay between complete password/hash spray rounds', default=0, dest='spray_round_delay')
+    bruteforce_group.add_argument('--max-attempts-per-account', metavar='count', type=int, nargs='?', help='Limit secrets attempted for each account', default=None, dest='max_attempts_per_account')
+    bruteforce_group.add_argument('--continue-on-success', action='store_true', help='Continue testing an account after a successful login', dest='continue_on_success')
     
     # Modules
     module_group = parser.add_argument_group("Modules")
@@ -96,6 +107,14 @@ def main():
     misc_group.add_argument("--nodb", action="store_true", help="Do not add entries to database")
 
     args = parser.parse_args()
+
+    if args.bruteforce or args.spray:
+        if args.ntlm_file is None and (args.username_file is None or args.password_file is None):
+            parser.error('Use -U with -P, or provide --ntlm-file for a credential campaign')
+    if args.simple_bruteforce and args.username_file is None:
+        parser.error('-U is required with --simple-bruteforce')
+    if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
+        parser.error('--max-attempts-per-account must be greater than zero')
 
     if args.list_modules:
         print('Available modules:')
@@ -198,10 +217,27 @@ def main():
             end_rid = int(args.rid_brute)
 
         actions['rid_brute'] = {'start': start_rid, 'end': end_rid}
-    if args.bruteforce:
-        actions['bruteforce'] ={'username_file': normalize_path(args.username_file), 'password_file': normalize_path(args.password_file), 'ntlm_file': normalize_path(args.ntlm_file), 'workers': args.bruteforce_workers, 'delay': args.bruteforce_delay}
+    campaign_common = {
+        'workers': args.bruteforce_workers,
+        'delay': args.bruteforce_delay,
+        'jitter': args.credential_jitter,
+        'spray_round_delay': args.spray_round_delay,
+        'strategy': 'spray' if args.spray else 'bruteforce',
+        'max_attempts_per_account': args.max_attempts_per_account,
+        'continue_on_success': args.continue_on_success,
+    }
+    if args.bruteforce or args.spray:
+        actions['bruteforce'] = {
+            'username_file': normalize_path(args.username_file),
+            'password_file': normalize_path(args.password_file),
+            'ntlm_file': normalize_path(args.ntlm_file),
+            **campaign_common,
+        }
     if args.simple_bruteforce:
-        actions['simple_bruteforce'] ={'username_file': normalize_path(args.username_file), 'workers': args.bruteforce_workers, 'delay': args.bruteforce_delay}
+        actions['simple_bruteforce'] = {
+            'username_file': normalize_path(args.username_file),
+            **campaign_common,
+        }
     if args.modules:
         if not smb_modules.check_modules(args.modules[0]):
             sys.exit()
@@ -215,8 +251,53 @@ def main():
 
 
 def smbscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-    args = (actions, creds, timeout)
+    scan_actions = dict(actions)
+    campaign = scan_actions.pop('bruteforce', None)
+    simple_campaign = scan_actions.pop('simple_bruteforce', None)
+    args = (scan_actions, creds, timeout)
     dispatch_targets(input_targets, static_inputs, smbscan_worker, args, workers=workers, delay=delay, resume=resume)
+
+    def run_campaign(settings, *, simple=False):
+        if not settings:
+            return
+        domain = creds.get('domain', 'WORKGROUP')
+        ntlm_file = settings.get('ntlm_file')
+        username_file = settings.get('username_file')
+        secret_file = settings.get('password_file')
+        secret_kind = 'password'
+        worker = bruteforce_worker
+        if ntlm_file is not None:
+            secret_kind = 'ntlm'
+            worker = bruteforce_ntlm_worker
+            if username_file is None:
+                username_file, secret_file = ntlm_file, None
+            else:
+                secret_file = ntlm_file
+        options = {
+            'default_domain': domain,
+            'strategy': settings['strategy'],
+            'secret_kind': secret_kind,
+            'simple': simple,
+            'max_attempts_per_account': settings['max_attempts_per_account'],
+        }
+        generator = iter_target_credential_attempts(
+            input_targets, static_inputs, username_file, secret_file, **options,
+        )
+        size = target_credential_attempt_count(
+            input_targets, static_inputs, username_file, secret_file, **options,
+        )
+        state = CampaignState(
+            continue_on_success=settings['continue_on_success'],
+            spray_round_delay=settings['spray_round_delay'],
+        )
+        dispatch(
+            generator, size, worker,
+            (settings['delay'], settings['jitter'], timeout, state),
+            workers=settings['workers'], process=False, pg_name='SMB credentials',
+        )
+
+    run_campaign(campaign)
+    run_campaign(simple_campaign, simple=True)
 
 
 if __name__ == '__main__':

@@ -7,6 +7,7 @@ import copy
 
 from .winrm import WinRMScan
 from .winrm_bruteforce import bruteforce_worker, bruteforce_generator, bruteforce_generator_count
+from utils.credential_campaign import CampaignState
 
 from utils.output import Output
 from utils.dispatch import dispatch
@@ -91,13 +92,32 @@ def winrmscan_worker(target, actions, creds, timeout):
                 username_file,
                 password_file,
                 simple_bruteforce=actions['bruteforce'].get('simple', False),
+                strategy=actions['bruteforce']['strategy'],
+                domain=domain,
+                max_attempts_per_account=actions['bruteforce']['max_attempts_per_account'],
             )
-            generator_size = bruteforce_generator_count(target, username_file, password_file)
+            generator_size = bruteforce_generator_count(
+                target,
+                username_file,
+                password_file,
+                default_domain=domain,
+                strategy=actions['bruteforce']['strategy'],
+                simple=actions['bruteforce'].get('simple', False),
+                max_attempts_per_account=actions['bruteforce']['max_attempts_per_account'],
+            )
+            state = CampaignState(
+                continue_on_success=actions['bruteforce']['continue_on_success']
+            )
             dispatch(
                 generator,
                 generator_size,
                 bruteforce_worker,
-                (domain, timeout, actions['bruteforce']['delay']),
+                (
+                    timeout,
+                    actions['bruteforce']['delay'],
+                    actions['bruteforce']['jitter'],
+                    state,
+                ),
                 workers=actions['bruteforce']['workers'],
                 process=False,
                 pg_name=target['hostname'],

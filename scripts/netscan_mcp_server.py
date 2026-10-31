@@ -51,10 +51,12 @@ mcp = MCPServer(
         "processes through WMI and applications through remote Windows commands. NetScan can "
         "validate SMB administrative access, validate the MSSQL sysadmin role, execute Windows "
         "commands, PowerShell, or payloads over SMB, and perform multi-host credential testing "
-        "with username/password or NTLM files on supported protocols. A single password or hash "
-        "combined with multiple users/targets is password or hash spraying, although NetScan "
-        "does not expose a separate global --spray scheduler; respect lockout policy and use "
-        "protocol-specific delay and worker controls. NetScan's database is the configured, "
+        "with username/password or NTLM files on supported protocols. SMB, SSH, and WinRM share "
+        "a scope-wide credential campaign engine. Use spray=true for secret-major scheduling "
+        "across every target, spray_round_delay and credential_jitter to pace attempts, and "
+        "max_attempts_per_account to enforce an account budget. Campaigns stop after a success "
+        "and suppress locked accounts unless explicitly configured otherwise. Respect the "
+        "operator's lockout policy and authorization. NetScan's database is the configured, "
         "session-scoped Elasticsearch index. It persists scan invocations, services, findings, "
         "credentials, hashes, secrets, AD objects, and discovered admin relationships. "
         "NetScan also has an AD-to-BloodHound workflow: collect domains, containers/OUs, users, "
@@ -70,7 +72,11 @@ mcp = MCPServer(
         "sensitive: retrieve and disclose them only when explicitly required. Prefer a read-only "
         "Kibana/Elasticsearch identity restricted to the configured NetScan index. If Kibana "
         "MCP is unavailable, or a NetScan-specific export is required, use netscan_es_query "
-        "cautiously; it includes destructive operations such as delete_session."
+        "cautiously; it includes destructive operations such as delete_session. Export paths "
+        "from netscan_es_query are confined to the job: after completion call "
+        "netscan_scan_artifacts and read the returned resource URIs. Scan findings use a stable "
+        "versioned event envelope with category, severity, status, target, timestamp, sensitive, "
+        "and data fields; prefer those fields over parsing terminal output."
     ),
 )
 
@@ -90,6 +96,8 @@ async def netscan_status() -> dict[str, object]:
         "maximum_output_bytes": maximum_output(),
         "maximum_concurrent_jobs": JOB_MANAGER.max_workers,
         "retained_jobs": JOB_MANAGER.retention,
+        "maximum_artifact_bytes": JOB_MANAGER.artifact_file_limit,
+        "maximum_artifact_total_bytes": JOB_MANAGER.artifact_total_limit,
     }
 
 
@@ -161,11 +169,32 @@ async def netscan_scan_output(
         raise ToolError(str(exc)) from exc
 
 
+@mcp.tool()
+async def netscan_scan_artifacts(scan_id: str) -> dict[str, object]:
+    """List files produced by a scan and their confined MCP resource URIs."""
+    try:
+        return JOB_MANAGER.list_artifacts(scan_id)
+    except MCPRuntimeError as exc:
+        raise ToolError(str(exc)) from exc
+
+
 @mcp.resource("netscan://scans/{scan_id}/output", mime_type="text/plain")
 async def netscan_scan_output_resource(scan_id: str) -> str:
     """Captured output for a background NetScan job."""
     try:
         return JOB_MANAGER.output_text(scan_id)
+    except MCPRuntimeError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.resource(
+    "netscan://scans/{scan_id}/artifacts/{artifact_id}",
+    mime_type="application/octet-stream",
+)
+async def netscan_scan_artifact_resource(scan_id: str, artifact_id: str) -> bytes:
+    """A file produced inside the confined artifact directory of a scan job."""
+    try:
+        return JOB_MANAGER.artifact_bytes(scan_id, artifact_id)
     except MCPRuntimeError as exc:
         raise ToolError(str(exc)) from exc
 
@@ -375,12 +404,12 @@ def main() -> None:
         try:
             mcp.run(transport="streamable-http", host=args.host, port=args.port)
         finally:
-            JOB_MANAGER.shutdown()
+            JOB_MANAGER.shutdown(wait=True)
     else:
         try:
             mcp.run(transport="stdio")
         finally:
-            JOB_MANAGER.shutdown()
+            JOB_MANAGER.shutdown(wait=True)
 
 
 if __name__ == "__main__":

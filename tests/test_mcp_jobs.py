@@ -32,11 +32,13 @@ class MCPJobTests(unittest.TestCase):
             scripts.mkdir()
             (scripts / "portscan.py").write_text(
                 """import json, os
+from pathlib import Path
 print('scanner output')
 with open(os.environ['NETSCAN_MCP_EVENT_FILE'], 'a') as output:
     output.write(json.dumps({'type': 'vuln', 'target': '192.0.2.1', 'message': 'test finding'}) + '\\n')
 with open(os.environ['NETSCAN_MCP_DB_RESULT_FILE'], 'w') as output:
     json.dump({'session': 'test', 'documents_processed': 2, 'documents_indexed': 2, 'documents_failed': 0, 'documents_written_to_file': 0, 'persistence_disabled': False}, output)
+Path(os.environ['NETSCAN_MCP_ARTIFACT_DIR'], 'report.json').write_text('{"ok": true}')
 """,
                 encoding="utf-8",
             )
@@ -60,6 +62,49 @@ with open(os.environ['NETSCAN_MCP_DB_RESULT_FILE'], 'w') as output:
                     result["elasticsearch"]["run"]["documents_indexed"], 2
                 )
                 self.assertIn("scanner output", manager.output_text(started["scan_id"]))
+                artifacts = manager.list_artifacts(started["scan_id"])
+                self.assertEqual(artifacts["count"], 1)
+                artifact = artifacts["artifacts"][0]
+                self.assertEqual(artifact["name"], "report.json")
+                self.assertEqual(
+                    manager.artifact_bytes(started["scan_id"], artifact["artifact_id"]),
+                    b'{"ok": true}',
+                )
+            finally:
+                manager.shutdown(wait=True)
+
+    def test_es_query_export_is_confined_to_the_job_artifact_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            requested = root / "operator-requested-output"
+            requested.mkdir()
+            (scripts / "es_query.py").write_text(
+                """import pathlib, sys
+destination = pathlib.Path(sys.argv[sys.argv.index('--export-bloodhound') + 1])
+destination.mkdir(parents=True, exist_ok=True)
+(destination / 'bloodhound.json').write_text('{"data": []}')
+""",
+                encoding="utf-8",
+            )
+            manager = ScanJobManager(max_workers=1, retention=10)
+            try:
+                with (
+                    patch.object(mcp_runtime, "PROJECT_ROOT", root),
+                    patch.object(mcp_runtime, "SCRIPTS_DIR", scripts),
+                    patch.object(mcp_jobs, "PROJECT_ROOT", root),
+                    patch.dict(os.environ, {"NETSCAN_MCP_ENABLE_RUN": "true"}),
+                ):
+                    started = manager.start(
+                        "es_query", ["--export-bloodhound", str(requested)], 5
+                    )
+                    self._wait(manager, started["scan_id"])
+
+                self.assertEqual(list(requested.iterdir()), [])
+                artifacts = manager.list_artifacts(started["scan_id"])["artifacts"]
+                self.assertEqual(len(artifacts), 1)
+                self.assertEqual(artifacts[0]["relative_path"], "bloodhound/bloodhound.json")
             finally:
                 manager.shutdown(wait=True)
 

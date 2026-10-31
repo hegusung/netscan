@@ -14,6 +14,7 @@ from jinja2 import Template
 
 # Sometimes tqdm hangs during write
 from utils.dispatch import pg_lock
+from utils.events import normalize_output_event
 tqdm.set_lock(pg_lock)
 
 # Colors:
@@ -98,6 +99,42 @@ class Output:
         self.write(message)
 
     @classmethod
+    def event(
+        self,
+        category,
+        message,
+        *,
+        target=None,
+        severity="info",
+        status=None,
+        data=None,
+        sensitive=False,
+    ):
+        """Emit a terminal-compatible message with a normalized event payload."""
+        legacy_type = {
+            "critical": "vuln",
+            "high": "major",
+            "error": "error",
+            "warning": "highlight",
+            "success": "success",
+            "debug": "minor",
+        }.get(severity, "normal")
+        payload = {
+            "message": message,
+            "type": legacy_type,
+            "event": {
+                "category": category,
+                "severity": severity,
+                "status": status,
+                "data": data or {},
+                "sensitive": sensitive,
+            },
+        }
+        if target is not None:
+            payload["target"] = target
+        self.write(payload)
+
+    @classmethod
     def log(self, message, output_format):
         if Config.config.get('Logging', 'enabled') in ['true', 'True']:
             script_name = os.path.basename(sys.argv[0]).split('.')[0]
@@ -151,7 +188,7 @@ class Output:
         if not event_file:
             return
         try:
-            event = copy.deepcopy(dict(message))
+            event = normalize_output_event(copy.deepcopy(dict(message)))
             with open(event_file, 'a', encoding='utf-8') as output:
                 output.write(json.dumps(event, default=str, ensure_ascii=False) + '\n')
         except (OSError, TypeError, ValueError):

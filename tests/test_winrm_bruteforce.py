@@ -13,6 +13,7 @@ from lib.winrmscan.winrm_bruteforce import (  # noqa: E402
     bruteforce_generator,
     bruteforce_generator_count,
 )
+from utils.credential_campaign import CampaignState  # noqa: E402
 
 
 class WinRMBruteforceTests(unittest.TestCase):
@@ -26,12 +27,16 @@ class WinRMBruteforceTests(unittest.TestCase):
             target = {"hostname": "192.0.2.10", "port": 5985, "ssl": False}
             generated = list(bruteforce_generator(target, users, passwords))
 
-            self.assertEqual(len(generated), 2)
+            self.assertEqual(len(generated), 3)
             self.assertEqual(generated[0]["b_username"], "alice")
-            self.assertEqual(generated[0]["b_password_list"], ["First!", "Second!"])
-            self.assertEqual(generated[1]["b_username"], "bob")
-            self.assertEqual(generated[1]["b_password_list"], ["Inline!"])
-            self.assertEqual(bruteforce_generator_count(target, users), 2)
+            self.assertEqual(generated[0]["b_secret"], "First!")
+            self.assertEqual(generated[1]["b_username"], "alice")
+            self.assertEqual(generated[1]["b_secret"], "Second!")
+            self.assertEqual(generated[2]["b_username"], "bob")
+            self.assertEqual(generated[2]["b_secret"], "Inline!")
+            self.assertEqual(
+                bruteforce_generator_count(target, users, passwords), 3
+            )
 
     def test_simple_mode_uses_username_as_password(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -42,9 +47,9 @@ class WinRMBruteforceTests(unittest.TestCase):
             generated = list(
                 bruteforce_generator(target, users, None, simple_bruteforce=True)
             )
-            self.assertEqual(generated[0]["b_password_list"], ["alice"])
+            self.assertEqual(generated[0]["b_secret"], "alice")
 
-    @patch("lib.winrmscan.winrm_bruteforce.Output.success")
+    @patch("lib.winrmscan.winrm_bruteforce.Output.event")
     @patch("lib.winrmscan.winrm_bruteforce.DB.insert_vulnerability")
     @patch("lib.winrmscan.winrm_bruteforce.DB.insert_credential")
     @patch("lib.winrmscan.winrm_bruteforce.DB.insert_port")
@@ -60,11 +65,12 @@ class WinRMBruteforceTests(unittest.TestCase):
             "hostname": "192.0.2.10",
             "port": 5985,
             "ssl": False,
+            "b_domain": "EXAMPLE",
             "b_username": "alice",
-            "b_password_list": ["Secret!", "Unused!"],
+            "b_secret": "Secret!",
         }
 
-        bruteforce_worker(target, "EXAMPLE", 5, 0)
+        bruteforce_worker(target, 5, 0, 0, CampaignState())
 
         scanner.auth.assert_called_once_with(
             "EXAMPLE", "alice@EXAMPLE", "Secret!", None

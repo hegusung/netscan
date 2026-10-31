@@ -10,6 +10,13 @@ from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
 from utils.process_inputs import str_ports
+from utils.credential_campaign import (
+    CampaignState,
+    iter_target_credential_attempts,
+    target_credential_attempt_count,
+)
+from lib.winrmscan.winrm_bruteforce import bruteforce_worker
+from utils.dispatch import dispatch
 
 
 def main():
@@ -30,11 +37,16 @@ def main():
 
     # Bruteforce / spraying
     parser.add_argument('--bruteforce', action='store_true', help='Enable multi-host credential testing')
+    parser.add_argument('--spray', action='store_true', help='Try each password across all users before the next password')
     parser.add_argument('--simple-bruteforce', action='store_true', help='Try username=password', dest='simple_bruteforce')
     parser.add_argument('-U', metavar='username file', type=str, nargs='?', help='Username file (username or username:password)', default=None, dest='username_file')
     parser.add_argument('-P', metavar='password file', type=str, nargs='?', help='Password file', default=None, dest='password_file')
     parser.add_argument('-W', metavar='number worker', nargs='?', type=int, help='Concurrent workers for credential testing', default=5, dest='bruteforce_workers')
     parser.add_argument('--bruteforce-delay', metavar='seconds', type=int, nargs='?', help='Delay between attempts for one account', default=0, dest='bruteforce_delay')
+    parser.add_argument('--credential-jitter', metavar='seconds', type=int, nargs='?', help='Add random delay up to this value before each attempt', default=0, dest='credential_jitter')
+    parser.add_argument('--spray-round-delay', metavar='seconds', type=int, nargs='?', help='Minimum delay between complete password spray rounds', default=0, dest='spray_round_delay')
+    parser.add_argument('--max-attempts-per-account', metavar='count', type=int, nargs='?', help='Limit secrets attempted for each account', default=None, dest='max_attempts_per_account')
+    parser.add_argument('--continue-on-success', action='store_true', help='Continue testing an account after a successful login', dest='continue_on_success')
 
     # Dispatcher arguments
     parser.add_argument('-w', metavar='number worker', nargs='?', type=int, help='Number of concurrent workers', default=10, dest='workers')
@@ -47,11 +59,13 @@ def main():
 
     args = parser.parse_args()
 
-    if args.bruteforce or args.simple_bruteforce:
+    if args.bruteforce or args.spray or args.simple_bruteforce:
         if args.username_file is None:
             parser.error('-U is required with --bruteforce or --simple-bruteforce')
-        if args.bruteforce and args.password_file is None:
-            parser.error('-P is required with --bruteforce')
+        if (args.bruteforce or args.spray) and args.password_file is None:
+            parser.error('-P is required with --bruteforce or --spray')
+        if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
+            parser.error('--max-attempts-per-account must be greater than zero')
 
     Output.setup()
     Config.load_config()
@@ -79,13 +93,18 @@ def main():
     actions = {}
     if args.command:
         actions['command'] ={'command': args.command}
-    if args.bruteforce or args.simple_bruteforce:
+    if args.bruteforce or args.spray or args.simple_bruteforce:
         actions['bruteforce'] = {
             'username_file': normalize_path(args.username_file),
             'password_file': normalize_path(args.password_file),
             'workers': args.bruteforce_workers,
             'delay': args.bruteforce_delay,
             'simple': args.simple_bruteforce,
+            'strategy': 'spray' if args.spray else 'bruteforce',
+            'jitter': args.credential_jitter,
+            'spray_round_delay': args.spray_round_delay,
+            'max_attempts_per_account': args.max_attempts_per_account,
+            'continue_on_success': args.continue_on_success,
         }
 
 
@@ -97,8 +116,34 @@ def main():
 
 
 def winrmscan(input_targets, static_inputs, workers, actions, creds, timeout, delay, resume):
-    args = (actions, creds, timeout)
+    scan_actions = dict(actions)
+    campaign = scan_actions.pop('bruteforce', None)
+    args = (scan_actions, creds, timeout)
     dispatch_targets(input_targets, static_inputs, winrmscan_worker, args, workers=workers, delay=delay, resume=resume)
+    if campaign:
+        options = {
+            'default_domain': creds.get('domain'),
+            'strategy': campaign['strategy'],
+            'simple': campaign['simple'],
+            'max_attempts_per_account': campaign['max_attempts_per_account'],
+        }
+        generator = iter_target_credential_attempts(
+            input_targets, static_inputs, campaign['username_file'],
+            campaign.get('password_file'), **options,
+        )
+        size = target_credential_attempt_count(
+            input_targets, static_inputs, campaign['username_file'],
+            campaign.get('password_file'), **options,
+        )
+        state = CampaignState(
+            continue_on_success=campaign['continue_on_success'],
+            spray_round_delay=campaign['spray_round_delay'],
+        )
+        dispatch(
+            generator, size, bruteforce_worker,
+            (timeout, campaign['delay'], campaign['jitter'], state),
+            workers=campaign['workers'], process=False, pg_name='WinRM credentials',
+        )
 
 
 if __name__ == '__main__':

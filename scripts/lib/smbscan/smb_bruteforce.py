@@ -1,197 +1,113 @@
-import copy
-import time
 from .smb import SMBScan
+from utils.credential_campaign import (
+    credential_attempt_count,
+    iter_credential_attempts,
+    wait_before_attempt,
+)
 from utils.output import Output
 from utils.utils import AuthFailure
 from utils.db import DB
 
-def bruteforce_worker(target, bruteforce_delay, timeout):
-    for password in target['b_password_list']:
-        time.sleep(bruteforce_delay)
-
-        domain = target['b_domain']
+def _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=False):
+        smbscan = None
+        secret = target['b_secret']
+        domain = target.get('b_domain')
         username = target['b_username']
-
-        smbscan = SMBScan(target['hostname'], target['port'], timeout)
-
-        success = smbscan.connect()
-
-        if not success:
-            Output.write({'target': smbscan.url(), 'message': 'Unable to connect to SMB server'})
-            continue
-
-        success = False
-        stop = False
+        state.begin_attempt(target)
         try:
-            success, is_admin = smbscan.auth(target['b_domain'], target['b_username'], password)
-            Output.success({'target': smbscan.url(), 'message': 'Authentication success with credentials %s\\%s and password %s' % (domain, username, password)})
+            if not state.claim_attempt(target, domain, username):
+                return
+            wait_before_attempt(delay, jitter)
+            smbscan = SMBScan(target['hostname'], target['port'], timeout)
+            if not smbscan.connect():
+                Output.write({'target': smbscan.url(), 'message': 'Unable to connect to SMB server'})
+                return
+            if use_hash:
+                success, is_admin = smbscan.auth(domain=domain, username=username, hash=secret)
+            else:
+                success, is_admin = smbscan.auth(domain, username, secret)
+            if not success:
+                return
+            state.mark_success(target, domain, username)
+            Output.event(
+                'authentication', 'Authentication success for account %s\\%s' % (domain, username),
+                target=smbscan.url(), severity='success', status='success',
+                data={'protocol': 'smb', 'domain': domain, 'username': username,
+                      'secret_type': 'ntlm' if use_hash else 'password'},
+                sensitive=True,
+            )
             if domain in [None, 'WORKGROUP']:
-                # local account
                 cred_info = {
                     'host': target['hostname'],
                     'port': target['port'],
                     'service': 'smb',
                     'url': smbscan.url(),
-                    'type': 'password',
+                    'type': 'hash' if use_hash else 'password',
                     'username': username,
-                    'password': password,
                 }
+                if use_hash:
+                    cred_info.update({'format': 'ntlm', 'hash': secret})
+                else:
+                    cred_info['password'] = secret
                 DB.insert_credential(cred_info)
-
             else:
-                # domain account 
                 cred_info = {
                     'domain': domain,
                     'username': username,
-                    'type': 'password',
-                    'password': password,
+                    'type': 'hash' if use_hash else 'password',
                 }
+                if use_hash:
+                    cred_info.update({'format': 'ntlm', 'hash': secret})
+                else:
+                    cred_info['password'] = secret
                 DB.insert_domain_credential(cred_info)
-
             if is_admin:
-                Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials %s\\%s' % (domain, username)})
-
-            stop = True
-
-        except AuthFailure as e:
-            if str(e) in ["STATUS_ACCOUNT_LOCKED_OUT"]:
-                    Output.write({'target': smbscan.url(), 'message': 'Account locked out: %s\\%s' % (domain, username)})
-                    stop = True
-            elif str(e) in ["STATUS_LOGON_FAILURE"]:
-                #Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials %s\\%s and password %s: %s' % (domain, username, password, str(e))})
+                Output.event(
+                    'privilege', 'Administrative privileges for account %s\\%s' % (domain, username),
+                    target=smbscan.url(), severity='high', status='admin',
+                    data={'protocol': 'smb', 'domain': domain, 'username': username},
+                    sensitive=True,
+                )
+        except AuthFailure as exc:
+            if str(exc) == "STATUS_ACCOUNT_LOCKED_OUT":
+                state.mark_locked(target, domain, username)
+                Output.event(
+                    'authentication', 'Account locked out: %s\\%s' % (domain, username),
+                    target=smbscan.url(), severity='warning', status='locked',
+                    data={'protocol': 'smb', 'domain': domain, 'username': username},
+                    sensitive=True,
+                )
+            elif str(exc) == "STATUS_LOGON_FAILURE":
                 pass
             else:
-                Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials %s\\%s and password %s: %s' % (domain, username, password, str(e))})
-
-        try:
-            smbscan.disconnect()
-        except:
-            pass
-
-        if stop:
-            break
-
-def bruteforce_ntlm_worker(target, bruteforce_delay, timeout):
-    for ntlm in target['b_password_list']:
-        time.sleep(bruteforce_delay)
-
-        domain = target['b_domain']
-        username = target['b_username']
-
-        smbscan = SMBScan(target['hostname'], target['port'], timeout)
-
-        success = smbscan.connect()
-
-        if not success:
-            Output.write({'target': smbscan.url(), 'message': 'Unable to connect to SMB server'})
-            continue
-
-        success = False
-        stop = False
-        try:
-            success, is_admin = smbscan.auth(domain=target['b_domain'], username=target['b_username'], hash=ntlm)
-            Output.success({'target': smbscan.url(), 'message': 'Authentication success with credentials %s\\%s and hash %s' % (domain, username, ntlm)})
-            if domain in [None, 'WORKGROUP']:
-                # local account
-                cred_info = {
-                    'host': target['hostname'],
-                    'port': target['port'],
-                    'service': 'smb',
-                    'url': smbscan.url(),
-                    'type': 'hash',
-                    'username': username,
-                    'format': 'ntlm',
-                    'hash': ntlm,
-                }
-                DB.insert_credential(cred_info)
-
-            else:
-                # domain account 
-                cred_info = {
-                    'domain': domain,
-                    'username': username,
-                    'type': 'hash',
-                    'format': 'ntlm',
-                    'hash': ntlm,
-                }
-                DB.insert_domain_credential(cred_info)
-
-            if is_admin:
-                Output.major({'target': smbscan.url(), 'message': 'Administrative privileges with credentials %s\\%s' % (domain, username)})
-
-            stop = True
-
-        except AuthFailure as e:
-            if str(e) in ["STATUS_ACCOUNT_LOCKED_OUT"]:
-                    Output.write({'target': smbscan.url(), 'message': 'Account locked out: %s\\%s' % (domain, username)})
-                    stop = True
-            elif str(e) in ["STATUS_LOGON_FAILURE"]:
-                #Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials %s\\%s and password %s: %s' % (domain, username, password, str(e))})
-                pass
-            else:
-                Output.write({'target': smbscan.url(), 'message': 'Authentication failure with credentials %s\\%s and hash %s: %s' % (domain, username, ntlm, str(e))})
-
-        try:
-            smbscan.disconnect()
-        except:
-            pass
-
-        if stop:
-            break
+                Output.write({'target': smbscan.url(), 'message': 'Authentication failure for %s\\%s: %s' % (domain, username, str(exc))})
+        finally:
+            if smbscan is not None:
+                try:
+                    smbscan.disconnect()
+                except Exception:
+                    pass
+            state.complete_attempt(target)
 
 
-def bruteforce_generator(target, domain, username_file, password_file, simple_bruteforce=False):
-    password_list = []
-    if password_file != None:
-        password_f = open(password_file)
-        for f in password_f:
-            f = f.strip()
-            password_list.append(f)
-        password_f.close()
+def bruteforce_worker(target, delay, jitter, timeout, state):
+    return _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=False)
 
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
+def bruteforce_ntlm_worker(target, delay, jitter, timeout, state):
+    return _bruteforce_worker(target, delay, jitter, timeout, state, use_hash=True)
 
-        if not simple_bruteforce:
-            if ':' in u:
-                p = [u.split(':', 1)[-1]]
-                u = u.split(':', 1)[0]
-            else:
-                p = password_list
-        else:
-            if ':' in u:
-                u = u.split(':', 1)[0]
-            p = [u]
-            if '\\' in p[0]:
-                p = [p[0].split('\\', 1)[-1]]
 
-        if '\\' in u:
-            d = u.split('\\', 1)[0]
-            u = u.split('\\', 1)[-1]
-        else:
-            d = domain
+def bruteforce_generator(
+    target, domain, username_file, password_file, simple_bruteforce=False,
+    strategy='bruteforce', secret_kind='password', max_attempts_per_account=None,
+):
+    return iter_credential_attempts(
+        target, username_file, password_file, default_domain=domain,
+        strategy=strategy, secret_kind=secret_kind, simple=simple_bruteforce,
+        max_attempts_per_account=max_attempts_per_account,
+    )
 
-        t = copy.copy(target)
-        t['b_domain'] = d
-        t['b_username'] = u
-        t['b_password_list'] = p
-
-        yield t
-    username_f.close()
-
-def bruteforce_generator_count(target, domain, username_file, password_file):
-    count = 0
-
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
-
-        count += 1
-    username_f.close()
-
-    return count
+def bruteforce_generator_count(target, domain, username_file, password_file, **options):
+    return credential_attempt_count(
+        target, username_file, password_file, default_domain=domain, **options
+    )

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -11,12 +13,13 @@ import time
 import uuid
 from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
 from utils.mcp_elasticsearch import elasticsearch_context
+from utils.events import normalize_output_event
 from utils.mcp_runtime import (
     ANSI_ESCAPE,
     MCPRuntimeError,
@@ -73,6 +76,16 @@ class ScanJob:
     events: list[dict[str, Any]] = field(default_factory=list, repr=False)
     event_summary: dict[str, Any] = field(default_factory=dict)
     internal_error: str | None = None
+    artifact_dir: Path | None = field(default=None, repr=False)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
+
+
+ES_QUERY_DIRECTORY_EXPORTS = {
+    "--export": "ports",
+    "--export-hashes": "hashes",
+    "--export-bloodhound": "bloodhound",
+    "--parse-spns": "spns",
+}
 
 
 class ScanJobManager:
@@ -85,6 +98,8 @@ class ScanJobManager:
         retention: int | None = None,
         output_limit: int | None = None,
         findings_limit: int | None = None,
+        artifact_file_limit: int | None = None,
+        artifact_total_limit: int | None = None,
     ) -> None:
         self.max_workers = max_workers or _positive_env_int(
             "NETSCAN_MCP_MAX_JOBS", 4
@@ -95,6 +110,12 @@ class ScanJobManager:
         self.output_limit = output_limit or maximum_output()
         self.findings_limit = findings_limit or _positive_env_int(
             "NETSCAN_MCP_MAX_FINDINGS", 200
+        )
+        self.artifact_file_limit = artifact_file_limit or _positive_env_int(
+            "NETSCAN_MCP_MAX_ARTIFACT_BYTES", 25_000_000
+        )
+        self.artifact_total_limit = artifact_total_limit or _positive_env_int(
+            "NETSCAN_MCP_MAX_ARTIFACT_TOTAL_BYTES", 100_000_000
         )
         self._jobs: dict[str, ScanJob] = {}
         self._lock = threading.RLock()
@@ -141,7 +162,37 @@ class ScanJobManager:
             result["summary"] = dict(job.event_summary)
             result["findings"] = list(job.events) if include_findings else []
             result["elasticsearch"] = job.elasticsearch
+            result["artifacts"] = list(job.artifacts)
             return result
+
+    def list_artifacts(self, scan_id: str) -> dict[str, Any]:
+        with self._lock:
+            job = self._get_locked(scan_id)
+            return {
+                "scan_id": scan_id,
+                "state": job.state,
+                "artifacts": list(job.artifacts),
+                "count": len(job.artifacts),
+                "total_bytes": sum(item["size"] for item in job.artifacts),
+            }
+
+    def artifact_bytes(self, scan_id: str, artifact_id: str) -> bytes:
+        with self._lock:
+            job = self._get_locked(scan_id)
+            artifact = next(
+                (item for item in job.artifacts if item["artifact_id"] == artifact_id),
+                None,
+            )
+            if artifact is None or job.artifact_dir is None:
+                raise MCPRuntimeError(f"Unknown artifact_id: {artifact_id}")
+            path = (job.artifact_dir / artifact["relative_path"]).resolve()
+            root = job.artifact_dir.resolve()
+            if path != root and root not in path.parents:
+                raise MCPRuntimeError("Artifact path escaped its job directory")
+            try:
+                return path.read_bytes()
+            except OSError as exc:
+                raise MCPRuntimeError(f"Unable to read artifact: {exc}") from exc
 
     def list(self, *, state: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         if limit < 1 or limit > 100:
@@ -210,6 +261,9 @@ class ScanJobManager:
         for job in active:
             self.cancel(job.scan_id)
         self._executor.shutdown(wait=wait, cancel_futures=True)
+        with self._lock:
+            for job in self._jobs.values():
+                self._delete_artifacts_locked(job)
 
     def _get_locked(self, scan_id: str) -> ScanJob:
         try:
@@ -225,6 +279,13 @@ class ScanJobManager:
         excess = max(0, len(self._jobs) - self.retention + reserve)
         for job in completed[:excess]:
             self._jobs.pop(job.scan_id, None)
+            self._delete_artifacts_locked(job)
+
+    def _delete_artifacts_locked(self, job: ScanJob) -> None:
+        if job.artifact_dir is not None:
+            shutil.rmtree(job.artifact_dir, ignore_errors=True)
+            job.artifact_dir = None
+            job.artifacts = []
 
     def _status_locked(self, job: ScanJob) -> dict[str, Any]:
         return {
@@ -245,6 +306,11 @@ class ScanJobManager:
                 "captured_bytes": len(job.output),
                 "total_bytes": job.total_output_bytes,
                 "truncated": job.output_truncated,
+            },
+            "artifacts": {
+                "count": len(job.artifacts),
+                "total_bytes": sum(item["size"] for item in job.artifacts),
+                "list_tool": "netscan_scan_artifacts",
             },
             "persistence_expected": job.elasticsearch["persistence_expected"],
             "internal_error": job.internal_error,
@@ -274,6 +340,11 @@ class ScanJobManager:
             environment = dict(prepared.environment)
             environment["NETSCAN_MCP_EVENT_FILE"] = str(event_path)
             environment["NETSCAN_MCP_DB_RESULT_FILE"] = str(db_result_path)
+            job.artifact_dir = Path(
+                tempfile.mkdtemp(prefix=f"netscan-mcp-artifacts-{job.scan_id[:8]}-")
+            )
+            environment["NETSCAN_MCP_ARTIFACT_DIR"] = str(job.artifact_dir)
+            prepared = self._confine_artifact_outputs(prepared, job.artifact_dir)
 
             process = subprocess.Popen(
                 prepared.command,
@@ -315,6 +386,7 @@ class ScanJobManager:
 
             self._load_events(job, event_path)
             self._load_db_result(job, db_result_path)
+            self._collect_artifacts(job)
             with self._lock:
                 job.exit_code = process.returncode
                 if job.cancel_requested.is_set():
@@ -346,6 +418,58 @@ class ScanJobManager:
                 job.duration_seconds = round(time.monotonic() - started, 3)
                 self._purge_locked()
 
+    def _confine_artifact_outputs(self, prepared: Any, artifact_dir: Path) -> Any:
+        if prepared.module != "es_query":
+            return prepared
+
+        arguments = list(prepared.arguments)
+        for index, argument in enumerate(arguments[:-1]):
+            subdirectory = ES_QUERY_DIRECTORY_EXPORTS.get(argument)
+            if subdirectory is not None:
+                destination = artifact_dir / subdirectory
+                destination.mkdir(parents=True, exist_ok=True)
+                arguments[index + 1] = str(destination)
+            elif argument == "--dump":
+                arguments[index + 1] = str(artifact_dir / "session-dump.jsonl")
+
+        command = (*prepared.command[:2], *arguments)
+        return replace(prepared, arguments=tuple(arguments), command=tuple(command))
+
+    def _collect_artifacts(self, job: ScanJob) -> None:
+        if job.artifact_dir is None:
+            return
+        root = job.artifact_dir.resolve()
+        artifacts: list[dict[str, Any]] = []
+        total = 0
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.is_symlink():
+                continue
+            resolved = path.resolve()
+            if root not in resolved.parents:
+                continue
+            size = resolved.stat().st_size
+            if size > self.artifact_file_limit or total + size > self.artifact_total_limit:
+                continue
+            relative = resolved.relative_to(root).as_posix()
+            artifact_id = uuid.uuid5(uuid.NAMESPACE_URL, f"{job.scan_id}:{relative}").hex
+            mime_type = mimetypes.guess_type(resolved.name)[0] or "application/octet-stream"
+            artifacts.append(
+                {
+                    "artifact_id": artifact_id,
+                    "name": resolved.name,
+                    "relative_path": relative,
+                    "size": size,
+                    "mime_type": mime_type,
+                    "sensitive": True,
+                    "resource_uri": (
+                        f"netscan://scans/{job.scan_id}/artifacts/{artifact_id}"
+                    ),
+                }
+            )
+            total += size
+        with self._lock:
+            job.artifacts = artifacts
+
     def _drain_output(
         self, job: ScanJob, process: subprocess.Popen[bytes]
     ) -> None:
@@ -362,6 +486,7 @@ class ScanJobManager:
 
     def _load_events(self, job: ScanJob, event_path: Path) -> None:
         counts: Counter[str] = Counter()
+        categories: Counter[str] = Counter()
         targets: set[str] = set()
         significant_total = 0
         findings: list[dict[str, Any]] = []
@@ -376,8 +501,11 @@ class ScanJobManager:
                 except (json.JSONDecodeError, TypeError):
                     counts["invalid"] += 1
                     continue
-                event_type = str(event.get("type", "normal"))
+                event = normalize_output_event(event)
+                event_type = str(event.get("legacy_type", "normal"))
+                category = str(event.get("category", "finding"))
                 counts[event_type] += 1
+                categories[category] += 1
                 if event.get("target") is not None:
                     targets.add(str(event["target"]))
                 if event_type in SIGNIFICANT_EVENT_TYPES:
@@ -389,8 +517,9 @@ class ScanJobManager:
             job.event_summary = {
                 "total_events": sum(counts.values()),
                 "event_types": dict(sorted(counts.items())),
+                "event_categories": dict(sorted(categories.items())),
                 "unique_targets": len(targets),
-                "vulnerabilities": counts["vuln"],
+                "vulnerabilities": categories["vulnerability"],
                 "errors": counts["error"],
                 "significant_findings": significant_total,
                 "findings_returned": len(findings),

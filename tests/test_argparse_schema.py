@@ -21,7 +21,7 @@ class ArgparseSchemaTests(unittest.TestCase):
 
     def test_every_argparse_action_is_extracted(self):
         all_specs = {module: self.specs(module) for module in NETSCAN_MODULES}
-        self.assertEqual(sum(len(specs) for specs in all_specs.values()), 471)
+        self.assertEqual(sum(len(specs) for specs in all_specs.values()), 487)
         for specs in all_specs.values():
             destinations = [spec.dest for spec in specs]
             self.assertEqual(len(destinations), len(set(destinations)))

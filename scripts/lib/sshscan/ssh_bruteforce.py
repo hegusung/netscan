@@ -1,117 +1,73 @@
-import copy
 import socket
 import traceback
 import paramiko
-from time import sleep
 from .ssh import SSH
+from utils.credential_campaign import (
+    credential_attempt_count,
+    iter_credential_attempts,
+    wait_before_attempt,
+)
 from utils.output import Output
 from utils.utils import AuthFailure
 from utils.db import DB
 
-def bruteforce_worker(target, timeout, bruteforce_delay):
-
-    for password in target['b_password_list']:
-        sleep(bruteforce_delay)
-
-        username = target['b_username']
-
+def bruteforce_worker(target, timeout, delay, jitter, state):
+    username = target['b_username']
+    password = target['b_secret']
+    domain = target.get('b_domain')
+    state.begin_attempt(target)
+    try:
+        if not state.claim_attempt(target, domain, username):
+            return
+        wait_before_attempt(delay, jitter)
+        ssh = SSH(target['hostname'], target['port'], timeout)
         try:
-            success = False
-            stop = False
-
-            ssh = SSH(target['hostname'], target['port'], timeout)
-
-            success = ssh.auth(username, password)
-            if success:
-                Output.success({'target': ssh.url(), 'message': 'Authentication success with credentials %s and password %s' % (username, password)})
-                cred_info = {
-                    'host': target['hostname'],
-                    'port': target['port'],
-                    'service': 'ssh',
-                    'url': ssh.url(),
-                    'type': 'password',
-                    'username': username,
-                    'password': password,
-                }
-                DB.insert_credential(cred_info)
-
-                vuln_info = {
-                    'host': target['hostname'],
-                    'port': target['port'],
-                    'service': 'ssh',
-                    'url': ssh.url(),
-                    'name': 'Default or predictable credentials on SSH service',
-                    'description': 'Service %s possess the following default or weak credentials: %s:%s' % (ssh.url(), username, password),
-                }
-                DB.insert_vulnerability(vuln_info)
-
-                stop = True
-
-        except paramiko.AuthenticationException as e:
+            if not ssh.auth(username, password):
+                return
+            state.mark_success(target, domain, username)
+            Output.event(
+                'authentication', 'Authentication success for account %s' % username,
+                target=ssh.url(), severity='success', status='success',
+                data={'protocol': 'ssh', 'username': username, 'secret_type': 'password'},
+                sensitive=True,
+            )
+            DB.insert_credential({
+                'host': target['hostname'], 'port': target['port'], 'service': 'ssh',
+                'url': ssh.url(), 'type': 'password', 'username': username,
+                'password': password,
+            })
+            DB.insert_vulnerability({
+                'host': target['hostname'], 'port': target['port'], 'service': 'ssh',
+                'url': ssh.url(), 'name': 'Default or predictable credentials on SSH service',
+                'description': 'SSH accepts a password from the supplied authorized credential campaign for account %s' % username,
+            })
+        except paramiko.AuthenticationException:
             pass
-        except ValueError as e:
-            stop = True
-        except paramiko.SSHException as e:
-            #print(e)
+        except ValueError:
+            pass
+        except paramiko.SSHException:
             Output.write({'target': ssh.url(), 'message': 'Server overloaded, try reducing amount of workers'})
-            stop = True
         except socket.error:
-            stop = True
-        except Exception as e:
-            stop = True
-            print("%s: %s\n%s" % (type(e), e, traceback.format_exc()))
-
-        try:
-            ssh.disconnect()
-        except:
             pass
+        except Exception as exc:
+            print("%s: %s\n%s" % (type(exc), exc, traceback.format_exc()))
+        finally:
+            try:
+                ssh.disconnect()
+            except Exception:
+                pass
+    finally:
+        state.complete_attempt(target)
 
-        if stop:
-            break
+def bruteforce_generator(
+    target, username_file, password_file, simple_bruteforce=False,
+    strategy='bruteforce', max_attempts_per_account=None,
+):
+    return iter_credential_attempts(
+        target, username_file, password_file, strategy=strategy,
+        simple=simple_bruteforce,
+        max_attempts_per_account=max_attempts_per_account,
+    )
 
-def bruteforce_generator(target, username_file, password_file, simple_bruteforce=False):
-    password_list = []
-    if password_file != None:
-        password_f = open(password_file)
-        for f in password_f:
-            f = f.strip()
-            password_list.append(f)
-        password_f.close()
-
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
-
-        if not simple_bruteforce:
-            if ':' in u:
-                p = [u.split(':', 1)[-1]]
-                u = u.split(':', 1)[0]
-            else:
-                p = password_list
-        else:
-            if ':' in u:
-                u = u.split(':', 1)[0]
-            p = [u]
-
-        t = copy.copy(target)
-        t['b_username'] = u
-        t['b_password_list'] = p
-
-        yield t
-    username_f.close()
-
-def bruteforce_generator_count(target, username_file, password_file):
-    count = 0
-
-    username_f = open(username_file)
-    for u in username_f:
-        u = u.strip()
-        if len(u) == 0:
-            continue
-
-        count += 1
-    username_f.close()
-
-    return count
+def bruteforce_generator_count(target, username_file, password_file, **options):
+    return credential_attempt_count(target, username_file, password_file, **options)

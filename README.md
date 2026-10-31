@@ -213,9 +213,10 @@ On your system or in the docker container,
 NetScan can be exposed to MCP-compatible clients over local stdio or localhost
 Streamable HTTP, including a proxychains-based local setup. It publishes a
 strongly typed MCP tool for every NetScan command, generated from the native
-`argparse` declarations. Scans run as cancellable background jobs with structured
-findings, bounded output resources, and an Elasticsearch session/index handoff.
-See the
+`argparse` declarations. Scans run as cancellable background jobs with normalized
+findings, bounded output resources, confined downloadable export artifacts, and
+an Elasticsearch session/index handoff. SMB, SSH, and WinRM also share
+scope-wide credential campaign controls. See the
 [MCP server guide](docs/mcp-server.md).
 
 ## 4. Troubleshooting
