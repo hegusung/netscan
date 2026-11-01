@@ -21,6 +21,13 @@
   - [X] Active Directory modifications
   - [x] Active Directory Certificate Services
   - [x] Bloodhound export
+  - [x] GPO parsing and analysis
+    - [x] Logon, logoff, startup and shutdown script locations
+    - [x] Environment variables, registry preferences and `Registry.pol`
+    - [x] Mapped drives, network shares, scheduled tasks and shortcuts
+    - [x] File, folder and INI changes
+    - [x] Local group membership, firewall and AppLocker policy changes
+    - [x] Secret search in referenced scripts and files
   - [x] Modules
     - [x] ZeroLogon (CVE-2020-1472)
     - [x] NoPAC (CVE-2021-42278 / CVE-2021-42287)
@@ -218,11 +225,16 @@ session enumeration; RID cycling; and WMI, SMB or MMC command execution,
 including PowerShell and generated payload workflows.
 
 Active Directory coverage includes domains, OUs, containers, users, groups,
-hosts, DNS, trusts, GPOs, password policies, delegation and RBCD; Kerberoasting
-and AS-REP roasting; GPP credentials; ACLs; TGT/TGS operations; AD CS and
-certificate templates; LAPS, gMSA and sMSA secrets; NTDS collection; user
-credential campaigns; BloodHound export; and explicitly selected directory
-modifications.
+hosts, DNS, trusts, password policies, delegation and RBCD. GPO collection also
+parses the policy files in SYSVOL to identify logon/logoff and startup/shutdown
+scripts, environment variables, registry and `Registry.pol` changes, mapped
+drives, network shares, scheduled tasks, files, folders, INI entries, shortcuts,
+local group changes, firewall rules and AppLocker rules. An optional keyword or
+regular-expression search inspects referenced scripts and files for secrets.
+Additional coverage includes Kerberoasting and AS-REP roasting; GPP credentials;
+ACLs; TGT/TGS operations; AD CS and certificate templates; LAPS, gMSA and sMSA
+secrets; NTDS collection; user credential campaigns; BloodHound export; and
+explicitly selected directory modifications.
 
 ### Elasticsearch, Kibana and MCP
 

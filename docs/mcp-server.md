@@ -106,6 +106,7 @@ Important mappings include:
 | Test WinRM at scale | `netscan_winrmscan` accepts multiple ports, HTTP or HTTPS, direct password/hash authentication, command execution, and multi-host credential files with independent target and credential worker controls. |
 | Enumerate through WMI | `netscan_smbscan` with `processes`; application enumeration also uses a remote Windows command. |
 | Enumerate NFS | `netscan_rpcscan` with `rpc`, `mounts`, or `list`; `uid`, `gid`, and `recurse` control NFSv3 directory access and traversal. |
+| Collect and analyze AD GPOs | `netscan_adscan` with `gpos=true` parses the GPO files in SYSVOL, including scripts, environment variables, registry settings, mapped drives, shares, scheduled tasks, files, folders, INI entries, shortcuts, local groups, firewall rules and AppLocker rules. Use `search` to inspect referenced scripts and files for secrets. |
 | Collect AD data for BloodHound | `netscan_adscan` with `domains`, `users`, `groups`, `hosts`, `gpos`, and, when required, `cas` and `cert_templates`. SMB `admins`, `loggedin`, and `sessions` add host relationships. |
 | Export BloodHound data | After persisted collection, use `netscan_es_query` with the exact `session` and `export_bloodhound` output directory. |
 
@@ -163,6 +164,14 @@ safety controls, not a substitute for reviewing the domain password policy.
 controls the subsequent credential campaign across the whole target scope. Port
 5986 selects WinRM HTTPS automatically; use `ssl=true` for HTTPS on a
 non-standard port.
+
+With `gpos=true`, `netscan_adscan` reads and parses the GPO files from SYSVOL. It
+records logon/logoff and startup/shutdown scripts, environment variables,
+registry preferences and `Registry.pol`, mapped drives, network shares,
+scheduled tasks, file/folder/INI changes, shortcuts, local group membership,
+firewall rules and AppLocker rules as GPO changes. The optional `search`
+argument searches referenced scripts and files for secrets using a keyword or
+the configured regular expressions.
 
 The BloodHound exporter reads the selected Elasticsearch session and writes
 BloodHound JSON for domains, containers, OUs, users, groups, computers, GPOs,
