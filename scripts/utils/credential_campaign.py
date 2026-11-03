@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterator
 
 from utils.process_inputs import count_process_inputs, process_inputs
+from utils.utils import normalize_path
 
 
 @dataclass(frozen=True)
@@ -159,6 +160,34 @@ def load_accounts(username_file: str | Path, default_domain: str | None = None) 
             )
         )
     return accounts
+
+
+def validate_username_secret_files(
+    username_file: str | Path | None,
+    secret_file: str | Path | None,
+    *,
+    simple: bool = False,
+) -> None:
+    """Validate the file combination used by username-based campaigns.
+
+    A separate secret file is optional when every non-empty username-file entry
+    embeds its own secret as ``username:secret``.  This preserves NetScan's
+    original ``-U credentials.txt --bruteforce`` interface while preventing a
+    username-only file from silently producing no attempts.
+    """
+    if username_file is None:
+        raise ValueError("-U is required for a credential campaign")
+    if simple or secret_file is not None:
+        return
+
+    accounts = load_accounts(normalize_path(username_file))
+    if not accounts:
+        raise ValueError("-U must contain at least one non-empty credential")
+    if any(account.inline_secret is None for account in accounts):
+        raise ValueError(
+            "-P is required unless every non-empty -U entry uses "
+            "the username:password format"
+        )
 
 
 def iter_credential_attempts(

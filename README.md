@@ -338,7 +338,10 @@ Streamable HTTP, including a proxychains-based local setup. It publishes a
 strongly typed MCP tool for every NetScan command, generated from the native
 `argparse` declarations. Scans run as cancellable background jobs with normalized
 findings, bounded output resources, confined downloadable export artifacts, and
-an Elasticsearch session/index handoff. Jobs and artifacts survive MCP server
+an Elasticsearch session/index handoff. Direct read-only Elasticsearch search
+and aggregation tools are available even when Kibana's MCP endpoint is
+unreachable; an MCP resource documents indexed document types and fields.
+Jobs and artifacts survive MCP server
 restarts. Thirteen authentication protocols share scope-wide credential campaign
 controls, persist secret-free validation results, and can reuse opaque IDs for
 credentials stored in Elasticsearch without returning their secrets to the

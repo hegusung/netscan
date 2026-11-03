@@ -15,6 +15,7 @@ from utils.credential_campaign import (
     CampaignState,
     iter_target_credential_attempts,
     target_credential_attempt_count,
+    validate_username_secret_files,
 )
 from lib.sshscan.ssh_bruteforce import bruteforce_worker
 
@@ -71,10 +72,10 @@ def main():
         os.environ.pop('NETSCAN_MCP_CREDENTIAL_PASSWORD', None)
 
     if args.bruteforce or args.spray or args.simple_bruteforce:
-        if args.username_file is None:
-            parser.error('-U is required for a credential campaign')
-        if (args.bruteforce or args.spray) and args.password_file is None:
-            parser.error('-P is required with --bruteforce or --spray')
+        try:
+            validate_username_secret_files(args.username_file, args.password_file, simple=args.simple_bruteforce)
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
         if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
             parser.error('--max-attempts-per-account must be greater than zero')
 

@@ -29,6 +29,13 @@ from utils.mcp_runtime import (
     run_module,
 )
 from utils.mcp_elasticsearch import elasticsearch_context
+from utils.mcp_elasticsearch_query import (
+    DOCUMENT_TYPES,
+    aggregate_documents,
+    elasticsearch_schema,
+    elasticsearch_schema_resource,
+    search_documents,
+)
 from utils.mcp_credentials import CredentialCatalog
 from utils.mcp_jobs import ScanJobManager
 
@@ -46,6 +53,7 @@ CredentialModule = Literal[
     "postgrescan", "rdpscan", "redisscan", "smbscan", "snmpscan",
     "sshscan", "telnetscan", "vncscan", "winrmscan",
 ]
+DocumentType = Literal.__getitem__(tuple(DOCUMENT_TYPES))
 USERNAME_CREDENTIAL_MODULES = frozenset(
     CREDENTIAL_REUSE_MODULES
 ) - {"redisscan", "snmpscan", "vncscan"}
@@ -89,12 +97,18 @@ mcp = MCPServer(
         "OUs, users, groups, computers, GPOs, and ADCS entities. Do not use nodb during any "
         "collection intended for correlation or export. NetScan is the collection layer; when "
         "a Kibana Agent Builder MCP server is available, use it as the preferred analysis layer for "
-        "persisted results. Before querying, inspect the index mappings and identify the active "
-        "NetScan session. Scope every analysis query to that session so separate engagements "
-        "are never mixed. Treat credentials, hashes, secrets, and recorded command lines as "
+        "persisted results. Call netscan_context and read netscan://elasticsearch/schema, or call "
+        "netscan_es_schema when resources are not available, to identify "
+        "the active session and NetScan fields. When using the built-in direct query tools, their "
+        "queries are automatically restricted to one exact session; for a separate Kibana or "
+        "Elasticsearch MCP, inspect the live index mapping and scope every query to that session "
+        "so separate engagements are never mixed. Treat credentials, hashes, secrets, and recorded command lines as "
         "sensitive: retrieve and disclose them only when explicitly required. Prefer a read-only "
         "Kibana/Elasticsearch identity restricted to the configured NetScan index. If Kibana "
-        "MCP is unavailable, or a NetScan-specific export is required, use netscan_es_query "
+        "MCP is unavailable, use netscan_es_search and netscan_es_aggregate for direct, "
+        "read-only Elasticsearch analysis; consult netscan://elasticsearch/schema or "
+        "netscan_es_schema for NetScan document types and fields. These tools always scope results to one exact "
+        "session and the configured index. For a NetScan-specific export, use netscan_es_query "
         "cautiously; it includes destructive operations such as delete_session. Export paths "
         "from netscan_es_query are confined to the job: after completion call "
         "netscan_scan_artifacts and read the returned resource URIs. Scan findings use a stable "
@@ -127,6 +141,9 @@ async def netscan_status() -> dict[str, object]:
         "maximum_artifact_total_bytes": JOB_MANAGER.artifact_total_limit,
         "persistent_state_directory": str(JOB_MANAGER.state_dir),
         "credential_reuse_modules": list(CREDENTIAL_REUSE_MODULES),
+        "elasticsearch_query_tools": ["netscan_es_search", "netscan_es_aggregate"],
+        "elasticsearch_schema_tool": "netscan_es_schema",
+        "elasticsearch_schema_resource": "netscan://elasticsearch/schema",
     }
 
 
@@ -138,6 +155,130 @@ async def netscan_context(check_elasticsearch: bool = True) -> dict[str, object]
     configured credentials only inside the server process.
     """
     return elasticsearch_context(check_connection=check_elasticsearch)
+
+
+@mcp.tool()
+async def netscan_es_search(
+    session: Annotated[
+        str | None,
+        Field(description="Exact NetScan session; defaults to Global.session in config.cfg."),
+    ] = None,
+    doc_type: Annotated[
+        DocumentType | None,
+        Field(description="Restrict results to one NetScan document category."),
+    ] = None,
+    filters: Annotated[
+        dict[str, Any] | None,
+        Field(description=(
+            "Exact field matches; string fields use .keyword automatically. "
+            "Values may be scalars or lists."
+        )),
+    ] = None,
+    search_text: Annotated[
+        str | None,
+        Field(description=(
+            "Simple full-text query across common host, service, finding, and AD fields."
+        )),
+    ] = None,
+    fields: Annotated[
+        list[str] | None,
+        Field(description=(
+            "Optional source fields to return; sensitive values remain redacted by default."
+        )),
+    ] = None,
+    limit: Annotated[int, Field(ge=1, le=100, description="Maximum number of documents to return (1–100).")] = 20,
+    offset: Annotated[
+        int,
+        Field(
+            ge=0,
+            le=10_000,
+            description="Number of matches to skip; offset + limit cannot exceed 10000.",
+        ),
+    ] = 0,
+    include_sensitive: Annotated[
+        bool,
+        Field(description=(
+            "Reveal credentials, secret-file contents, and sensitive GPO values. "
+            "Use only when explicitly needed."
+        )),
+    ] = False,
+) -> dict[str, object]:
+    """Search NetScan's configured Elasticsearch index, scoped to one session.
+
+    Use exact filters such as {"service": "ssh"}, optional full-text search,
+    and fields to keep results concise. Known sensitive fields are redacted
+    unless include_sensitive is explicitly true.
+    """
+    try:
+        return search_documents(
+            session=session,
+            doc_type=doc_type,
+            filters=filters,
+            search_text=search_text,
+            fields=fields,
+            limit=limit,
+            offset=offset,
+            include_sensitive=include_sensitive,
+        )
+    except MCPRuntimeError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def netscan_es_aggregate(
+    field: Annotated[
+        str,
+        Field(description=(
+            "Field whose top distinct values should be counted; secret-like fields are rejected."
+        )),
+    ],
+    session: Annotated[
+        str | None,
+        Field(description="Exact NetScan session; defaults to Global.session in config.cfg."),
+    ] = None,
+    doc_type: Annotated[
+        DocumentType | None,
+        Field(description="Restrict results to one NetScan document category."),
+    ] = None,
+    filters: Annotated[
+        dict[str, Any] | None,
+        Field(description=(
+            "Additional exact field matches; string fields use .keyword automatically."
+        )),
+    ] = None,
+    size: Annotated[
+        int,
+        Field(ge=1, le=100, description="Maximum number of buckets to return (1–100)."),
+    ] = 20,
+) -> dict[str, object]:
+    """Aggregate a NetScan field into top terms for one exact session."""
+    try:
+        return aggregate_documents(
+            field=field,
+            session=session,
+            doc_type=doc_type,
+            filters=filters,
+            size=size,
+        )
+    except MCPRuntimeError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool()
+async def netscan_es_schema() -> dict[str, object]:
+    """Return the NetScan Elasticsearch field guide, including current scope."""
+    schema = elasticsearch_schema()
+    context = elasticsearch_context(check_connection=False)
+    schema["configured_index"] = context["index"]
+    schema["active_session"] = context["session"]
+    schema["elasticsearch_enabled"] = context["enabled"]
+    return schema
+
+
+@mcp.resource("netscan://elasticsearch/schema", mime_type="application/json")
+async def netscan_elasticsearch_schema_resource() -> str:
+    """Document NetScan's Elasticsearch document types, fields, and query rules."""
+    return elasticsearch_schema_resource()
 
 
 @mcp.tool()

@@ -46,6 +46,13 @@ General-purpose tools are also available:
 - `netscan_status`: inspect configuration, policy, and typed tool names.
 - `netscan_context`: get the session, index, Elasticsearch reachability, and a
   credential-safe Elastic MCP handoff.
+- `netscan_es_search`: search indexed NetScan documents directly in Elasticsearch
+  with exact filters, optional text search, pagination, and field projection.
+- `netscan_es_aggregate`: get top terms and counts for a field in one session.
+- `netscan_es_schema`: return the field guide and configured index/session through
+  the tool interface for clients that do not surface MCP resources.
+- `netscan://elasticsearch/schema`: MCP resource describing document types,
+  commonly used fields, query rules, and examples.
 - `netscan_credentials`: list opaque IDs and non-secret metadata for credentials
   already persisted in the selected NetScan session.
 - `netscan_run_with_credential`: reuse one stored credential with a supported
@@ -62,6 +69,55 @@ General-purpose tools are also available:
 - `netscan_scan_artifacts`: list files produced by a completed job and their
   confined resource URIs.
 - `run_netscan`: enqueue a command using an argv-style list.
+
+### Querying Elasticsearch directly
+
+The two `netscan_es_*` query tools use the Elasticsearch endpoint, credentials,
+and index in `config.cfg`; they do not need the Kibana Agent Builder MCP to be
+reachable. `Elasticsearch.enabled` must be true. `netscan_context` reports the
+configured endpoint, index, current session, and connection check status without
+returning credentials.
+
+Every query is restricted to the configured index and one exact session. If
+`session` is omitted, NetScan uses `[Global].session`; pass a specific session to
+analyze older results. `doc_type` narrows a search to one NetScan document
+category, and `filters` adds exact field matches. String filters and terms
+aggregations automatically use the `.keyword` subfield; for example, filter on
+`service: "ssh"` or aggregate `field: "service"`. `search_text` performs simple
+full-text matching across common host, service, finding, and AD fields. Use
+`fields` to project only the source fields needed by the analysis.
+
+Example search:
+
+```json
+{
+  "doc_type": "port",
+  "filters": {"service": "ssh"},
+  "fields": ["host", "port", "service", "version"],
+  "limit": 50
+}
+```
+
+Example aggregation:
+
+```json
+{
+  "field": "service",
+  "doc_type": "port",
+  "size": 20
+}
+```
+
+Search pages are capped at 100 documents and aggregation buckets at 100. Known
+credential fields, stored command lines, matched secret-file lines, and GPO
+action/value/command fields are redacted unless `include_sensitive=true` is
+explicitly requested.
+Aggregations over secret-like fields are rejected. The schema resource is available even when
+Elasticsearch is offline; it documents the NetScan fields but is not a live
+mapping dump. Elasticsearch dynamically maps many scanner-specific fields, so
+the exact nested fields can vary by result. The legacy `netscan_es_query` tool
+still provides exports and maintenance operations; it is not needed for normal
+searches and includes destructive actions such as deleting a session.
 
 Clients that support MCP resources can read the same output from
 `netscan://scans/{scan_id}/output`. Output is bounded by
@@ -113,8 +169,9 @@ Important mappings include:
 NetScan's database is not limited to port results. Elasticsearch stores scan
 invocations, services, vulnerabilities, content, applications, credentials,
 hashes, secrets, AD objects, ADCS objects, and discovered administrative
-relationships. The session is the engagement boundary. Use the Elasticsearch
-MCP to query and correlate those records; credentials can then be supplied to an
+relationships. The session is the engagement boundary. Use the Kibana MCP when
+available, or `netscan_es_search` and `netscan_es_aggregate` for direct,
+session-scoped Elasticsearch queries. Credentials can then be supplied to an
 appropriate typed scanner tool when the operator explicitly requests credential
 reuse.
 
@@ -196,10 +253,13 @@ Elasticsearch results:
 2. Start the authorized scan without `--nodb` when its results need analysis.
 3. Poll `netscan_scan_status` using the returned `scan_id`, then retrieve
    `netscan_scan_result` when it reaches a terminal state.
-4. Pass the result's `elasticsearch.analysis_handoff` to the Kibana MCP
-   and inspect the configured index mapping.
-5. Scope every search, aggregation, or ES|QL query to the exact index and session
-   from the handoff so separate engagements are never mixed.
+4. Read `netscan://elasticsearch/schema` (or call `netscan_es_schema`) to find
+   document types and fields. Pass the result's
+   `elasticsearch.analysis_handoff` to Kibana MCP when it is available.
+5. Query through Kibana MCP using its live mapping, or use
+   `netscan_es_search` / `netscan_es_aggregate` for direct Elasticsearch access.
+   The built-in tools use the configured index and enforce an exact session
+   filter; with another MCP, apply the handoff's index and session yourself.
 6. Retrieve credentials, hashes, secrets, or recorded command lines only when the
    operator explicitly requires them.
 
@@ -211,10 +271,11 @@ files through `netscan_scan_artifacts`. Do not export an unscoped or guessed
 session.
 
 The Kibana MCP identity should be read-only and restricted to the NetScan index.
-If Kibana MCP is unavailable, or a NetScan-specific export is
-needed, `netscan_es_query` remains available but must be used carefully because it
-also exposes destructive operations. A scan performed with `--nodb` has no results
-for Elasticsearch to analyze.
+The built-in Elasticsearch query tools use the credentials in `config.cfg` and
+work without Kibana MCP. `netscan_es_query` is still used for NetScan-specific
+exports and maintenance, and must be used carefully because it also exposes
+destructive operations. A scan performed with `--nodb` has no results for
+Elasticsearch to analyze.
 
 For HTTPS Elasticsearch deployments, set `verify_certificates=true` and set
 `ca_certs` to the CA bundle when a private CA is used. The default remains false

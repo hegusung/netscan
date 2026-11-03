@@ -132,9 +132,15 @@ def elasticsearch_context(
             "preferred_server": "Kibana Agent Builder MCP",
             "mcp_url": mcp_url or None,
             "required_scope": {"index": index, "session": session},
+            "fallback_tools": ["netscan_es_search", "netscan_es_aggregate", "netscan_es_schema"],
+            "schema_resource": "netscan://elasticsearch/schema",
             "instructions": (
-                "Inspect the index mapping, then constrain every search, aggregation, "
-                "or ES|QL query to this exact NetScan session. Use a read-only identity."
+                "Read netscan://elasticsearch/schema or call netscan_es_schema for NetScan "
+                "document types and fields. "
+                "The built-in search and aggregation tools use this configured index and "
+                "require an exact session filter. If using another Elasticsearch or Kibana "
+                "MCP, inspect its live index mapping and constrain every query to this exact "
+                "session. Use a read-only identity."
             ),
         },
     }

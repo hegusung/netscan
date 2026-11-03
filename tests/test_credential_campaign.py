@@ -15,10 +15,40 @@ from utils.credential_campaign import (  # noqa: E402
     iter_credential_attempts,
     iter_target_credential_attempts,
     iter_target_secret_attempts,
+    validate_username_secret_files,
 )
 
 
 class CredentialCampaignTests(unittest.TestCase):
+    def test_inline_credential_file_does_not_require_password_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            credentials = Path(temp_dir) / "credentials.txt"
+            credentials.write_text(
+                "alice:First!\nEXAMPLE\\bob:Second:WithColon\n",
+                encoding="utf-8",
+            )
+            validate_username_secret_files(credentials, None)
+            attempts = list(
+                iter_credential_attempts(
+                    {"hostname": "192.0.2.1"}, credentials, None
+                )
+            )
+
+        self.assertEqual(
+            [(item["b_domain"], item["b_username"], item["b_secret"]) for item in attempts],
+            [
+                (None, "alice", "First!"),
+                ("EXAMPLE", "bob", "Second:WithColon"),
+            ],
+        )
+
+    def test_username_only_file_still_requires_password_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            users = Path(temp_dir) / "users.txt"
+            users.write_text("alice\nbob:Inline!\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "-P is required"):
+                validate_username_secret_files(users, None)
+
     def test_mcp_secret_environment_is_consumed(self):
         arguments = Namespace(password=None, hash=None, community=None)
         environment = {

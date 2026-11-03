@@ -11,7 +11,7 @@ from lib.rdpscan.rdpscan import rdp_modules
 from utils.db import DB
 from utils.config import Config
 from utils.argparse_format import ColoredSelectiveDefaultsHelpFormatter
-from utils.credential_campaign import apply_mcp_credential_environment, dispatch_credential_campaign
+from utils.credential_campaign import apply_mcp_credential_environment, dispatch_credential_campaign, validate_username_secret_files
 from lib.rdpscan.rdp_bruteforce import bruteforce_worker
 
 
@@ -59,10 +59,10 @@ def main():
     if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
         parser.error('--max-attempts-per-account must be greater than zero')
     if args.bruteforce or args.spray or args.simple_bruteforce:
-        if args.username_file is None:
-            parser.error('-U is required for a credential campaign')
-        if not args.simple_bruteforce and args.password_file is None:
-            parser.error('-P is required unless --simple-bruteforce is selected')
+        try:
+            validate_username_secret_files(args.username_file, args.password_file, simple=args.simple_bruteforce)
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
 
     if args.list_modules:
         print('Available modules:')

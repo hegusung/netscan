@@ -16,6 +16,7 @@ from utils.credential_campaign import (
     CampaignState,
     iter_target_credential_attempts,
     target_credential_attempt_count,
+    validate_username_secret_files,
 )
 from lib.smbscan.smb_bruteforce import bruteforce_ntlm_worker, bruteforce_worker
 
@@ -118,8 +119,11 @@ def main():
         os.environ.pop('NETSCAN_MCP_CREDENTIAL_HASH', None)
 
     if args.bruteforce or args.spray:
-        if args.ntlm_file is None and (args.username_file is None or args.password_file is None):
-            parser.error('Use -U with -P, or provide --ntlm-file for a credential campaign')
+        if args.ntlm_file is None:
+            try:
+                validate_username_secret_files(args.username_file, args.password_file)
+            except (OSError, ValueError) as exc:
+                parser.error(str(exc))
     if args.simple_bruteforce and args.username_file is None:
         parser.error('-U is required with --simple-bruteforce')
     if args.max_attempts_per_account is not None and args.max_attempts_per_account < 1:
