@@ -18,7 +18,8 @@ class Module:
 
         Output.minor({'target': 'ssh://%s:%d' % (target['hostname'], target['port']), 'message': '[%s] Running module...' % self.name})
 
-        check(target['hostname'], target['port'], user, timeout)
+        for username in user.split(','):
+            check(target['hostname'], target['port'], username, timeout)
 
 
 def check(hostname, port, user, timeout):
